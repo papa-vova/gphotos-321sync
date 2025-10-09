@@ -342,7 +342,7 @@ class ArchiveExtractor:
         target_dir: Path,
         verify_integrity: bool = True,
         preserve_structure: bool = True,
-        max_retry_attempts: int = 5,
+        max_retry_attempts: int = 10,
         initial_retry_delay: float = 32.0,
         enable_resume: bool = True,
         state_file: Optional[Path] = None,
@@ -484,7 +484,7 @@ class ArchiveExtractor:
             Result of operation
             
         Raises:
-            Last exception if all retries fail
+            RuntimeError: If all retries fail (FATAL - terminates entire extraction)
         """
         delay = self.initial_retry_delay
         
@@ -493,11 +493,14 @@ class ArchiveExtractor:
                 return operation(*args, **kwargs)
             except OSError as e:
                 if attempt >= self.max_retry_attempts:
-                    # Final attempt failed - give up
+                    # Final attempt failed - raise fatal error
                     logger.error(
                         f"{operation_name} failed after {attempt} attempts: {e}"
                     )
-                    raise
+                    logger.critical(f"FATAL: Terminating extraction process due to persistent error: {e}")
+                    raise RuntimeError(
+                        f"Extraction failed after {attempt} attempts: {e}"
+                    ) from e
                 
                 # Log retry attempt
                 logger.warning(
@@ -673,12 +676,11 @@ class ArchiveExtractor:
                             gc.collect()
                             logger.debug(f"Performed garbage collection at {i + 1}/{total} files")
                     
-                except OSError as e:
-                    # File extraction failed after all retries
-                    logger.warning(f"Skipping file {member}: {e}")
-                    if archive_state:
-                        archive_state.mark_file_failed(sanitized_member, str(e))
-                    skipped += 1
+                except (OSError, RuntimeError) as e:
+                    # File extraction failed after all retries - this is now FATAL
+                    logger.critical(f"FATAL: Extraction terminated due to persistent error on file {member}")
+                    self._save_state()  # Save state before terminating
+                    raise
                 
                 # Log progress every 100 files to avoid log spam
                 if (i + 1) % 100 == 0:
@@ -790,12 +792,11 @@ class ArchiveExtractor:
                             gc.collect()
                             logger.debug(f"Performed garbage collection at {i + 1}/{total} files")
                 
-                except OSError as e:
-                    # File extraction failed after all retries
-                    logger.warning(f"Skipping file {member.name}: {e}")
-                    if archive_state:
-                        archive_state.mark_file_failed(member.name, str(e))
-                    skipped += 1
+                except (OSError, RuntimeError) as e:
+                    # File extraction failed after all retries - this is now FATAL
+                    logger.critical(f"FATAL: Extraction terminated due to persistent error on file {member.name}")
+                    self._save_state()  # Save state before terminating
+                    raise
                 
                 # Log progress every 100 files
                 if (i + 1) % 100 == 0:
@@ -871,7 +872,7 @@ class TakeoutExtractor:
         target_dir: Path,
         verify_integrity: bool = True,
         preserve_structure: bool = True,
-        max_retry_attempts: int = 5,
+        max_retry_attempts: int = 10,
         initial_retry_delay: float = 32.0,
         enable_resume: bool = True,
         state_file: Optional[Path] = None,

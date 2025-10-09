@@ -52,8 +52,8 @@ verify_checksums = true
 supported_formats = ["zip", "tar", "tar.gz", "tar.bz2", "7z", "rar"]
 
 # Retry configuration for handling transient failures (network issues, file locks, etc.)
-max_retry_attempts = 5  # Maximum number of retry attempts per file (then hard fail)
-initial_retry_delay_seconds = 32.0  # Initial delay, doubles each attempt (32s → 64s → 128s → 256s → 512s)
+max_retry_attempts = 10  # Maximum number of retry attempts per file (then hard fail)
+initial_retry_delay_seconds = 32.0  # Initial delay, doubles each attempt (32s → 64s → 128s → 256s → 512s → 1024s → 2048s → 4096s → 8192s)
 
 # State tracking for resuming interrupted extractions
 enable_resume = true

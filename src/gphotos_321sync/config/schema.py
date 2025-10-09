@@ -104,7 +104,7 @@ class ExtractionConfig(BaseModel):
     cleanup_after_extraction: bool
     verify_checksums: bool
     supported_formats: List[str]
-    max_retry_attempts: int = Field(ge=1)
+    max_retry_attempts: int = Field(ge=1, default=10)
     initial_retry_delay_seconds: float = Field(ge=0.1)
     enable_resume: bool
     state_file: str
