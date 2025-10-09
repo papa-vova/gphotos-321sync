@@ -4,7 +4,7 @@ import pytest
 import zipfile
 import tarfile
 from pathlib import Path
-from gphotos_sync.processing.extractor import (
+from gphotos_321sync.processing.extractor import (
     ArchiveDiscovery,
     ArchiveExtractor,
     TakeoutExtractor,

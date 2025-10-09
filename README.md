@@ -51,7 +51,7 @@ A comprehensive backup and synchronization tool for Google Photos Takeout archiv
 Start the application:
 
 ```bash
-python -m gphotos_sync.main
+python -m gphotos_321sync.main
 ```
 
 The web interface will be available at `http://localhost:8080`
@@ -112,7 +112,7 @@ pip install -r requirements-dev.txt
 python -m pytest tests/ -v
 
 # Run with coverage report
-python -m pytest tests/ --cov=src/gphotos_sync --cov-report=term-missing
+python -m pytest tests/ --cov=src/gphotos_321sync --cov-report=term-missing
 
 # Run specific test file
 python -m pytest tests/test_config.py -v

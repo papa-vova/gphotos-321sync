@@ -2,8 +2,8 @@
 
 import pytest
 from pathlib import Path
-from gphotos_sync.config import ConfigLoader
-from gphotos_sync.errors import ConfigurationError
+from gphotos_321sync.config import ConfigLoader
+from gphotos_321sync.errors import ConfigurationError
 
 
 def test_config_loader_loads_defaults():
@@ -43,7 +43,7 @@ def test_resource_auto_detection():
 @pytest.mark.asyncio
 async def test_config_validation():
     """Test that invalid configuration raises validation errors."""
-    from gphotos_sync.config.schema import ResourcesConfig
+    from gphotos_321sync.config.schema import ResourcesConfig
 
     # Invalid CPU percent
     with pytest.raises(Exception):  # Pydantic validation error

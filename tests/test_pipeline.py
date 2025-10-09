@@ -3,7 +3,7 @@
 import pytest
 from pathlib import Path
 from typing import AsyncIterator
-from gphotos_sync.pipeline import PipelineComponent, Pipeline, PipelineContext
+from gphotos_321sync.pipeline import PipelineComponent, Pipeline, PipelineContext
 
 
 class TestComponent(PipelineComponent[int, str]):

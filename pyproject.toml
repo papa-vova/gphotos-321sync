@@ -3,7 +3,7 @@ requires = ["setuptools>=65.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "gphotos-sync"
+name = "gphotos-321sync"
 version = "0.1.0"
 description = "Google Photos Takeout backup and synchronization tool"
 readme = "README.md"
@@ -57,7 +57,7 @@ cloud = [
 ]
 
 [project.scripts]
-gphotos-sync = "gphotos_sync.main:main"
+gphotos-321sync = "gphotos_321sync.main:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

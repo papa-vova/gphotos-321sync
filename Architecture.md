@@ -121,7 +121,7 @@ gphotos-sync is designed as a modular, pipeline-based application for processing
 
 ### Configuration System
 
-**Location:** `src/gphotos_sync/config/`
+**Location:** `src/gphotos_321sync/config/`
 
 - **schema.py** - Pydantic models for type-safe configuration
 - **loader.py** - Multi-source configuration loader
@@ -136,7 +136,7 @@ gphotos-sync is designed as a modular, pipeline-based application for processing
 
 ### Logging Infrastructure
 
-**Location:** `src/gphotos_sync/logging_config.py`
+**Location:** `src/gphotos_321sync/logging_config.py`
 
 **Components:**
 
@@ -147,7 +147,7 @@ gphotos-sync is designed as a modular, pipeline-based application for processing
 
 ### Pipeline System
 
-**Location:** `src/gphotos_sync/pipeline/`
+**Location:** `src/gphotos_321sync/pipeline/`
 
 **Base Classes:**
 
@@ -165,7 +165,7 @@ gphotos-sync is designed as a modular, pipeline-based application for processing
 
 ### Error Handling
 
-**Location:** `src/gphotos_sync/errors.py`
+**Location:** `src/gphotos_321sync/errors.py`
 
 **Exception Hierarchy:**
 

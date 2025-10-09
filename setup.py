@@ -1,4 +1,4 @@
-"""Setup script for gphotos-sync."""
+"""Setup script for gphotos-321sync."""
 
 from setuptools import setup, find_packages
 from pathlib import Path
@@ -8,7 +8,7 @@ readme_file = Path(__file__).parent / "README.md"
 long_description = readme_file.read_text(encoding="utf-8") if readme_file.exists() else ""
 
 setup(
-    name="gphotos-sync",
+    name="gphotos-321sync",
     version="0.1.0",
     description="Google Photos Takeout backup and synchronization tool",
     long_description=long_description,
@@ -53,7 +53,7 @@ setup(
     },
     entry_points={
         "console_scripts": [
-            "gphotos-sync=gphotos_sync.main:main",
+            "gphotos-321sync=gphotos_321sync.main:main",
         ],
     },
     classifiers=[
