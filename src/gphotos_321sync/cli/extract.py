@@ -56,11 +56,20 @@ def extract_command() -> int:
         # Create extractor and run
         # preserve_structure=False so all archives extract to same dir
         # (Google Takeout archives all contain "Takeout" folder inside)
+        
+        # Prepare state file path
+        state_file = Path(config.paths.temp_directory) / "extraction_state.json"
+        
         extractor = TakeoutExtractor(
             source_dir=src,
             target_dir=tgt,
             verify_integrity=config.extraction.verify_checksums,
-            preserve_structure=False
+            preserve_structure=False,
+            max_retry_attempts=config.extraction.max_retry_attempts,
+            initial_retry_delay=config.extraction.initial_retry_delay_seconds,
+            enable_resume=config.extraction.enable_resume,
+            state_file=state_file,
+            verify_extracted_files=config.extraction.verify_extracted_files
         )
         
         results = extractor.run(

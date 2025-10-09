@@ -4,12 +4,84 @@ import logging
 import zipfile
 import tarfile
 import shutil
+import json
+import time
+import hashlib
+import re
+import zlib
 from pathlib import Path
-from typing import List, Dict, Optional, Callable
-from dataclasses import dataclass
+from typing import List, Dict, Optional, Callable, Set
+from dataclasses import dataclass, field, asdict
 from enum import Enum
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
+
+
+def calculate_crc32(file_path: Path) -> int:
+    """Calculate CRC32 checksum of a file.
+    
+    Args:
+        file_path: Path to file
+        
+    Returns:
+        CRC32 checksum as unsigned 32-bit integer
+    """
+    crc = 0
+    with open(file_path, 'rb') as f:
+        while chunk := f.read(65536):  # 64KB chunks
+            crc = zlib.crc32(chunk, crc)
+    return crc & 0xFFFFFFFF  # Ensure unsigned 32-bit
+
+# Windows invalid filename characters
+WINDOWS_INVALID_CHARS = r'[<>:"|?*]'
+WINDOWS_RESERVED_NAMES = {
+    'CON', 'PRN', 'AUX', 'NUL',
+    'COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9',
+    'LPT1', 'LPT2', 'LPT3', 'LPT4', 'LPT5', 'LPT6', 'LPT7', 'LPT8', 'LPT9'
+}
+
+
+def sanitize_filename(filename: str) -> tuple[str, bool]:
+    """Sanitize filename for Windows compatibility.
+    
+    Args:
+        filename: Original filename from archive
+        
+    Returns:
+        Tuple of (sanitized_filename, was_modified)
+    """
+    original = filename
+    
+    # Replace invalid characters with underscore
+    filename = re.sub(WINDOWS_INVALID_CHARS, '_', filename)
+    
+    # Handle path components
+    parts = filename.split('/')
+    sanitized_parts = []
+    
+    for part in parts:
+        if not part:
+            sanitized_parts.append(part)
+            continue
+            
+        # Remove trailing dots and spaces (Windows doesn't allow)
+        part = part.rstrip('. ')
+        
+        # Check for reserved names
+        name_without_ext = part.split('.')[0].upper()
+        if name_without_ext in WINDOWS_RESERVED_NAMES:
+            part = f"_{part}"
+        
+        sanitized_parts.append(part)
+    
+    filename = '/'.join(sanitized_parts)
+    
+    was_modified = (filename != original)
+    if was_modified:
+        logger.debug(f"Sanitized filename: '{original}' -> '{filename}'")
+    
+    return filename, was_modified
 
 
 class ArchiveFormat(Enum):
@@ -20,6 +92,135 @@ class ArchiveFormat(Enum):
     TAR_BZ2 = "tar.bz2"
     TGZ = "tgz"
     TBZ2 = "tbz2"
+
+
+@dataclass
+class FileExtractionRecord:
+    """Record of an extracted file for state tracking."""
+    path: str  # Relative path within archive
+    size: int  # File size in bytes
+    extracted_at: str  # ISO timestamp
+    crc32: Optional[int] = None  # CRC32 checksum from ZIP metadata
+
+
+@dataclass
+class ArchiveExtractionState:
+    """State of archive extraction for resumption."""
+    archive_name: str
+    archive_path: str
+    archive_size: int
+    started_at: str
+    completed_at: Optional[str] = None
+    extracted_files: Dict[str, FileExtractionRecord] = field(default_factory=dict)
+    failed_files: Dict[str, str] = field(default_factory=dict)  # path -> error message
+    total_files: int = 0
+    
+    def mark_file_extracted(self, file_path: str, size: int, crc32: Optional[int] = None):
+        """Mark a file as successfully extracted."""
+        self.extracted_files[file_path] = FileExtractionRecord(
+            path=file_path,
+            size=size,
+            extracted_at=datetime.utcnow().isoformat(),
+            crc32=crc32
+        )
+    
+    def mark_file_failed(self, file_path: str, error: str):
+        """Mark a file as failed extraction."""
+        self.failed_files[file_path] = error
+    
+    def is_file_extracted(self, file_path: str) -> bool:
+        """Check if a file has been extracted."""
+        return file_path in self.extracted_files
+    
+    def get_progress(self) -> tuple[int, int]:
+        """Get extraction progress (extracted, total)."""
+        return len(self.extracted_files), self.total_files
+
+
+@dataclass
+class ExtractionState:
+    """Overall extraction state for all archives."""
+    session_id: str
+    started_at: str
+    archives: Dict[str, ArchiveExtractionState] = field(default_factory=dict)
+    
+    def get_or_create_archive_state(self, archive: 'ArchiveInfo') -> ArchiveExtractionState:
+        """Get or create state for an archive."""
+        if archive.name not in self.archives:
+            self.archives[archive.name] = ArchiveExtractionState(
+                archive_name=archive.name,
+                archive_path=str(archive.path),
+                archive_size=archive.size_bytes,
+                started_at=datetime.utcnow().isoformat()
+            )
+        return self.archives[archive.name]
+    
+    def save(self, state_file: Path):
+        """Save state to JSON file."""
+        state_file.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Convert to dict for JSON serialization
+        state_dict = {
+            'session_id': self.session_id,
+            'started_at': self.started_at,
+            'archives': {}
+        }
+        
+        for name, archive_state in self.archives.items():
+            state_dict['archives'][name] = {
+                'archive_name': archive_state.archive_name,
+                'archive_path': archive_state.archive_path,
+                'archive_size': archive_state.archive_size,
+                'started_at': archive_state.started_at,
+                'completed_at': archive_state.completed_at,
+                'total_files': archive_state.total_files,
+                'extracted_files': {k: asdict(v) for k, v in archive_state.extracted_files.items()},
+                'failed_files': archive_state.failed_files
+            }
+        
+        with open(state_file, 'w') as f:
+            json.dump(state_dict, f, indent=2)
+        
+        logger.debug(f"Saved extraction state to {state_file}")
+    
+    @classmethod
+    def load(cls, state_file: Path) -> Optional['ExtractionState']:
+        """Load state from JSON file."""
+        if not state_file.exists():
+            return None
+        
+        try:
+            with open(state_file, 'r') as f:
+                state_dict = json.load(f)
+            
+            state = cls(
+                session_id=state_dict['session_id'],
+                started_at=state_dict['started_at']
+            )
+            
+            for name, archive_dict in state_dict.get('archives', {}).items():
+                archive_state = ArchiveExtractionState(
+                    archive_name=archive_dict['archive_name'],
+                    archive_path=archive_dict['archive_path'],
+                    archive_size=archive_dict['archive_size'],
+                    started_at=archive_dict['started_at'],
+                    completed_at=archive_dict.get('completed_at'),
+                    total_files=archive_dict.get('total_files', 0),
+                    failed_files=archive_dict.get('failed_files', {})
+                )
+                
+                # Reconstruct extracted files
+                for file_path, file_dict in archive_dict.get('extracted_files', {}).items():
+                    archive_state.extracted_files[file_path] = FileExtractionRecord(**file_dict)
+                
+                state.archives[name] = archive_state
+            
+            logger.info(f"Loaded extraction state from {state_file}")
+            return state
+            
+        except Exception as e:
+            logger.warning(f"Failed to load extraction state: {e}")
+            return None
 
 
 @dataclass
@@ -119,7 +320,12 @@ class ArchiveExtractor:
         self,
         target_dir: Path,
         verify_integrity: bool = True,
-        preserve_structure: bool = True
+        preserve_structure: bool = True,
+        max_retry_attempts: int = 5,
+        initial_retry_delay: float = 32.0,
+        enable_resume: bool = True,
+        state_file: Optional[Path] = None,
+        verify_extracted_files: bool = True
     ):
         """Initialize archive extractor.
         
@@ -127,13 +333,36 @@ class ArchiveExtractor:
             target_dir: Directory to extract archives to
             verify_integrity: Whether to verify archive integrity before extraction
             preserve_structure: Whether to preserve directory structure from archive
+            max_retry_attempts: Maximum number of retry attempts per file (then hard fail)
+            initial_retry_delay: Initial delay (seconds), doubles each attempt
+            enable_resume: Whether to enable resumption of interrupted extractions
+            state_file: Path to state file for tracking progress
+            verify_extracted_files: Whether to verify extracted files exist before skipping
         """
         self.target_dir = Path(target_dir)
         self.verify_integrity = verify_integrity
         self.preserve_structure = preserve_structure
+        self.max_retry_attempts = max_retry_attempts
+        self.initial_retry_delay = initial_retry_delay
+        self.enable_resume = enable_resume
+        self.state_file = Path(state_file) if state_file else None
+        self.verify_extracted_files = verify_extracted_files
         
         # Create target directory if it doesn't exist
         self.target_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Load or create extraction state
+        self.state: Optional[ExtractionState] = None
+        if self.enable_resume and self.state_file:
+            self.state = ExtractionState.load(self.state_file)
+            if self.state:
+                logger.info(f"Resuming extraction from previous session: {self.state.session_id}")
+        
+        if not self.state:
+            self.state = ExtractionState(
+                session_id=datetime.utcnow().strftime("%Y%m%d_%H%M%S"),
+                started_at=datetime.utcnow().isoformat()
+            )
     
     def extract(
         self,
@@ -155,6 +384,9 @@ class ArchiveExtractor:
         """
         logger.info(f"Extracting {archive}")
         
+        # Get or create state for this archive
+        archive_state = self.state.get_or_create_archive_state(archive)
+        
         # Determine extraction subdirectory
         if self.preserve_structure:
             # Extract to subdirectory named after archive (without extension)
@@ -167,7 +399,7 @@ class ArchiveExtractor:
         
         try:
             if archive.format == ArchiveFormat.ZIP:
-                self._extract_zip(archive.path, extract_to, progress_callback)
+                self._extract_zip(archive.path, extract_to, progress_callback, archive_state)
             elif archive.format in (
                 ArchiveFormat.TAR,
                 ArchiveFormat.TAR_GZ,
@@ -175,22 +407,130 @@ class ArchiveExtractor:
                 ArchiveFormat.TAR_BZ2,
                 ArchiveFormat.TBZ2
             ):
-                self._extract_tar(archive.path, extract_to, progress_callback)
+                self._extract_tar(archive.path, extract_to, progress_callback, archive_state)
             else:
                 raise ValueError(f"Unsupported archive format: {archive.format}")
+            
+            # Mark archive as completed
+            archive_state.completed_at = datetime.utcnow().isoformat()
+            self._save_state()
             
             logger.info(f"Successfully extracted to {extract_to}")
             return extract_to
             
         except Exception as e:
             logger.error(f"Failed to extract {archive.path}: {e}")
+            self._save_state()  # Save state even on failure
             raise RuntimeError(f"Extraction failed: {e}") from e
+    
+    def _save_state(self):
+        """Save extraction state to file."""
+        if self.enable_resume and self.state_file and self.state:
+            try:
+                self.state.save(self.state_file)
+            except Exception as e:
+                logger.warning(f"Failed to save extraction state: {e}")
+    
+    def _retry_with_backoff(
+        self,
+        operation: Callable,
+        operation_name: str,
+        *args,
+        **kwargs
+    ):
+        """Retry an operation with exponential backoff.
+        
+        Args:
+            operation: Function to retry
+            operation_name: Name for logging
+            *args, **kwargs: Arguments to pass to operation
+            
+        Returns:
+            Result of operation
+            
+        Raises:
+            Last exception if all retries fail
+        """
+        delay = self.initial_retry_delay
+        
+        for attempt in range(1, self.max_retry_attempts + 1):
+            try:
+                return operation(*args, **kwargs)
+            except OSError as e:
+                if attempt >= self.max_retry_attempts:
+                    # Final attempt failed - give up
+                    logger.error(
+                        f"{operation_name} failed after {attempt} attempts: {e}"
+                    )
+                    raise
+                
+                # Log retry attempt
+                logger.warning(
+                    f"{operation_name} failed (attempt {attempt}/{self.max_retry_attempts}): {e}. "
+                    f"Retrying in {delay:.0f}s..."
+                )
+                
+                # Wait before retry
+                time.sleep(delay)
+                
+                # Double delay for next retry (exponential backoff)
+                delay *= 2
+    
+    def _verify_extracted_file(
+        self,
+        extract_to: Path,
+        member_path: str,
+        expected_size: Optional[int] = None,
+        expected_crc32: Optional[int] = None
+    ) -> bool:
+        """Verify that an extracted file exists and matches expected properties.
+        
+        Args:
+            extract_to: Base extraction directory
+            member_path: Relative path of file within archive
+            expected_size: Expected file size in bytes
+            expected_crc32: Expected CRC32 checksum
+            
+        Returns:
+            True if file exists and is valid, False otherwise
+        """
+        try:
+            file_path = extract_to / member_path
+            if not file_path.exists():
+                logger.debug(f"File not found: {member_path}")
+                return False
+            
+            # Check size
+            if expected_size is not None:
+                actual_size = file_path.stat().st_size
+                if actual_size != expected_size:
+                    logger.warning(
+                        f"File size mismatch for {member_path}: "
+                        f"expected {expected_size}, got {actual_size}"
+                    )
+                    return False
+            
+            # Check CRC32
+            if expected_crc32 is not None:
+                actual_crc32 = calculate_crc32(file_path)
+                if actual_crc32 != expected_crc32:
+                    logger.warning(
+                        f"CRC32 mismatch for {member_path}: "
+                        f"expected {expected_crc32:08X}, got {actual_crc32:08X}"
+                    )
+                    return False
+            
+            return True
+        except Exception as e:
+            logger.debug(f"Error verifying file {member_path}: {e}")
+            return False
     
     def _extract_zip(
         self,
         archive_path: Path,
         extract_to: Path,
-        progress_callback: Optional[Callable[[int, int], None]] = None
+        progress_callback: Optional[Callable[[int, int], None]] = None,
+        archive_state: Optional[ArchiveExtractionState] = None
     ) -> None:
         """Extract a ZIP archive.
         
@@ -198,37 +538,118 @@ class ArchiveExtractor:
             archive_path: Path to ZIP file
             extract_to: Directory to extract to
             progress_callback: Optional progress callback
+            archive_state: Optional state tracker for resumption
         """
         with zipfile.ZipFile(archive_path, 'r') as zip_ref:
             members = zip_ref.namelist()
             total = len(members)
             
+            # Update total files in state
+            if archive_state:
+                archive_state.total_files = total
+            
             logger.debug(f"Extracting {total} files from ZIP archive")
             
             skipped = 0
+            resumed = 0
+            
             for i, member in enumerate(members):
+                info = zip_ref.getinfo(member)
+                
+                # Sanitize filename for Windows compatibility
+                sanitized_member, was_sanitized = sanitize_filename(member)
+                
+                # Check if file was already extracted
+                if archive_state and self.enable_resume:
+                    if archive_state.is_file_extracted(sanitized_member):
+                        # Verify file still exists if verification is enabled
+                        if self.verify_extracted_files:
+                            # Get stored CRC32 from state
+                            stored_record = archive_state.extracted_files.get(sanitized_member)
+                            expected_crc32 = stored_record.crc32 if stored_record else info.CRC
+                            
+                            if self._verify_extracted_file(
+                                extract_to, 
+                                sanitized_member, 
+                                info.file_size,
+                                expected_crc32
+                            ):
+                                resumed += 1
+                                if (i + 1) % 100 == 0:
+                                    logger.info(
+                                        f"Progress {i + 1}/{total} files "
+                                        f"({resumed} resumed, {skipped} skipped)"
+                                    )
+                                if progress_callback:
+                                    progress_callback(i + 1, total)
+                                continue
+                            else:
+                                logger.info(f"Re-extracting {member} (verification failed)")
+                        else:
+                            resumed += 1
+                            if (i + 1) % 100 == 0:
+                                logger.info(
+                                    f"Progress {i + 1}/{total} files "
+                                    f"({resumed} resumed, {skipped} skipped)"
+                                )
+                            if progress_callback:
+                                progress_callback(i + 1, total)
+                            continue
+                
+                if was_sanitized:
+                    logger.info(f"Sanitized filename: '{member}' -> '{sanitized_member}'")
+                
+                # Extract file with retry logic
                 try:
-                    # Extract using extended-length path for Windows
-                    # This handles both long paths and Unicode characters better
-                    extract_to_extended = Path(f"\\\\?\\{extract_to.resolve()}")
-                    zip_ref.extract(member, extract_to_extended)
+                    def extract_operation():
+                        # Extract to sanitized path
+                        target_path = extract_to / sanitized_member
+                        target_path.parent.mkdir(parents=True, exist_ok=True)
+                        
+                        # Read from archive and write to sanitized path
+                        with zip_ref.open(member) as source:
+                            with open(target_path, 'wb') as target:
+                                shutil.copyfileobj(source, target)
+                    
+                    self._retry_with_backoff(
+                        extract_operation,
+                        f"Extraction of {member}"
+                    )
+                    
+                    # Mark file as extracted in state (use sanitized name + CRC32)
+                    if archive_state:
+                        archive_state.mark_file_extracted(
+                            sanitized_member, 
+                            info.file_size,
+                            info.CRC  # CRC32 from ZIP metadata
+                        )
+                        
+                        # Save state periodically (every 100 files)
+                        if (i + 1) % 100 == 0:
+                            self._save_state()
+                    
                 except OSError as e:
-                    # If extended path fails, try normal path
-                    try:
-                        zip_ref.extract(member, extract_to)
-                    except OSError as e2:
-                        # Skip files that can't be extracted
-                        logger.warning(f"Skipping file {member}: {e2}")
-                        skipped += 1
-                        continue
+                    # File extraction failed after all retries
+                    logger.warning(f"Skipping file {member}: {e}")
+                    if archive_state:
+                        archive_state.mark_file_failed(sanitized_member, str(e))
+                    skipped += 1
                 
                 # Log progress every 100 files to avoid log spam
                 if (i + 1) % 100 == 0:
-                    logger.info(f"Extracted {i + 1}/{total} files ({skipped} skipped)")
+                    logger.info(
+                        f"Extracted {i + 1}/{total} files "
+                        f"({resumed} resumed, {skipped} skipped)"
+                    )
                 
                 if progress_callback:
                     progress_callback(i + 1, total)
             
+            # Final state save
+            self._save_state()
+            
+            if resumed > 0:
+                logger.info(f"Resumed {resumed} previously extracted files")
             if skipped > 0:
                 logger.warning(f"Skipped {skipped} files due to errors")
     
@@ -236,7 +657,8 @@ class ArchiveExtractor:
         self,
         archive_path: Path,
         extract_to: Path,
-        progress_callback: Optional[Callable[[int, int], None]] = None
+        progress_callback: Optional[Callable[[int, int], None]] = None,
+        archive_state: Optional[ArchiveExtractionState] = None
     ) -> None:
         """Extract a TAR archive (including compressed variants).
         
@@ -244,6 +666,7 @@ class ArchiveExtractor:
             archive_path: Path to TAR file
             extract_to: Directory to extract to
             progress_callback: Optional progress callback
+            archive_state: Optional state tracker for resumption
         """
         # Determine compression mode
         if archive_path.suffix in ('.gz', '.tgz'):
@@ -257,16 +680,90 @@ class ArchiveExtractor:
             members = tar_ref.getmembers()
             total = len(members)
             
+            # Update total files in state
+            if archive_state:
+                archive_state.total_files = total
+            
+            skipped = 0
+            resumed = 0
+            
             for i, member in enumerate(members):
                 # Security check: prevent path traversal
                 if not self._is_safe_path(extract_to, member.name):
                     logger.warning(f"Skipping unsafe path: {member.name}")
+                    skipped += 1
                     continue
                 
-                tar_ref.extract(member, extract_to)
+                # Check if file was already extracted
+                if archive_state and self.enable_resume:
+                    if archive_state.is_file_extracted(member.name):
+                        # Verify file still exists if verification is enabled
+                        if self.verify_extracted_files:
+                            if self._verify_extracted_file(extract_to, member.name, member.size):
+                                resumed += 1
+                                if (i + 1) % 100 == 0:
+                                    logger.info(
+                                        f"Progress {i + 1}/{total} files "
+                                        f"({resumed} resumed, {skipped} skipped)"
+                                    )
+                                if progress_callback:
+                                    progress_callback(i + 1, total)
+                                continue
+                            else:
+                                logger.info(f"Re-extracting {member.name} (verification failed)")
+                        else:
+                            resumed += 1
+                            if (i + 1) % 100 == 0:
+                                logger.info(
+                                    f"Progress {i + 1}/{total} files "
+                                    f"({resumed} resumed, {skipped} skipped)"
+                                )
+                            if progress_callback:
+                                progress_callback(i + 1, total)
+                            continue
+                
+                # Extract file with retry logic
+                try:
+                    def extract_operation():
+                        tar_ref.extract(member, extract_to)
+                    
+                    self._retry_with_backoff(
+                        extract_operation,
+                        f"Extraction of {member.name}"
+                    )
+                    
+                    # Mark file as extracted in state
+                    if archive_state:
+                        archive_state.mark_file_extracted(member.name, member.size)
+                        
+                        # Save state periodically (every 100 files)
+                        if (i + 1) % 100 == 0:
+                            self._save_state()
+                
+                except OSError as e:
+                    # File extraction failed after all retries
+                    logger.warning(f"Skipping file {member.name}: {e}")
+                    if archive_state:
+                        archive_state.mark_file_failed(member.name, str(e))
+                    skipped += 1
+                
+                # Log progress every 100 files
+                if (i + 1) % 100 == 0:
+                    logger.info(
+                        f"Extracted {i + 1}/{total} files "
+                        f"({resumed} resumed, {skipped} skipped)"
+                    )
                 
                 if progress_callback:
                     progress_callback(i + 1, total)
+            
+            # Final state save
+            self._save_state()
+            
+            if resumed > 0:
+                logger.info(f"Resumed {resumed} previously extracted files")
+            if skipped > 0:
+                logger.warning(f"Skipped {skipped} files due to errors")
     
     def _is_safe_path(self, base_dir: Path, member_path: str) -> bool:
         """Check if extraction path is safe (no path traversal).
@@ -323,7 +820,12 @@ class TakeoutExtractor:
         source_dir: Path,
         target_dir: Path,
         verify_integrity: bool = True,
-        preserve_structure: bool = True
+        preserve_structure: bool = True,
+        max_retry_attempts: int = 5,
+        initial_retry_delay: float = 32.0,
+        enable_resume: bool = True,
+        state_file: Optional[Path] = None,
+        verify_extracted_files: bool = True
     ):
         """Initialize Takeout extractor.
         
@@ -332,12 +834,22 @@ class TakeoutExtractor:
             target_dir: Directory to extract to
             verify_integrity: Whether to verify archive integrity
             preserve_structure: Whether to preserve directory structure
+            max_retry_attempts: Maximum number of retry attempts per file
+            initial_retry_delay: Initial delay (seconds), doubles each attempt
+            enable_resume: Whether to enable resumption of interrupted extractions
+            state_file: Path to state file for tracking progress
+            verify_extracted_files: Whether to verify extracted files exist before skipping
         """
         self.discovery = ArchiveDiscovery(source_dir)
         self.extractor = ArchiveExtractor(
             target_dir,
             verify_integrity=verify_integrity,
-            preserve_structure=preserve_structure
+            preserve_structure=preserve_structure,
+            max_retry_attempts=max_retry_attempts,
+            initial_retry_delay=initial_retry_delay,
+            enable_resume=enable_resume,
+            state_file=state_file,
+            verify_extracted_files=verify_extracted_files
         )
     
     def run(

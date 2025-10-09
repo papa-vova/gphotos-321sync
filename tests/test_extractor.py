@@ -3,12 +3,16 @@
 import pytest
 import zipfile
 import tarfile
+import time
 from pathlib import Path
+from unittest.mock import Mock, patch
 from gphotos_321sync.processing.extractor import (
     ArchiveDiscovery,
     ArchiveExtractor,
     TakeoutExtractor,
     ArchiveFormat,
+    ExtractionState,
+    ArchiveExtractionState,
 )
 
 
@@ -235,3 +239,107 @@ class TestTakeoutExtractor:
         results = extractor.run()
         
         assert len(results) == 0
+
+
+class TestExtractionState:
+    """Test extraction state tracking."""
+    
+    def test_state_save_and_load(self, tmp_path):
+        """Test saving and loading extraction state."""
+        state_file = tmp_path / "state.json"
+        
+        # Create state
+        state = ExtractionState(
+            session_id="test_session",
+            started_at="2025-01-01T00:00:00"
+        )
+        
+        # Save state
+        state.save(state_file)
+        assert state_file.exists()
+        
+        # Load state
+        loaded_state = ExtractionState.load(state_file)
+        assert loaded_state is not None
+        assert loaded_state.session_id == "test_session"
+    
+    def test_resume_extraction(self, temp_source_dir, temp_target_dir, tmp_path):
+        """Test resuming an interrupted extraction."""
+        state_file = tmp_path / "state.json"
+        
+        # First extraction - will be interrupted
+        extractor1 = ArchiveExtractor(
+            temp_target_dir,
+            enable_resume=True,
+            state_file=state_file
+        )
+        
+        discovery = ArchiveDiscovery(temp_source_dir)
+        archives = discovery.discover()
+        zip_archive = next(a for a in archives if a.format == ArchiveFormat.ZIP)
+        
+        # Extract
+        extractor1.extract(zip_archive)
+        
+        # Verify state was saved
+        assert state_file.exists()
+        
+        # Second extraction - should resume
+        extractor2 = ArchiveExtractor(
+            temp_target_dir,
+            enable_resume=True,
+            state_file=state_file
+        )
+        
+        # Should load previous state
+        assert extractor2.state is not None
+        assert zip_archive.name in extractor2.state.archives
+
+
+class TestRetryLogic:
+    """Test retry with exponential backoff."""
+    
+    def test_retry_on_transient_failure(self, temp_source_dir, temp_target_dir, tmp_path):
+        """Test that extraction retries on transient failures."""
+        state_file = tmp_path / "state.json"
+        
+        extractor = ArchiveExtractor(
+            temp_target_dir,
+            enable_resume=True,
+            state_file=state_file,
+            max_retry_duration=10.0,
+            initial_retry_delay=0.1,
+            max_retry_delay=1.0
+        )
+        
+        # Test retry logic with a mock operation that fails then succeeds
+        call_count = [0]
+        
+        def flaky_operation():
+            call_count[0] += 1
+            if call_count[0] < 3:
+                raise OSError("Simulated network error")
+            return "success"
+        
+        result = extractor._retry_with_backoff(flaky_operation, "test operation")
+        
+        assert result == "success"
+        assert call_count[0] == 3  # Failed twice, succeeded on third try
+    
+    def test_retry_timeout(self, temp_target_dir, tmp_path):
+        """Test that retry gives up after max duration."""
+        state_file = tmp_path / "state.json"
+        
+        extractor = ArchiveExtractor(
+            temp_target_dir,
+            enable_resume=True,
+            state_file=state_file,
+            max_retry_duration=1.0,  # Short timeout
+            initial_retry_delay=0.5
+        )
+        
+        def always_fail():
+            raise OSError("Persistent error")
+        
+        with pytest.raises(OSError, match="Persistent error"):
+            extractor._retry_with_backoff(always_fail, "test operation")
