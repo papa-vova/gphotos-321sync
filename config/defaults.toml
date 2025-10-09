@@ -12,8 +12,8 @@ environment = "production"  # production | development | testing
 
 [paths]
 # Variables: ${USER_HOME}, ${USER_DATA}, ${USER_CONFIG}, ${USER_CACHE}, ${USER_LOGS}, ${TEMP}
-takeout_archives = "${USER_HOME}/Downloads"
-working_directory = "${USER_DATA}/gphotos-sync"
+takeout_archives = "${USER_HOME}/Takeout"
+working_directory = "${USER_HOME}/takeout_gallery"
 database_path = "${USER_DATA}/gphotos-sync/metadata.db"
 config_directory = "${USER_CONFIG}/gphotos-sync"
 log_directory = "${USER_LOGS}/gphotos-sync"
@@ -134,7 +134,7 @@ secret_access_key = ""
 
 [logging]
 level = "INFO"  # DEBUG | INFO | WARNING | ERROR | CRITICAL
-format = "detailed"  # simple | detailed | json
+format = "json"  # simple | detailed | json
 enable_file_logging = true
 enable_console_logging = true
 max_file_size_mb = 10

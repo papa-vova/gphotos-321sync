@@ -70,9 +70,9 @@ def setup_logging() -> None:
     # Remove existing handlers
     root_logger.handlers.clear()
 
-    # Console handler
+    # Console handler (always stderr for CLI tools)
     if config.logging.enable_console_logging:
-        console_handler = logging.StreamHandler(sys.stdout)
+        console_handler = logging.StreamHandler(sys.stderr)
 
         if config.logging.format == "json":
             console_handler.setFormatter(StructuredFormatter())
