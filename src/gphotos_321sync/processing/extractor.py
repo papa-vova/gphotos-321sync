@@ -9,6 +9,7 @@ import time
 import hashlib
 import re
 import zlib
+import gc
 from pathlib import Path
 from typing import List, Dict, Optional, Callable, Set
 from dataclasses import dataclass, field, asdict
@@ -156,7 +157,11 @@ class ExtractionState:
         return self.archives[archive.name]
     
     def save(self, state_file: Path):
-        """Save state to JSON file."""
+        """Save state to JSON file.
+        
+        Note: Only saves extracted_files for incomplete archives to reduce memory usage.
+        Completed archives only store summary statistics.
+        """
         state_file.parent.mkdir(parents=True, exist_ok=True)
         
         # Convert to dict for JSON serialization
@@ -167,16 +172,32 @@ class ExtractionState:
         }
         
         for name, archive_state in self.archives.items():
-            state_dict['archives'][name] = {
-                'archive_name': archive_state.archive_name,
-                'archive_path': archive_state.archive_path,
-                'archive_size': archive_state.archive_size,
-                'started_at': archive_state.started_at,
-                'completed_at': archive_state.completed_at,
-                'total_files': archive_state.total_files,
-                'extracted_files': {k: asdict(v) for k, v in archive_state.extracted_files.items()},
-                'failed_files': archive_state.failed_files
-            }
+            # For completed archives, don't save the full extracted_files list to save memory
+            # Only save it for incomplete archives (for resume capability)
+            if archive_state.completed_at:
+                # Archive completed - only save summary
+                state_dict['archives'][name] = {
+                    'archive_name': archive_state.archive_name,
+                    'archive_path': archive_state.archive_path,
+                    'archive_size': archive_state.archive_size,
+                    'started_at': archive_state.started_at,
+                    'completed_at': archive_state.completed_at,
+                    'total_files': archive_state.total_files,
+                    'extracted_files': {},  # Empty for completed archives
+                    'failed_files': archive_state.failed_files
+                }
+            else:
+                # Archive in progress - save full state for resume
+                state_dict['archives'][name] = {
+                    'archive_name': archive_state.archive_name,
+                    'archive_path': archive_state.archive_path,
+                    'archive_size': archive_state.archive_size,
+                    'started_at': archive_state.started_at,
+                    'completed_at': archive_state.completed_at,
+                    'total_files': archive_state.total_files,
+                    'extracted_files': {k: asdict(v) for k, v in archive_state.extracted_files.items()},
+                    'failed_files': archive_state.failed_files
+                }
         
         with open(state_file, 'w') as f:
             json.dump(state_dict, f, indent=2)
@@ -411,9 +432,23 @@ class ArchiveExtractor:
             else:
                 raise ValueError(f"Unsupported archive format: {archive.format}")
             
-            # Mark archive as completed
+            # Mark archive as completed and save state
+            # This will trigger the save logic to only store summary (not full file list)
             archive_state.completed_at = datetime.utcnow().isoformat()
             self._save_state()
+            
+            # Clear extracted_files dict from memory after archive completion to prevent OOM
+            # The state file already saved (without the file list for completed archives)
+            if archive_state:
+                extracted_count = len(archive_state.extracted_files)
+                logger.debug(f"Clearing {extracted_count} file records from memory for {archive.name}")
+                archive_state.extracted_files.clear()
+                # Also clear failed_files if archive completed successfully
+                if not archive_state.failed_files:
+                    archive_state.failed_files.clear()
+                # Force garbage collection to free memory immediately
+                gc.collect()
+                logger.debug(f"Freed memory after completing {archive.name}")
             
             logger.info(f"Successfully extracted to {extract_to}")
             return extract_to
@@ -606,10 +641,15 @@ class ArchiveExtractor:
                         target_path = extract_to / sanitized_member
                         target_path.parent.mkdir(parents=True, exist_ok=True)
                         
-                        # Read from archive and write to sanitized path
+                        # Read from archive and write to sanitized path with explicit buffer control
                         with zip_ref.open(member) as source:
                             with open(target_path, 'wb') as target:
-                                shutil.copyfileobj(source, target)
+                                # Use smaller buffer (8KB) and explicit copying to reduce memory usage
+                                while True:
+                                    chunk = source.read(8192)
+                                    if not chunk:
+                                        break
+                                    target.write(chunk)
                     
                     self._retry_with_backoff(
                         extract_operation,
@@ -627,6 +667,11 @@ class ArchiveExtractor:
                         # Save state periodically (every 100 files)
                         if (i + 1) % 100 == 0:
                             self._save_state()
+                        
+                        # Force garbage collection every 500 files to prevent memory buildup
+                        if (i + 1) % 500 == 0:
+                            gc.collect()
+                            logger.debug(f"Performed garbage collection at {i + 1}/{total} files")
                     
                 except OSError as e:
                     # File extraction failed after all retries
@@ -739,6 +784,11 @@ class ArchiveExtractor:
                         # Save state periodically (every 100 files)
                         if (i + 1) % 100 == 0:
                             self._save_state()
+                        
+                        # Force garbage collection every 500 files to prevent memory buildup
+                        if (i + 1) % 500 == 0:
+                            gc.collect()
+                            logger.debug(f"Performed garbage collection at {i + 1}/{total} files")
                 
                 except OSError as e:
                     # File extraction failed after all retries
