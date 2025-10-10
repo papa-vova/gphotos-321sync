@@ -1,4 +1,4 @@
-# Google Photos Sync (gphotos-321sync)
+# Google Photos 3-2-1 Sync (gphotos-321sync)
 
 A comprehensive backup and synchronization tool for Google Photos Takeout archives.
 

@@ -369,8 +369,17 @@ class ArchiveExtractor:
         self.state_file = Path(state_file) if state_file else None
         self.verify_extracted_files = verify_extracted_files
         
-        # Create target directory if it doesn't exist
-        self.target_dir.mkdir(parents=True, exist_ok=True)
+        # Validate target directory exists
+        if not self.target_dir.exists():
+            raise FileNotFoundError(
+                f"Target directory does not exist: {self.target_dir}\n"
+                f"Please create the directory before running extraction."
+            )
+        
+        if not self.target_dir.is_dir():
+            raise NotADirectoryError(
+                f"Target path is not a directory: {self.target_dir}"
+            )
         
         # Load or create extraction state
         self.state: Optional[ExtractionState] = None
@@ -456,11 +465,11 @@ class ArchiveExtractor:
         if self.preserve_structure:
             # Extract to subdirectory named after archive (without extension)
             extract_to = self.target_dir / archive.path.stem
+            # Create subdirectory for this archive
+            extract_to.mkdir(parents=True, exist_ok=True)
         else:
-            # Extract directly to target directory
+            # Extract directly to target directory (already validated in __init__)
             extract_to = self.target_dir
-        
-        extract_to.mkdir(parents=True, exist_ok=True)
         
         try:
             if archive.format == ArchiveFormat.ZIP:

@@ -100,10 +100,11 @@ class TestArchiveDiscovery:
         archives_non_recursive = discovery.discover(recursive=False)
         assert len(archives_non_recursive) == 0
     
-    def test_invalid_source_dir(self):
+    def test_invalid_source_dir(self, tmp_path):
         """Test error handling for invalid source directory."""
+        nonexistent = tmp_path / "definitely_does_not_exist_12345"
         with pytest.raises(FileNotFoundError):
-            ArchiveDiscovery(Path("/nonexistent/path"))
+            ArchiveDiscovery(nonexistent)
     
     def test_source_is_file(self, tmp_path):
         """Test error handling when source is a file."""
@@ -187,6 +188,7 @@ class TestArchiveExtractor:
         
         # With preserve_structure=False
         target_dir_2 = temp_target_dir.parent / "target2"
+        target_dir_2.mkdir()  # Must create target directory
         extractor_no_preserve = ArchiveExtractor(target_dir_2, preserve_structure=False)
         extract_path_2 = extractor_no_preserve.extract(zip_archive)
         assert extract_path_2 == target_dir_2
@@ -230,6 +232,7 @@ class TestTakeoutExtractor:
         source_dir.mkdir()
         
         target_dir = tmp_path / "target"
+        target_dir.mkdir()  # Must create target directory
         
         extractor = TakeoutExtractor(
             source_dir=source_dir,
@@ -307,9 +310,8 @@ class TestRetryLogic:
             temp_target_dir,
             enable_resume=True,
             state_file=state_file,
-            max_retry_duration=10.0,
-            initial_retry_delay=0.1,
-            max_retry_delay=1.0
+            max_retry_attempts=3,
+            initial_retry_delay=0.1
         )
         
         # Test retry logic with a mock operation that fails then succeeds
@@ -326,20 +328,20 @@ class TestRetryLogic:
         assert result == "success"
         assert call_count[0] == 3  # Failed twice, succeeded on third try
     
-    def test_retry_timeout(self, temp_target_dir, tmp_path):
-        """Test that retry gives up after max duration."""
+    def test_retry_gives_up_after_max_attempts(self, temp_target_dir, tmp_path):
+        """Test that retry gives up after max attempts."""
         state_file = tmp_path / "state.json"
         
         extractor = ArchiveExtractor(
             temp_target_dir,
             enable_resume=True,
             state_file=state_file,
-            max_retry_duration=1.0,  # Short timeout
-            initial_retry_delay=0.5
+            max_retry_attempts=2,
+            initial_retry_delay=0.1
         )
         
         def always_fail():
             raise OSError("Persistent error")
         
-        with pytest.raises(OSError, match="Persistent error"):
+        with pytest.raises(RuntimeError, match="Extraction failed after 2 attempts"):
             extractor._retry_with_backoff(always_fail, "test operation")
