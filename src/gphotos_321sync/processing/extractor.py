@@ -408,6 +408,16 @@ class ArchiveExtractor:
         # Get or create state for this archive
         archive_state = self.state.get_or_create_archive_state(archive)
         
+        # Check if archive was already completed in a previous session
+        if archive_state.completed_at:
+            logger.info(f"Archive {archive.name} already completed at {archive_state.completed_at}, skipping")
+            # Determine extraction path for return value
+            if self.preserve_structure:
+                extract_to = self.target_dir / archive.path.stem
+            else:
+                extract_to = self.target_dir
+            return extract_to
+        
         # Determine extraction subdirectory
         if self.preserve_structure:
             # Extract to subdirectory named after archive (without extension)
