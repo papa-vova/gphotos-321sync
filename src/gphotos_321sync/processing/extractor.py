@@ -419,12 +419,34 @@ class ArchiveExtractor:
                 extract_to = self.target_dir
             
             # Verify all files actually exist with correct CRC32
-            if self._verify_archive_extraction(archive, extract_to):
+            all_valid, bad_files = self._verify_archive_extraction(archive, extract_to)
+            
+            if all_valid:
                 logger.info(f"Archive {archive.name} verified successfully, skipping")
                 return extract_to
-            else:
+            elif bad_files:
+                # Selective re-extraction of corrupted/missing files only
                 logger.warning(
-                    f"Archive {archive.name} verification failed, will re-extract"
+                    f"Archive {archive.name} has {len(bad_files)} corrupted/missing files, "
+                    f"re-extracting them only"
+                )
+                try:
+                    if archive.format == ArchiveFormat.ZIP:
+                        self._extract_specific_files_from_zip(archive.path, extract_to, bad_files)
+                        logger.info(f"Successfully repaired {archive.name}")
+                        return extract_to
+                    else:
+                        logger.warning(f"Selective re-extraction not supported for {archive.format}, will re-extract entire archive")
+                        # Mark as incomplete to trigger full re-extraction
+                        archive_state.completed_at = None
+                except Exception as e:
+                    logger.error(f"Failed to re-extract specific files: {e}, will re-extract entire archive")
+                    # Mark as incomplete to trigger full re-extraction
+                    archive_state.completed_at = None
+            else:
+                # Verification failed but no specific files identified
+                logger.warning(
+                    f"Archive {archive.name} verification failed, will re-extract entire archive"
                 )
                 # Mark as incomplete to trigger re-extraction
                 archive_state.completed_at = None
@@ -589,7 +611,7 @@ class ArchiveExtractor:
         self,
         archive: ArchiveInfo,
         extract_to: Path
-    ) -> bool:
+    ) -> tuple[bool, List[str]]:
         """Verify all files from a completed archive exist with correct CRC32.
         
         Uses batch optimization: first scans directory tree once to check existence,
@@ -600,25 +622,30 @@ class ArchiveExtractor:
             extract_to: Directory where files were extracted
             
         Returns:
-            True if all files exist and have correct CRC32, False otherwise
+            Tuple of (all_valid, bad_files_list)
+            - all_valid: True if all files verified, False if any issues
+            - bad_files_list: List of file paths that need re-extraction (original names from ZIP)
         """
         try:
             logger.info(f"Verifying extraction of {archive.name}")
             
             if archive.format != ArchiveFormat.ZIP:
-                logger.debug(f"Skipping verification for non-ZIP archive: {archive.name}")
-                return True  # Only verify ZIP archives for now
+                logger.warning(f"Verification not possible for {archive.format.value} archives, will re-extract to be safe")
+                return (False, [])  # Cannot verify, assume bad and trigger full re-extraction
             
             with zipfile.ZipFile(archive.path, 'r') as zip_ref:
                 members = zip_ref.namelist()
                 total = len(members)
                 
                 # Build expected files map with sanitized names
+                # Keep mapping of sanitized -> original for re-extraction
                 expected_files = {}
+                sanitized_to_original = {}
                 for member in members:
                     info = zip_ref.getinfo(member)
                     sanitized_member, _ = sanitize_filename(member)
                     expected_files[sanitized_member] = info
+                    sanitized_to_original[sanitized_member] = member
                 
                 logger.debug(f"Verifying {total} files from {archive.name}")
                 
@@ -634,20 +661,22 @@ class ArchiveExtractor:
                             existing_files[rel_path_str] = file_path
                 except Exception as e:
                     logger.warning(f"Error scanning directory tree: {e}")
-                    return False
+                    return (False, [])
                 
-                # Step 2: Fast-fail on missing files (no disk I/O, just memory lookups)
-                missing_files = []
+                # Step 2: Check for missing/corrupted files
+                bad_files = []  # Track files that need re-extraction (original names)
+                
+                # Check missing files
                 for member_path in expected_files.keys():
                     if member_path not in existing_files:
-                        missing_files.append(member_path)
+                        bad_files.append(sanitized_to_original[member_path])
                 
-                if missing_files:
+                if bad_files:
                     logger.warning(
-                        f"Archive {archive.name} has {len(missing_files)} missing files "
-                        f"(first 5: {missing_files[:5]})"
+                        f"Archive {archive.name} has {len(bad_files)} missing files "
+                        f"(first 5: {bad_files[:5]})"
                     )
-                    return False
+                    return (False, bad_files)
                 
                 # Step 3: Verify CRC32 for all files (expensive, but only if all exist)
                 logger.debug(f"All {total} files exist, verifying CRC32 checksums")
@@ -663,7 +692,8 @@ class ArchiveExtractor:
                             f"Size mismatch for {member_path}: "
                             f"expected {info.file_size}, got {actual_size}"
                         )
-                        return False
+                        bad_files.append(sanitized_to_original[member_path])
+                        continue
                     
                     # Verify CRC32
                     actual_crc32 = calculate_crc32(file_path)
@@ -672,7 +702,8 @@ class ArchiveExtractor:
                             f"CRC32 mismatch for {member_path}: "
                             f"expected {info.CRC:08X}, got {actual_crc32:08X}"
                         )
-                        return False
+                        bad_files.append(sanitized_to_original[member_path])
+                        continue
                     
                     verified_count += 1
                     
@@ -680,12 +711,65 @@ class ArchiveExtractor:
                     if verified_count % 100 == 0:
                         logger.debug(f"Verified {verified_count}/{total} files")
                 
+                if bad_files:
+                    logger.warning(
+                        f"Archive {archive.name} has {len(bad_files)} corrupted files "
+                        f"(first 5: {bad_files[:5]})"
+                    )
+                    return (False, bad_files)
+                
                 logger.info(f"Successfully verified all {total} files from {archive.name}")
-                return True
+                return (True, [])
                 
         except Exception as e:
             logger.warning(f"Error verifying archive {archive.name}: {e}")
-            return False
+            return (False, [])
+    
+    def _extract_specific_files_from_zip(
+        self,
+        archive_path: Path,
+        extract_to: Path,
+        files_to_extract: List[str]
+    ) -> None:
+        """Extract specific files from a ZIP archive.
+        
+        Args:
+            archive_path: Path to ZIP file
+            extract_to: Directory to extract to
+            files_to_extract: List of file paths (original names from ZIP) to extract
+        """
+        logger.info(f"Re-extracting {len(files_to_extract)} corrupted/missing files from {archive_path.name}")
+        
+        with zipfile.ZipFile(archive_path, 'r') as zip_ref:
+            for i, member in enumerate(files_to_extract, 1):
+                try:
+                    # Sanitize filename
+                    sanitized_member, was_sanitized = sanitize_filename(member)
+                    
+                    if was_sanitized:
+                        logger.info(f"Sanitized filename: '{member}' -> '{sanitized_member}'")
+                    
+                    # Extract to sanitized path
+                    target_path = extract_to / sanitized_member
+                    target_path.parent.mkdir(parents=True, exist_ok=True)
+                    
+                    # Read from archive and write to sanitized path
+                    with zip_ref.open(member) as source:
+                        with open(target_path, 'wb') as target:
+                            # Use smaller buffer (8KB) and explicit copying to reduce memory usage
+                            while True:
+                                chunk = source.read(8192)
+                                if not chunk:
+                                    break
+                                target.write(chunk)
+                    
+                    logger.debug(f"Re-extracted {i}/{len(files_to_extract)}: {member}")
+                    
+                except Exception as e:
+                    logger.error(f"Failed to re-extract {member}: {e}")
+                    raise
+        
+        logger.info(f"Successfully re-extracted {len(files_to_extract)} files")
     
     def _extract_zip(
         self,
