@@ -853,7 +853,12 @@ class ArchiveExtractor:
             try:
                 extract_path = self.extract(archive)
                 results[archive.name] = extract_path
+            except RuntimeError as e:
+                # Fatal error - re-raise to terminate entire process
+                logger.error(f"Failed to extract {archive.name}: {e}")
+                raise
             except Exception as e:
+                # Non-fatal error - log and continue
                 logger.error(f"Failed to extract {archive.name}: {e}")
                 results[archive.name] = None
         
