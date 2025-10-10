@@ -410,13 +410,25 @@ class ArchiveExtractor:
         
         # Check if archive was already completed in a previous session
         if archive_state.completed_at:
-            logger.info(f"Archive {archive.name} already completed at {archive_state.completed_at}, skipping")
-            # Determine extraction path for return value
+            logger.info(f"Archive {archive.name} marked as completed at {archive_state.completed_at}")
+            
+            # Determine extraction path
             if self.preserve_structure:
                 extract_to = self.target_dir / archive.path.stem
             else:
                 extract_to = self.target_dir
-            return extract_to
+            
+            # Verify all files actually exist with correct CRC32
+            if self._verify_archive_extraction(archive, extract_to):
+                logger.info(f"Archive {archive.name} verified successfully, skipping")
+                return extract_to
+            else:
+                logger.warning(
+                    f"Archive {archive.name} verification failed, will re-extract"
+                )
+                # Mark as incomplete to trigger re-extraction
+                archive_state.completed_at = None
+                # Continue to extraction below
         
         # Determine extraction subdirectory
         if self.preserve_structure:
@@ -571,6 +583,108 @@ class ArchiveExtractor:
             return True
         except Exception as e:
             logger.debug(f"Error verifying file {member_path}: {e}")
+            return False
+    
+    def _verify_archive_extraction(
+        self,
+        archive: ArchiveInfo,
+        extract_to: Path
+    ) -> bool:
+        """Verify all files from a completed archive exist with correct CRC32.
+        
+        Uses batch optimization: first scans directory tree once to check existence,
+        then verifies CRC32 only for files that exist.
+        
+        Args:
+            archive: Archive to verify
+            extract_to: Directory where files were extracted
+            
+        Returns:
+            True if all files exist and have correct CRC32, False otherwise
+        """
+        try:
+            logger.info(f"Verifying extraction of {archive.name}")
+            
+            if archive.format != ArchiveFormat.ZIP:
+                logger.debug(f"Skipping verification for non-ZIP archive: {archive.name}")
+                return True  # Only verify ZIP archives for now
+            
+            with zipfile.ZipFile(archive.path, 'r') as zip_ref:
+                members = zip_ref.namelist()
+                total = len(members)
+                
+                # Build expected files map with sanitized names
+                expected_files = {}
+                for member in members:
+                    info = zip_ref.getinfo(member)
+                    sanitized_member, _ = sanitize_filename(member)
+                    expected_files[sanitized_member] = info
+                
+                logger.debug(f"Verifying {total} files from {archive.name}")
+                
+                # Step 1: Batch existence check - scan directory tree once
+                logger.debug("Scanning directory tree for existing files")
+                existing_files = {}
+                try:
+                    for file_path in extract_to.rglob('*'):
+                        if file_path.is_file():
+                            rel_path = file_path.relative_to(extract_to)
+                            # Convert to forward slashes for consistency with ZIP paths
+                            rel_path_str = str(rel_path).replace('\\', '/')
+                            existing_files[rel_path_str] = file_path
+                except Exception as e:
+                    logger.warning(f"Error scanning directory tree: {e}")
+                    return False
+                
+                # Step 2: Fast-fail on missing files (no disk I/O, just memory lookups)
+                missing_files = []
+                for member_path in expected_files.keys():
+                    if member_path not in existing_files:
+                        missing_files.append(member_path)
+                
+                if missing_files:
+                    logger.warning(
+                        f"Archive {archive.name} has {len(missing_files)} missing files "
+                        f"(first 5: {missing_files[:5]})"
+                    )
+                    return False
+                
+                # Step 3: Verify CRC32 for all files (expensive, but only if all exist)
+                logger.debug(f"All {total} files exist, verifying CRC32 checksums")
+                verified_count = 0
+                
+                for member_path, info in expected_files.items():
+                    file_path = existing_files[member_path]
+                    
+                    # Verify size
+                    actual_size = file_path.stat().st_size
+                    if actual_size != info.file_size:
+                        logger.warning(
+                            f"Size mismatch for {member_path}: "
+                            f"expected {info.file_size}, got {actual_size}"
+                        )
+                        return False
+                    
+                    # Verify CRC32
+                    actual_crc32 = calculate_crc32(file_path)
+                    if actual_crc32 != info.CRC:
+                        logger.warning(
+                            f"CRC32 mismatch for {member_path}: "
+                            f"expected {info.CRC:08X}, got {actual_crc32:08X}"
+                        )
+                        return False
+                    
+                    verified_count += 1
+                    
+                    # Log progress every 100 files
+                    if verified_count % 100 == 0:
+                        logger.debug(f"Verified {verified_count}/{total} files")
+                
+                logger.info(f"Successfully verified all {total} files from {archive.name}")
+                return True
+                
+        except Exception as e:
+            logger.warning(f"Error verifying archive {archive.name}: {e}")
             return False
     
     def _extract_zip(

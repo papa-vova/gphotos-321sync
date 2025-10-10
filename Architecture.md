@@ -1,8 +1,8 @@
-# Architecture Documentation
+# Architecture Documentation — MOSTLY WIP! CHECK THE CODE
 
 ## Overview
 
-gphotos-sync is designed as a modular, pipeline-based application for processing Google Photos Takeout archives. The architecture supports three deployment modes: local (desktop), hybrid (local + cloud), and cloud-only.
+gphotos-321sync is designed as a modular, pipeline-based application for processing Google Photos Takeout archives. The architecture supports three deployment modes: local (desktop), hybrid (local + cloud), and cloud-only.
 
 ## High-Level Architecture
 
