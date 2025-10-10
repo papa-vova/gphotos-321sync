@@ -10,6 +10,7 @@ import hashlib
 import re
 import zlib
 import gc
+import unicodedata
 from pathlib import Path
 from typing import List, Dict, Optional, Callable, Set
 from dataclasses import dataclass, field, asdict
@@ -17,6 +18,22 @@ from enum import Enum
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
+
+
+def normalize_unicode_path(path: str) -> str:
+    """Normalize Unicode path to NFC form for consistent comparison.
+    
+    This ensures that paths with Unicode characters (Cyrillic, Chinese, Arabic, etc.)
+    are compared consistently regardless of how they're encoded in the archive
+    or filesystem.
+    
+    Args:
+        path: Path string to normalize
+        
+    Returns:
+        Normalized path string in NFC (Canonical Composition) form
+    """
+    return unicodedata.normalize('NFC', path)
 
 
 def calculate_crc32(file_path: Path) -> int:
@@ -653,6 +670,8 @@ class ArchiveExtractor:
                 for member in members:
                     info = zip_ref.getinfo(member)
                     sanitized_member, _ = sanitize_filename(member)
+                    # Normalize Unicode for consistent comparison
+                    sanitized_member = normalize_unicode_path(sanitized_member)
                     expected_files[sanitized_member] = info
                     sanitized_to_original[sanitized_member] = member
                 
@@ -667,6 +686,8 @@ class ArchiveExtractor:
                             rel_path = file_path.relative_to(extract_to)
                             # Convert to forward slashes for consistency with ZIP paths
                             rel_path_str = str(rel_path).replace('\\', '/')
+                            # Normalize Unicode for consistent comparison
+                            rel_path_str = normalize_unicode_path(rel_path_str)
                             existing_files[rel_path_str] = file_path
                 except Exception as e:
                     logger.warning(f"Error scanning directory tree: {e}")
@@ -682,8 +703,7 @@ class ArchiveExtractor:
                 
                 if bad_files:
                     logger.warning(
-                        f"Archive {archive.name} has {len(bad_files)} missing files "
-                        f"(first 5: {bad_files[:5]})"
+                        f"Archive {archive.name} has {len(bad_files)} missing files: {bad_files}"
                     )
                     return (False, bad_files)
                 
@@ -722,8 +742,7 @@ class ArchiveExtractor:
                 
                 if bad_files:
                     logger.warning(
-                        f"Archive {archive.name} has {len(bad_files)} corrupted files "
-                        f"(first 5: {bad_files[:5]})"
+                        f"Archive {archive.name} has {len(bad_files)} corrupted files: {bad_files}"
                     )
                     return (False, bad_files)
                 

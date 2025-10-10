@@ -3,12 +3,14 @@
 import pytest
 import zipfile
 import zlib
+import unicodedata
 from pathlib import Path
 from gphotos_321sync.processing.extractor import (
     ArchiveDiscovery,
     ArchiveExtractor,
     ArchiveFormat,
     ExtractionState,
+    normalize_unicode_path,
 )
 
 
@@ -527,5 +529,312 @@ class TestEdgeCases:
             target_dir
         )
         
+        assert all_valid is True
+        assert len(bad_files) == 0
+
+
+class TestUnicodePathHandling:
+    """Test Unicode path normalization and verification across multiple languages."""
+    
+    def test_normalize_unicode_path_nfc(self):
+        """Test that normalize_unicode_path converts to NFC form."""
+        # NFD (decomposed) form of "café"
+        nfd_path = "cafe\u0301"  # e + combining acute accent
+        # NFC (composed) form of "café"
+        nfc_path = "café"
+        
+        assert normalize_unicode_path(nfd_path) == nfc_path
+        assert normalize_unicode_path(nfc_path) == nfc_path
+    
+    def test_cyrillic_filenames(self, tmp_path):
+        """Test extraction and verification with Cyrillic filenames."""
+        source_dir = tmp_path / "source"
+        source_dir.mkdir()
+        
+        # Create ZIP with Cyrillic filenames (Russian, Ukrainian, Bulgarian)
+        zip_path = source_dir / "cyrillic.zip"
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr("Takeout/Google Photos/Израильские документы/file1.txt", "Content 1")
+            zf.writestr("Takeout/Google Photos/Inglesina инструкции/file2.txt", "Content 2")
+            zf.writestr("Takeout/Google Photos/Проводы Сергія/file3.txt", "Content 3")
+            zf.writestr("Takeout/Google Photos/България/file4.txt", "Content 4")
+        
+        target_dir = tmp_path / "target"
+        target_dir.mkdir()
+        
+        # Extract
+        discovery = ArchiveDiscovery(source_dir)
+        archives = discovery.discover()
+        archive = archives[0]
+        
+        extractor = ArchiveExtractor(target_dir, preserve_structure=False)
+        extractor.extract(archive)
+        
+        # Verify all files exist
+        all_valid, bad_files = extractor._verify_archive_extraction(archive, target_dir)
+        assert all_valid is True
+        assert len(bad_files) == 0
+        
+        # Delete a file from Cyrillic directory
+        cyrillic_file = target_dir / "Takeout" / "Google Photos" / "Израильские документы" / "file1.txt"
+        cyrillic_file.unlink()
+        
+        # Verify should detect missing file
+        all_valid, bad_files = extractor._verify_archive_extraction(archive, target_dir)
+        assert all_valid is False
+        assert len(bad_files) == 1
+        assert "Takeout/Google Photos/Израильские документы/file1.txt" in bad_files
+        
+        # Re-extract the missing file
+        extractor._extract_specific_files_from_zip(
+            archive.path,
+            target_dir,
+            ["Takeout/Google Photos/Израильские документы/file1.txt"]
+        )
+        
+        # Verify it's fixed
+        all_valid, bad_files = extractor._verify_archive_extraction(archive, target_dir)
+        assert all_valid is True
+        assert len(bad_files) == 0
+    
+    def test_chinese_filenames(self, tmp_path):
+        """Test extraction and verification with Chinese filenames."""
+        source_dir = tmp_path / "source"
+        source_dir.mkdir()
+        
+        # Create ZIP with Chinese filenames (Simplified and Traditional)
+        zip_path = source_dir / "chinese.zip"
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr("照片/2024年/春节/照片1.jpg", b"Photo 1")
+            zf.writestr("照片/2024年/春节/照片2.jpg", b"Photo 2")
+            zf.writestr("相片/家庭/聚會.jpg", b"Photo 3")  # Traditional Chinese
+        
+        target_dir = tmp_path / "target"
+        target_dir.mkdir()
+        
+        # Extract
+        discovery = ArchiveDiscovery(source_dir)
+        archives = discovery.discover()
+        archive = archives[0]
+        
+        extractor = ArchiveExtractor(target_dir, preserve_structure=False)
+        extractor.extract(archive)
+        
+        # Verify
+        all_valid, bad_files = extractor._verify_archive_extraction(archive, target_dir)
+        assert all_valid is True
+        assert len(bad_files) == 0
+        
+        # Delete files
+        (target_dir / "照片" / "2024年" / "春节" / "照片1.jpg").unlink()
+        (target_dir / "相片" / "家庭" / "聚會.jpg").unlink()
+        
+        # Verify should detect missing files
+        all_valid, bad_files = extractor._verify_archive_extraction(archive, target_dir)
+        assert all_valid is False
+        assert len(bad_files) == 2
+    
+    def test_arabic_filenames(self, tmp_path):
+        """Test extraction and verification with Arabic filenames."""
+        source_dir = tmp_path / "source"
+        source_dir.mkdir()
+        
+        # Create ZIP with Arabic filenames (RTL text)
+        zip_path = source_dir / "arabic.zip"
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr("الصور/العائلة/صورة١.jpg", b"Photo 1")
+            zf.writestr("الصور/العائلة/صورة٢.jpg", b"Photo 2")
+            zf.writestr("المستندات/ملف.txt", "Arabic content")
+        
+        target_dir = tmp_path / "target"
+        target_dir.mkdir()
+        
+        # Extract
+        discovery = ArchiveDiscovery(source_dir)
+        archives = discovery.discover()
+        archive = archives[0]
+        
+        extractor = ArchiveExtractor(target_dir, preserve_structure=False)
+        extractor.extract(archive)
+        
+        # Verify
+        all_valid, bad_files = extractor._verify_archive_extraction(archive, target_dir)
+        assert all_valid is True
+        assert len(bad_files) == 0
+    
+    def test_japanese_filenames(self, tmp_path):
+        """Test extraction and verification with Japanese filenames (Hiragana, Katakana, Kanji)."""
+        source_dir = tmp_path / "source"
+        source_dir.mkdir()
+        
+        # Create ZIP with Japanese filenames
+        zip_path = source_dir / "japanese.zip"
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr("写真/家族/ファミリー写真.jpg", b"Family photo")
+            zf.writestr("写真/旅行/東京タワー.jpg", b"Tokyo Tower")
+            zf.writestr("ドキュメント/メモ.txt", "Japanese memo")
+        
+        target_dir = tmp_path / "target"
+        target_dir.mkdir()
+        
+        # Extract
+        discovery = ArchiveDiscovery(source_dir)
+        archives = discovery.discover()
+        archive = archives[0]
+        
+        extractor = ArchiveExtractor(target_dir, preserve_structure=False)
+        extractor.extract(archive)
+        
+        # Verify
+        all_valid, bad_files = extractor._verify_archive_extraction(archive, target_dir)
+        assert all_valid is True
+        assert len(bad_files) == 0
+    
+    def test_korean_filenames(self, tmp_path):
+        """Test extraction and verification with Korean filenames (Hangul)."""
+        source_dir = tmp_path / "source"
+        source_dir.mkdir()
+        
+        # Create ZIP with Korean filenames
+        zip_path = source_dir / "korean.zip"
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr("사진/가족/가족사진.jpg", b"Family photo")
+            zf.writestr("사진/여행/서울타워.jpg", b"Seoul Tower")
+            zf.writestr("문서/메모.txt", "Korean memo")
+        
+        target_dir = tmp_path / "target"
+        target_dir.mkdir()
+        
+        # Extract
+        discovery = ArchiveDiscovery(source_dir)
+        archives = discovery.discover()
+        archive = archives[0]
+        
+        extractor = ArchiveExtractor(target_dir, preserve_structure=False)
+        extractor.extract(archive)
+        
+        # Verify
+        all_valid, bad_files = extractor._verify_archive_extraction(archive, target_dir)
+        assert all_valid is True
+        assert len(bad_files) == 0
+    
+    def test_mixed_unicode_languages(self, tmp_path):
+        """Test extraction with mixed Unicode languages in same archive."""
+        source_dir = tmp_path / "source"
+        source_dir.mkdir()
+        
+        # Create ZIP with multiple language filenames
+        zip_path = source_dir / "mixed.zip"
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr("English/file.txt", "English")
+            zf.writestr("Русский/файл.txt", "Russian")
+            zf.writestr("中文/文件.txt", "Chinese")
+            zf.writestr("العربية/ملف.txt", "Arabic")
+            zf.writestr("日本語/ファイル.txt", "Japanese")
+            zf.writestr("한국어/파일.txt", "Korean")
+            zf.writestr("Ελληνικά/αρχείο.txt", "Greek")
+            zf.writestr("עברית/קובץ.txt", "Hebrew")
+        
+        target_dir = tmp_path / "target"
+        target_dir.mkdir()
+        
+        # Extract
+        discovery = ArchiveDiscovery(source_dir)
+        archives = discovery.discover()
+        archive = archives[0]
+        
+        extractor = ArchiveExtractor(target_dir, preserve_structure=False)
+        extractor.extract(archive)
+        
+        # Verify all files
+        all_valid, bad_files = extractor._verify_archive_extraction(archive, target_dir)
+        assert all_valid is True
+        assert len(bad_files) == 0
+        
+        # Delete files from multiple language directories
+        (target_dir / "Русский" / "файл.txt").unlink()
+        (target_dir / "中文" / "文件.txt").unlink()
+        (target_dir / "日本語" / "ファイル.txt").unlink()
+        
+        # Verify should detect all missing files
+        all_valid, bad_files = extractor._verify_archive_extraction(archive, target_dir)
+        assert all_valid is False
+        assert len(bad_files) == 3
+        assert "Русский/файл.txt" in bad_files
+        assert "中文/文件.txt" in bad_files
+        assert "日本語/ファイル.txt" in bad_files
+        
+        # Re-extract all missing files
+        extractor._extract_specific_files_from_zip(
+            archive.path,
+            target_dir,
+            bad_files
+        )
+        
+        # Verify all fixed
+        all_valid, bad_files = extractor._verify_archive_extraction(archive, target_dir)
+        assert all_valid is True
+        assert len(bad_files) == 0
+    
+    def test_unicode_normalization_forms(self, tmp_path):
+        """Test that different Unicode normalization forms are handled correctly."""
+        source_dir = tmp_path / "source"
+        source_dir.mkdir()
+        
+        # Create ZIP with filename that could be in different normalization forms
+        # "café" can be represented as NFC (é as single char) or NFD (e + combining accent)
+        zip_path = source_dir / "normalization.zip"
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+            # Use NFC form in ZIP
+            zf.writestr("café/résumé.txt", "Content")
+            zf.writestr("naïve/file.txt", "Content 2")
+        
+        target_dir = tmp_path / "target"
+        target_dir.mkdir()
+        
+        # Extract
+        discovery = ArchiveDiscovery(source_dir)
+        archives = discovery.discover()
+        archive = archives[0]
+        
+        extractor = ArchiveExtractor(target_dir, preserve_structure=False)
+        extractor.extract(archive)
+        
+        # Verify
+        all_valid, bad_files = extractor._verify_archive_extraction(archive, target_dir)
+        assert all_valid is True
+        assert len(bad_files) == 0
+        
+        # The extracted files should be findable regardless of normalization form
+        # This tests that our normalization is working
+        cafe_dir = target_dir / "café"
+        assert cafe_dir.exists()
+        assert (cafe_dir / "résumé.txt").exists()
+    
+    def test_emoji_in_filenames(self, tmp_path):
+        """Test extraction with emoji in filenames."""
+        source_dir = tmp_path / "source"
+        source_dir.mkdir()
+        
+        # Create ZIP with emoji in filenames
+        zip_path = source_dir / "emoji.zip"
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr("Photos 📷/Vacation 🏖️/beach.jpg", b"Beach photo")
+            zf.writestr("Photos 📷/Family 👨‍👩‍👧‍👦/family.jpg", b"Family photo")
+            zf.writestr("Documents 📄/Notes 📝.txt", "Notes")
+        
+        target_dir = tmp_path / "target"
+        target_dir.mkdir()
+        
+        # Extract
+        discovery = ArchiveDiscovery(source_dir)
+        archives = discovery.discover()
+        archive = archives[0]
+        
+        extractor = ArchiveExtractor(target_dir, preserve_structure=False)
+        extractor.extract(archive)
+        
+        # Verify
+        all_valid, bad_files = extractor._verify_archive_extraction(archive, target_dir)
         assert all_valid is True
         assert len(bad_files) == 0

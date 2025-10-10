@@ -79,6 +79,26 @@ Tests for archive verification and selective re-extraction.
 - **Empty ZIP file**: Handles empty archives gracefully
 - **Filename sanitization**: Verifies sanitized filenames correctly
 
+#### Unicode Path Handling
+
+Tests for Unicode normalization and verification across multiple languages and scripts.
+
+- **Unicode normalization**: Tests NFC/NFD normalization forms (e.g., "café" with composed vs decomposed accents)
+- **Cyrillic filenames**: Russian, Ukrainian, Bulgarian (Израильские документы, Inglesina инструкции, etc.)
+- **Chinese filenames**: Simplified and Traditional Chinese (照片, 相片, 家庭, 聚會)
+- **Arabic filenames**: RTL text support (الصور, العائلة, المستندات)
+- **Japanese filenames**: Hiragana, Katakana, Kanji (写真, ファミリー, 東京タワー)
+- **Korean filenames**: Hangul (사진, 가족, 서울타워)
+- **Mixed languages**: Multiple scripts in same archive (English, Русский, 中文, العربية, 日本語, 한국어, Ελληνικά, עברית)
+- **Emoji in filenames**: Tests emoji support (📷, 🏖️, 👨‍👩‍👧‍👦)
+
+These tests ensure that:
+
+1. Files with Unicode characters extract correctly
+2. Missing files in Unicode-named directories are detected properly
+3. Selective re-extraction works for all Unicode paths
+4. Different Unicode normalization forms are handled consistently
+
 ### test_pipeline.py
 
 Tests for the complete extraction pipeline.
