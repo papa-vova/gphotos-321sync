@@ -94,13 +94,18 @@ This document compares the performance characteristics of two scanning approache
 |-----------|------|------|
 | Read JSON sidecar | 0.5 ms | I/O |
 | Parse JSON | 0.2 ms | CPU (light) |
-| Read file for EXIF | 2 ms | I/O |
-| Extract EXIF | 5 ms | CPU |
-| Read file for CRC32 | 15 ms | I/O |
-| Calculate CRC32 | 10 ms | CPU |
-| MIME detection | 1 ms | CPU |
+| Stream full file (7.7 MB avg) | 15.4 ms | I/O |
+| Extract EXIF (from stream headers) | 5 ms | CPU |
+| Calculate CRC32 (from stream) | 10 ms | CPU |
+| MIME detection (from stream start) | 1 ms | CPU |
 | DB write (batched) | 0.1 ms | I/O |
-| **Total per file** | **~34 ms** | |
+| **Total per file** | **~32 ms** | |
+
+**I/O Constraint:** At 500 MB/s SSD bandwidth, reading 7.7 MB takes minimum 15.4 ms. This is the bottleneck.
+
+**Implementation Note:** File is streamed once; EXIF reads headers, CRC32 processes full stream, MIME detects from initial bytes. All operations consume the same file read.
+
+**Note:** Content fingerprint (SHA-256 of last 8KB) is calculated lazily during rescans, only when `(path, size)` match. Not included in initial scan timing.
 
 **Parallel configuration:**
 
@@ -119,7 +124,8 @@ This document compares the performance characteristics of two scanning approache
 
 **Per-file cost:**
 
-- All operations sequential: 34 ms/file
+- All operations sequential: 32 ms/file
+- Bottleneck: I/O (15.4 ms to read 7.7 MB at 500 MB/s)
 
 **Shutdown cost:**
 
@@ -147,7 +153,11 @@ This document compares the performance characteristics of two scanning approache
 
 - I/O operations can overlap with CPU operations
 - Multiple files processed simultaneously
-- Effective throughput: ~4-5 ms/file (8x speedup on CPU, limited by I/O)
+- **Disk bandwidth limit:** 500 MB/s ÷ 7.7 MB/file = 65 files/sec max
+- **Minimum time per file:** 15.4 ms (I/O bound)
+- **Theoretical best:** 15.4 ms I/O + 0 ms CPU (perfect overlap) = 15.4 ms
+- **Realistic:** ~19 ms/file (≈**1.7x speedup**, accounting for coordination overhead)
+- CPU parallelism hides most CPU time but cannot exceed disk I/O limits
 
 **Shutdown cost:**
 
@@ -176,10 +186,10 @@ This document compares the performance characteristics of two scanning approache
 
 ```text
 Startup:     0.01 s
-Processing:  34.0 s  (1,000 × 34 ms)
+Processing:  32.0 s  (1,000 × 32 ms)
 Shutdown:    0.005 s
 ─────────────────────
-Total:       34.0 s
+Total:       32.0 s
 Memory:      70 MB
 ```
 
@@ -187,18 +197,19 @@ Memory:      70 MB
 
 ```text
 Startup:     0.22 s
-Processing:  5.0 s   (1,000 × 5 ms effective)
+Processing:  19.0 s  (1,000 × 19 ms effective, disk I/O bound)
 Shutdown:    0.07 s
 ─────────────────────
-Total:       5.3 s
+Total:       19.3 s
 Memory:      736 MB
-Speedup:     6.4x
+Speedup:     1.7x
 ```
 
 **Analysis:**
 
 - Parallel wins significantly despite overhead
-- Startup/shutdown overhead is 5% of total time
+- Startup/shutdown overhead is 2% of total time
+- Bottlenecked by disk I/O bandwidth (500 MB/s)
 - Memory cost: 10.5x higher
 
 ---
@@ -209,10 +220,10 @@ Speedup:     6.4x
 
 ```text
 Startup:     0.01 s
-Processing:  340 s   (10,000 × 34 ms)
+Processing:  320 s   (10,000 × 32 ms)
 Shutdown:    0.005 s
 ─────────────────────
-Total:       340 s (5.7 min)
+Total:       320 s (5.3 min)
 Memory:      70 MB
 ```
 
@@ -220,12 +231,12 @@ Memory:      70 MB
 
 ```text
 Startup:     0.22 s
-Processing:  50 s    (10,000 × 5 ms effective)
+Processing:  190 s   (10,000 × 19 ms effective, disk I/O bound)
 Shutdown:    0.07 s
 ─────────────────────
-Total:       50.3 s (0.8 min)
+Total:       190.3 s (3.2 min)
 Memory:      736 MB
-Speedup:     6.8x
+Speedup:     1.7x
 ```
 
 **Analysis:**
@@ -242,10 +253,10 @@ Speedup:     6.8x
 
 ```text
 Startup:     0.01 s
-Processing:  3,400 s  (100,000 × 34 ms)
+Processing:  3,200 s  (100,000 × 32 ms)
 Shutdown:    0.005 s
 ─────────────────────
-Total:       3,400 s (56.7 min)
+Total:       3,200 s (53.3 min)
 Memory:      70 MB
 ```
 
@@ -253,12 +264,12 @@ Memory:      70 MB
 
 ```text
 Startup:     0.22 s
-Processing:  500 s    (100,000 × 5 ms effective)
+Processing:  1,900 s  (100,000 × 19 ms effective, disk I/O bound)
 Shutdown:    0.07 s
 ─────────────────────
-Total:       500.3 s (8.3 min)
+Total:       1,900.3 s (31.7 min)
 Memory:      736 MB
-Speedup:     6.8x
+Speedup:     1.7x
 ```
 
 **Analysis:**
@@ -266,7 +277,8 @@ Speedup:     6.8x
 - Parallel wins massively
 - Startup/shutdown overhead is negligible (<0.1%)
 - Memory cost: 10.5x higher (still reasonable for modern systems)
-- Time savings: 48 minutes
+- Time savings: 22 minutes
+- Disk I/O is the bottleneck, not CPU
 
 ---
 
@@ -276,10 +288,10 @@ Speedup:     6.8x
 
 ```text
 Startup:     0.01 s
-Processing:  17,000 s  (500,000 × 34 ms)
+Processing:  16,000 s  (500,000 × 32 ms)
 Shutdown:    0.005 s
 ─────────────────────
-Total:       17,000 s (4.7 hours)
+Total:       16,000 s (4.4 hours)
 Memory:      70 MB
 ```
 
@@ -287,12 +299,12 @@ Memory:      70 MB
 
 ```text
 Startup:     0.22 s
-Processing:  2,500 s   (500,000 × 5 ms effective)
+Processing:  9,500 s   (500,000 × 19 ms effective, disk I/O bound)
 Shutdown:    0.07 s
 ─────────────────────
-Total:       2,500 s (41.7 min)
+Total:       9,500.3 s (2.6 hours)
 Memory:      736 MB
-Speedup:     6.8x
+Speedup:     1.7x
 ```
 
 **Analysis:**
@@ -300,7 +312,8 @@ Speedup:     6.8x
 - Parallel wins overwhelmingly
 - Startup/shutdown overhead is negligible
 - Memory cost: 10.5x higher (acceptable)
-- Time savings: 4 hours
+- Time savings: 1.8 hours
+- Disk I/O is the bottleneck, not CPU
 
 ---
 
@@ -308,10 +321,12 @@ Speedup:     6.8x
 
 | Library Size | Files | Sequential Time | Parallel Time | Speedup | Memory Cost |
 |--------------|-------|-----------------|---------------|---------|-------------|
-| **Small** | 1K | 34 s | 5.3 s | 6.4x | 10.5x (736 MB) |
-| **Medium** | 10K | 5.7 min | 50 s | 6.8x | 10.5x (736 MB) |
-| **Large** | 100K | 56.7 min | 8.3 min | 6.8x | 10.5x (736 MB) |
-| **Very Large** | 500K | 4.7 hours | 41.7 min | 6.8x | 10.5x (736 MB) |
+| **Small** | 1K | 32 s | 19 s | 1.7x | 10.5x (736 MB) |
+| **Medium** | 10K | 5.3 min | 3.2 min | 1.7x | 10.5x (736 MB) |
+| **Large** | 100K | 53.3 min | 31.7 min | 1.7x | 10.5x (736 MB) |
+| **Very Large** | 500K | 4.4 hours | 2.6 hours | 1.7x | 10.5x (736 MB) |
+
+**Note:** Speedup limited to ~1.7x by disk I/O bandwidth (500 MB/s). Sequential already spends 15.4ms of 32ms on I/O; parallelism can only hide the 16.6ms CPU overhead, achieving theoretical max of 2.08x but realistic 1.7x due to coordination overhead.
 
 ---
 
@@ -339,9 +354,12 @@ Speedup:     6.8x
 
 **Parallel:**
 
-- Bottleneck: I/O bandwidth (disk read speed)
-- CPU work happens in parallel while waiting for I/O
-- Effective speedup: ~6-7x (not 8x due to I/O limits)
+- Bottleneck: Disk I/O bandwidth (500 MB/s physical limit)
+- CPU work happens in parallel but cannot exceed disk throughput
+- Effective speedup: ~1.7x (limited by disk bandwidth, not CPU cores)
+- Sequential spends 15.4ms on I/O + 16.6ms on CPU = 32ms total
+- Parallel can hide most CPU time but not I/O: 15.4ms I/O + ~3.6ms CPU overhead = 19ms
+- Theoretical max: 32/15.4 = 2.08x, realistic: 32/19 = 1.7x
 
 ### Optimization Opportunities
 
@@ -352,10 +370,10 @@ Speedup:     6.8x
 
 **Parallel:**
 
-- Tune N (worker threads) based on I/O concurrency
-- Tune M (worker processes) based on CPU cores
-- Adjust batch size for DB writes
-- Could achieve 7-8x speedup with tuning
+- Tune N (worker threads) based on I/O concurrency (2-4x CPU cores)
+- Tune M (worker processes) to match CPU cores
+- Adjust batch size for DB writes (100-500 records)
+- NAS/network storage: reduce N to 4-8 to avoid overwhelming bandwidth
 
 ---
 
@@ -459,24 +477,94 @@ process_pool.join()
 
 **Rationale:**
 
-- 6-7x speedup on realistic workloads
+- ~1.7x speedup on realistic workloads (local SSD, I/O bound)
 - Memory cost (736 MB) is acceptable on modern systems
 - Startup/shutdown overhead becomes negligible at scale
-- Time savings are substantial (minutes to hours)
+- Time savings are substantial (1-2 hours saved on large libraries)
+- File streamed once: EXIF from headers, CRC32 from full stream, MIME from start
+- CRC32 for duplicate detection, content fingerprint for change detection
+- **Disk I/O is the bottleneck**, not CPU - parallelism hides CPU overhead but can't exceed 500 MB/s
 
 **Configuration:**
 
-- N = 2-4x CPU cores for worker threads (e.g., 16-32 for 8-core CPU)
+- **N = 2x CPU cores** for worker threads (e.g., 16 for 8-core CPU)
   - Threads do I/O work and block waiting, so oversubscribe
-- M = CPU cores for process pool (e.g., 8 for 8-core CPU)
+  - For NAS/network storage: reduce to 4-8 to avoid bandwidth saturation
+- **M = CPU cores** for process pool (e.g., 8 for 8-core CPU)
   - Processes do CPU work, match core count for true parallelism
-- Batch size = 100-500 (tune based on DB performance)
+- **Batch size = 100-500** records per commit (tune based on DB performance)
+- **Queue size = 1000** for both work and results queues (backpressure)
 
 **Trade-offs accepted:**
 
 - 10x memory usage (70 MB → 736 MB)
-- Implementation complexity
-- Startup/shutdown overhead (~282 ms total)
+- Implementation complexity (threads + processes + queues)
+- Startup/shutdown overhead (~282 ms total, negligible for >1K files)
+
+**SQLite Configuration:**
+
+```sql
+PRAGMA journal_mode=WAL;        -- Concurrent reads during writes
+PRAGMA busy_timeout=5000;       -- Wait 5s on lock contention
+PRAGMA synchronous=NORMAL;      -- Balance safety and performance
+```
+
+**Content Fingerprint Specification:**
+
+```python
+import hashlib
+from pathlib import Path
+
+def compute_fingerprint(file_path: Path, file_size: int) -> str:
+    """
+    Tail-based fingerprint for change detection.
+    
+    Calculated lazily during rescans, only when (path, size) match.
+    
+    Specification:
+    - Algorithm: SHA-256
+    - Input: Last 8192 bytes (8 KB) of file
+    - Output: Hex digest (64 characters)
+    - If file < 8KB: hash entire file
+    - Rationale: Tail contains unique content, not just headers
+    """
+    FINGERPRINT_SIZE = 8192
+    
+    with open(file_path, 'rb') as f:
+        if file_size <= FINGERPRINT_SIZE:
+            # Small file: hash entire content
+            chunk = f.read()
+        else:
+            # Large file: hash last 8KB
+            f.seek(-FINGERPRINT_SIZE, 2)  # Seek from end
+            chunk = f.read(FINGERPRINT_SIZE)
+    
+    return hashlib.sha256(chunk).hexdigest()
+```
+
+**Usage Pattern:**
+
+```python
+# During rescan
+existing = db.query(
+    "SELECT content_fingerprint FROM media_items WHERE relative_path = ? AND file_size = ?",
+    (path, size)
+)
+
+if existing:
+    # Path and size match - verify with fingerprint
+    fingerprint = compute_fingerprint(path, size)
+    if fingerprint == existing.content_fingerprint:
+        # Unchanged - skip processing
+        db.execute("UPDATE media_items SET last_seen_timestamp = ? WHERE relative_path = ?", 
+                   (now, path))
+    else:
+        # Changed - reprocess
+        process_file(path)
+else:
+    # New file or size changed - process
+    process_file(path)
+```
 
 ---
 
