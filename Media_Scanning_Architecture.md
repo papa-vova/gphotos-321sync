@@ -138,7 +138,7 @@ This document outlines the architecture for scanning and cataloging Google Photo
 ║                            │                                        ║
 ║                            ▼                                        ║
 ║  ┌────────────────────────────────────────────────────────────────┐ ║
-║  │ Worker Thread 1  │  Worker Thread 2  │  ...  │  Worker Thread N│ ║
+║  │ Worker Thread 1  │  Worker Thread 2  │  ...  │ Worker Thread N │ ║
 ║  │                                                                │ ║
 ║  │ Each thread (N=16, 2x CPU cores for I/O):                      │ ║
 ║  │   • Get work from queue (maxsize=1000)                         │ ║
@@ -146,29 +146,29 @@ This document outlines the architecture for scanning and cataloging Google Photo
 ║  │   • Submit file path to Process Pool ──┐                       │ ║
 ║  │   • Wait for result (blocks on I/O)    │                       │ ║
 ║  │   • Put result in Results Queue        │                       │ ║
-║  └───────────────────────────────────────┼─────────────────────── ┘ ║
-║                            │                 │                      ║
-║                            ▼                 │                      ║
-║  ┌────────────────────────────────────────────────────────────────┐ ║
-║  │ Results Queue                             │                    │ ║
-║  └───────────────────────────────────────────┼────────────────────┘ ║
-║                            │                 │                      ║
-║                            ▼                 │                      ║
-║  ┌────────────────────────────────────────────────────────────────┐ ║
-║  │ Batch Writer Thread                       │                    │ ║
-║  │ • Reads from Results Queue                │                    │ ║
-║  │ • Writes to SQLite                        │                    │ ║
-║  └───────────────────────────────────────────┼────────────────────┘ ║
-║                            │                 │                      ║
-║                            ▼                 │                      ║
-║  ┌────────────────────────────────────────────────────────────────┐ ║
-║  │ SQLite Database (WAL mode)                │                    │ ║
-║  └───────────────────────────────────────────┼────────────────────┘ ║
-║                                              │                      ║
-╚══════════════════════════════════════════════│══════════════════════╝
-                                               │
-                                               │ (calls)
-                                               ▼
+║  └────────────────────────────────────────┼───────────────────────┘ ║
+║                            │              │                         ║
+║                            ▼              │                         ║
+║  ┌────────────────────────────────────────┼───────────────────────┐ ║
+║  │ Results Queue                          │                       │ ║
+║  └────────────────────────────────────────┼───────────────────────┘ ║
+║                            │              │                         ║
+║                            ▼              │                         ║
+║  ┌────────────────────────────────────────┼───────────────────────┐ ║
+║  │ Batch Writer Thread                    │                       │ ║
+║  │ • Reads from Results Queue             │                       │ ║
+║  │ • Writes to SQLite                     │                       │ ║
+║  └────────────────────────────────────────┼───────────────────────┘ ║
+║                            │              │                         ║
+║                            ▼              │                         ║
+║  ┌────────────────────────────────────────┼───────────────────────┐ ║
+║  │ SQLite Database (WAL mode)             │                       │ ║
+║  └────────────────────────────────────────┼───────────────────────┘ ║
+║                                           │                         ║
+╚═══════════════════════════════════════════│═════════════════════════╝
+                                            │
+                                            │ (calls)
+                                            ▼
 ╔═════════════════════════════════════════════════════════════════════╗
 ║              SEPARATE PROCESS POOL                                  ║
 ╠═════════════════════════════════════════════════════════════════════╣
@@ -176,12 +176,12 @@ This document outlines the architecture for scanning and cataloging Google Photo
 ║  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌───────────┐   ║
 ║  │ Process 1   │  │ Process 2   │  │ Process 3   │  │ Process M │   ║
 ║  │             │  │             │  │             │  │           │   ║
-║  │ CPU work (M=8, match CPU cores):                              │   ║
-║  │ • Stream file once (7.7 MB avg):                              │   ║
-║  │   - EXIF extraction from headers (Pillow)                     │   ║
-║  │   - CRC32 calculation (full stream)                           │   ║
-║  │   - MIME detection (initial bytes)                            │   ║
-║  │ • Content fingerprint (last 8KB, lazy/on-demand)              │   ║
+║  │ CPU work (M=8, match CPU cores):                             │   ║
+║  │ • Stream file once (7.7 MB avg):                             │   ║
+║  │   - EXIF extraction from headers (Pillow)                    │   ║
+║  │   - CRC32 calculation (full stream)                          │   ║
+║  │   - MIME detection (initial bytes)                           │   ║
+║  │ • Content fingerprint (last 8KB, lazy/on-demand)             │   ║
 ║  └─────────────┘  └─────────────┘  └─────────────┘  └───────────┘   ║
 ║                                                                     ║
 ║                          (returns result to caller)                 ║
