@@ -60,7 +60,7 @@ This document outlines the architecture for scanning and cataloging Google Photo
 
 ## High-Level Architecture
 
-### Component Overview
+### Processing Pipeline
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
@@ -111,84 +111,72 @@ This document outlines the architecture for scanning and cataloging Google Photo
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### System Components
-
-#### 1. Orchestrator (Main Thread)
-
-- Creates and manages all other components
-- Spawns worker threads, process pool, and writer thread
-- Runs discovery phase (walks filesystem, builds queues)
-- Coordinates shutdown
-
-#### 2. Worker Thread Pool (N threads)
-
-- Created by orchestrator at startup
-- Each thread: gets work from queue, parses JSON, submits to process pool, puts results in results queue
-- Light work only (I/O-bound: JSON parsing, coordination)
-- Why threads: I/O operations release Python's GIL
-
-#### 3. Process Pool (M processes)
-
-- Created by orchestrator at startup
-- Separate Python processes (not threads)
-- Heavy CPU-bound work: EXIF extraction, CRC32 hashing, MIME detection
-- Why processes: Bypasses Python's GIL for true parallelism
-
-#### 4. Batch Writer Thread (1 thread)
-
-- Created by orchestrator at startup
-- ONLY component that writes to database
-- Accumulates results into batches, writes transactions
-- Why single writer: SQLite constraint
-
-#### 5. Work Queue & Results Queue
-
-- Thread-safe queues (bounded size)
-- Work Queue: orchestrator → workers
-- Results Queue: workers → writer
-
-#### 6. SQLite Database
-
-- WAL mode for concurrent reads
-- Single writer (batch writer thread)
-
 ### Data Flow
 
 ```text
-Orchestrator (main thread)
-    ├─> Spawns: Worker Threads (N)
-    ├─> Spawns: Process Pool (M)
-    ├─> Spawns: Batch Writer Thread (1)
-    └─> Runs Discovery:
-        ├─> Walk directory tree
-        ├─> Build sidecar lookup map
-        ├─> Identify albums
-        └─> Put (media_file, json_file, album_id) into Work Queue
-    
-Work Queue (bounded, thread-safe)
-    │
-    ▼
-Worker Threads (N threads, light work)
-    ├─> Get work from queue
-    ├─> Parse JSON sidecar (fast, Python)
-    ├─> Submit to Process Pool for heavy work
-    └─> Combine results → Results Queue
-    
-Process Pool (M processes, CPU-bound)
-    ├─> EXIF extraction (images only)
-    ├─> Content hashing (CRC32)
-    └─> MIME type detection (magic bytes)
-    
-Results Queue (bounded, thread-safe)
-    │
-    ▼
-Batch Writer Thread (single writer)
-    ├─> Accumulate results into batch
-    ├─> BEGIN IMMEDIATE transaction
-    ├─> Insert into database tables
-    └─> COMMIT transaction
-    
-SQLite Database (WAL mode)
+╔═════════════════════════════════════════════════════════════════════╗
+║                    MAIN PYTHON PROCESS                              ║
+╠═════════════════════════════════════════════════════════════════════╣
+║                                                                     ║
+║  ┌───────────────────────────────────────────────────────────────┐  ║
+║  │ Orchestrator (main thread)                                    │  ║
+║  │ • Spawns threads and processes                                │  ║
+║  │ • Walks filesystem, builds Work Queue                         │  ║
+║  └───────────────────────────────────────────────────────────────┘  ║
+║                            │                                        ║
+║                            ▼                                        ║
+║  ┌───────────────────────────────────────────────────────────────┐  ║
+║  │ Work Queue                                                    │  ║
+║  └───────────────────────────────────────────────────────────────┘  ║
+║                            │                                        ║
+║                            ▼                                        ║
+║  ┌────────────────────────────────────────────────────────────────┐ ║
+║  │ Worker Thread 1  │  Worker Thread 2  │  ...  │  Worker Thread N│ ║
+║  │                                                                │ ║
+║  │ Each thread:                                                   │ ║
+║  │   • Get work from queue                                        │ ║
+║  │   • Parse JSON                                                 │ ║
+║  │   • Submit file to Process Pool (below) ──┐                    │ ║
+║  │   • Wait for result                       │                    │ ║
+║  │   • Put result in Results Queue           │                    │ ║
+║  └───────────────────────────────────────────┼────────────────────┘ ║
+║                            │                 │                      ║
+║                            ▼                 │                      ║
+║  ┌────────────────────────────────────────────────────────────────┐ ║
+║  │ Results Queue                             │                    │ ║
+║  └───────────────────────────────────────────┼────────────────────┘ ║
+║                            │                 │                      ║
+║                            ▼                 │                      ║
+║  ┌────────────────────────────────────────────────────────────────┐ ║
+║  │ Batch Writer Thread                       │                    │ ║
+║  │ • Reads from Results Queue                │                    │ ║
+║  │ • Writes to SQLite                        │                    │ ║
+║  └───────────────────────────────────────────┼────────────────────┘ ║
+║                            │                 │                      ║
+║                            ▼                 │                      ║
+║  ┌────────────────────────────────────────────────────────────────┐ ║
+║  │ SQLite Database (WAL mode)                │                    │ ║
+║  └───────────────────────────────────────────┼────────────────────┘ ║
+║                                              │                      ║
+╚══════════════════════════════════════════════│══════════════════════╝
+                                               │
+                                               │ (calls)
+                                               ▼
+╔═════════════════════════════════════════════════════════════════════╗
+║              SEPARATE PROCESS POOL                                  ║
+╠═════════════════════════════════════════════════════════════════════╣
+║                                                                     ║
+║  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌───────────┐   ║
+║  │ Process 1   │  │ Process 2   │  │ Process 3   │  │ Process M │   ║
+║  │             │  │             │  │             │  │           │   ║
+║  │ CPU work:   │  │ CPU work:   │  │ CPU work:   │  │ CPU work: │   ║
+║  │ • EXIF      │  │ • EXIF      │  │ • EXIF      │  │ • EXIF    │   ║
+║  │ • CRC32     │  │ • CRC32     │  │ • CRC32     │  │ • CRC32   │   ║
+║  │ • MIME      │  │ • MIME      │  │ • MIME      │  │ • MIME    │   ║
+║  └─────────────┘  └─────────────┘  └─────────────┘  └───────────┘   ║
+║                                                                     ║
+║                          (returns result to caller)                 ║
+╚═════════════════════════════════════════════════════════════════════╝
 ```
 
 ## Database Schema
