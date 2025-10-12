@@ -198,8 +198,8 @@ This document outlines the architecture for scanning and cataloging Google Photo
 - `relative_path` (UNIQUE, normalized NFC) - Full path within Takeout
 - `album_id` - UUID of the album
 - `title` - From JSON metadata
-- `file_size` + `crc32` - For duplicate detection
-- `crc32` - CRC32 of full file (for finding duplicates)
+- `file_size` - File size in bytes
+- `crc32` - CRC32 of full file (for duplicate detection: WHERE file_size = X AND crc32 = Y)
 - `content_fingerprint` - SHA-256 of last 8KB (for change detection, calculated lazily)
 - `capture_timestamp` - When photo was taken (JSON > EXIF > filename > NULL)
 - `first_seen_timestamp` - When file first entered database
