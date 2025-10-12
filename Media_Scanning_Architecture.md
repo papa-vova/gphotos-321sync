@@ -151,136 +151,59 @@ Batch Writer Thread (single writer)
 SQLite Database (WAL mode)
 ```
 
-## Database Design Principles
+## Database Schema
 
-### Entity Model
+### Entities
 
-**Core Entities:**
+#### 1. Media Items
 
-1. **Media Items** - Individual media files with all their metadata
-2. **Albums** - Album metadata and identity (UUID-based)
-   - Fields: `album_id` (UUID), `folder_path` (e.g., "Chair yoga"), `title`, `description`, `creation_timestamp`, `access_level`, `scan_timestamp`
-3. **People Tags** - Face tags associated with media items
-   - Fields: `media_item_id` (UUID), `person_name` (e.g., "Alice"), `tag_order` (position in array)
+- `relative_path` - Full path within Takeout
+- `album_id` - UUID of the album
+- `title` - From JSON metadata
+- `file_size` + `crc32` - For duplicate detection
+- `first_seen_timestamp`, `last_seen_timestamp`, `file_mtime`, `status` - Lifecycle tracking
+- Other metadata from JSON sidecar and EXIF
 
-**Supporting Entities:**
+#### 2. Albums
 
-1. **Scan Metadata** - Tracking information for resumability
-2. **Scan Log** - Audit trail of scanning operations
+- `album_id` (UUID), `folder_path`, `title`, `description`, `creation_timestamp`, `access_level`, `scan_timestamp`
+- Two types: User Albums (with metadata.json) and Synthetic Albums (Photos from YYYY/)
+- Note: Google Takeout does not provide stable album IDs
 
-### Key Design Decisions
+#### 3. People Tags
 
-#### 1. Catalog Everything, Deduplicate Later
+- `media_item_id`, `person_name`, `tag_order`
 
-- Store all instances of a file, even if they're duplicates
-- Use content hash (CRC32) and file size for duplicate detection
+#### 4. Scan Metadata
+
+- `current_scan_id`, `scan_status`, `current_scan_start_time`, `last_completed_scan_time`, `total_files_scanned`
+
+#### 5. Scan Log
+
+- Audit trail of scanning operations
+
+### Design Principles
+
+#### Catalog everything, deduplicate later
+
+- Store all file instances (duplicates detected by file size + CRC32)
 - Deduplication is a query concern, not a storage constraint
-- This enables flexible reconstruction strategies:
-  - **Strategy A:** Keep only originals (no edited versions)
-  - **Strategy B:** Keep edited versions where they exist, originals otherwise
-  - **Strategy C:** Keep both originals and edited versions
-  - **Strategy D:** Keep files from specific albums only
 
-#### 2. File Lifecycle and Resumability
+#### Resumability
 
-**Tracked fields:**
+- Track file lifecycle with timestamps
+- Skip unchanged files (compare `file_mtime`)
+- Detect deletions (files with old `last_seen_timestamp`)
 
-- `first_seen_timestamp` - when file first entered database
-- `last_seen_timestamp` - updated every time we see the file during a scan
-- `file_mtime` - filesystem modification time
-- `status` - 'present', 'deleted', 'moved' (or similar)
+#### No foreign keys
 
-**Scan algorithm:**
+- Application-enforced integrity
+- Simpler migrations, better write performance
 
-- For each file in filesystem:
-  - Get `current_file_mtime` from filesystem
-  - Query database for this file path
-  - If file exists in DB AND `stored_file_mtime == current_file_mtime`:
-    - File unchanged → skip full processing
-    - Update: `last_seen_timestamp` = now
-  - Otherwise (file is new or modified):
-    - Full processing (extract metadata, hash, EXIF, etc.)
-    - Update: `file_mtime` = `current_file_mtime`
-    - Update: `last_seen_timestamp` = now
-    - Update: `first_seen_timestamp` = now (only if new file)
+#### Preserve user edits
 
-**Deletion detection:**
-
-- After scan completes: files with `last_seen_timestamp` older than scan start time are marked as deleted/moved
-
-**Note:** Full history tracking (all changes over time) is post-MVP
-
-#### 3. No Foreign Keys (Application-Enforced Integrity)
-
-- Simplifies schema migrations
-- Improves write performance
-- Referential integrity enforced by application logic
-- Easier to port to different databases
-
-#### 4. Separate User Edits from Originals
-
-- Store both original EXIF data and Google Photos metadata
-- Detect when users edited timestamps or locations
-- Preserve both versions for user choice during reconstruction
-
-## Media Item Fields
-
-For each file instance, store:
-
-- **`relative_path`** - Full path within Takeout (e.g., `Google Photos/Chair yoga/IMG_123.jpg`)
-- **`album_id`** - UUID of the album (generated during discovery)
-- **`title`** - From JSON metadata (may differ from filename)
-- **`file_size`** + **`crc32`** - For duplicate detection
-- **Lifecycle timestamps** - `first_seen_timestamp`, `last_seen_timestamp`, `file_mtime`, `status`
-- **Other metadata** - From JSON sidecar and EXIF
-
-## Parallel Processing
-
-**Architecture:** See Data Flow diagram above
-
-**Thread pool (I/O):** File traversal, JSON parsing, coordination
-
-**Process pool (CPU):** EXIF extraction, CRC32 hashing, MIME detection (bypasses Python GIL)
-
-**Single writer:** Only writer thread touches database (SQLite constraint)
-
-## Scan State Management
-
-**Scan Metadata Table:**
-
-- `current_scan_id` - Unique ID for current scan run (for tracking/logging)
-- `scan_status` - 'in_progress', 'completed', 'failed'
-- `current_scan_start_time` - When current scan started
-- `last_completed_scan_time` - When last successful scan finished
-- `total_files_scanned` - Progress counter
-
-**Interruption Handling:**
-
-- Graceful shutdown on SIGINT/SIGTERM
-- Flush pending writes before exit
-- Update `scan_status` to reflect final state
-- Next run checks status and resumes if 'in_progress'
-
-## Album Handling
-
-**Two types:**
-
-1. **User Albums** - Folders with `metadata.json` (have title, description, creation date, access level)
-2. **Synthetic Albums** - `Photos from YYYY/` folders (chronological organization)
-
-**Discovery:**
-
-- Scan folders under `Google Photos/`
-- Generate UUID for each unique folder path
-- Store `folder_path` in albums table
-
-**Note:** Google Takeout does not provide stable album IDs, so folder renames between exports create new album records
-
-**Query:**
-
-```sql
-SELECT * FROM media_items WHERE album_id = :album_uuid
-```
+- Store both original EXIF and Google Photos metadata
+- Detect edited timestamps/locations
 
 ## Next Steps
 
