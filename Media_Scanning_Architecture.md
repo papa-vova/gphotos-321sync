@@ -74,8 +74,8 @@ This document outlines the architecture for scanning and cataloging Google Photo
 ┌─────────────────────────────────────────────────────────────┐
 │                      Discovery Phase                        │
 │  - Walk directory tree                                      │
-│  - Identify media files and their sidecars                  │
 │  - Identify albums                                          │
+│  - Identify media files and their sidecars                  │
 │  - Build work queue                                         │
 └─────────────────────────────────────────────────────────────┘
                               │
@@ -95,35 +95,75 @@ This document outlines the architecture for scanning and cataloging Google Photo
 │  - Batch writes to database                                 │
 │  - Single writer thread (SQLite constraint)                 │
 │  - Transactional integrity                                  │
+│  - Update last_seen_timestamp for each file                 │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                   Post-Processing Phase                     │
-│  - Link edited versions to originals                        │
-│  - Build album relationships                                │
-│  - Generate statistics                                      │
+│  - Link edited versions to originals (match filenames)      │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                    Media Database                           │
 │  - Queryable catalog of all media                           │
-│  - Supports multiple reconstruction strategies              │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+### System Components
+
+#### 1. Orchestrator (Main Thread)
+
+- Creates and manages all other components
+- Spawns worker threads, process pool, and writer thread
+- Runs discovery phase (walks filesystem, builds queues)
+- Coordinates shutdown
+
+#### 2. Worker Thread Pool (N threads)
+
+- Created by orchestrator at startup
+- Each thread: gets work from queue, parses JSON, submits to process pool, puts results in results queue
+- Light work only (I/O-bound: JSON parsing, coordination)
+- Why threads: I/O operations release Python's GIL
+
+#### 3. Process Pool (M processes)
+
+- Created by orchestrator at startup
+- Separate Python processes (not threads)
+- Heavy CPU-bound work: EXIF extraction, CRC32 hashing, MIME detection
+- Why processes: Bypasses Python's GIL for true parallelism
+
+#### 4. Batch Writer Thread (1 thread)
+
+- Created by orchestrator at startup
+- ONLY component that writes to database
+- Accumulates results into batches, writes transactions
+- Why single writer: SQLite constraint
+
+#### 5. Work Queue & Results Queue
+
+- Thread-safe queues (bounded size)
+- Work Queue: orchestrator → workers
+- Results Queue: workers → writer
+
+#### 6. SQLite Database
+
+- WAL mode for concurrent reads
+- Single writer (batch writer thread)
 
 ### Data Flow
 
 ```text
-Takeout Folder
-    │
-    ▼
-Discovery Thread (I/O-bound)
-    ├─> Walk directory tree
-    ├─> Build sidecar lookup map
-    ├─> Identify albums
-    └─> Put (media_file, json_file, album_id) into Work Queue
+Orchestrator (main thread)
+    ├─> Spawns: Worker Threads (N)
+    ├─> Spawns: Process Pool (M)
+    ├─> Spawns: Batch Writer Thread (1)
+    └─> Runs Discovery:
+        ├─> Walk directory tree
+        ├─> Build sidecar lookup map
+        ├─> Identify albums
+        └─> Put (media_file, json_file, album_id) into Work Queue
     
 Work Queue (bounded, thread-safe)
     │
@@ -162,7 +202,10 @@ SQLite Database (WAL mode)
 - `album_id` - UUID of the album
 - `title` - From JSON metadata
 - `file_size` + `crc32` - For duplicate detection
-- `first_seen_timestamp`, `last_seen_timestamp`, `file_mtime`, `status` - Lifecycle tracking
+- `first_seen_timestamp` - When file first entered database
+- `last_seen_timestamp` - When file was last seen in a scan
+- `file_mtime` - Filesystem modification time
+- `status` - present, missing (if not seen in latest scan)
 - Other metadata from JSON sidecar and EXIF
 
 #### 2. Albums
@@ -195,7 +238,7 @@ SQLite Database (WAL mode)
 
 - Track file lifecycle with timestamps
 - Skip unchanged files (compare `file_mtime`)
-- Detect deletions (files with old `last_seen_timestamp`)
+- Detect deletions (files with old `last_seen_timestamp`) as `status`
 
 #### No foreign keys
 
