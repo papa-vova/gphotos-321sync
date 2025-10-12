@@ -480,7 +480,148 @@ process_pool.join()
 
 ---
 
-## Appendix: Visual Architecture Comparison
+## Appendix: Threads vs Processes Deep Dive
+
+### What Are Threads and Processes?
+
+#### Thread
+
+A **thread** is a lightweight execution unit that runs **inside** a Python process.
+
+**Key characteristics:**
+
+- **Shared memory**: All threads in a process share the same memory space
+- **Direct access**: Can directly access the same variables, queues, and database connections
+- **Low overhead**: Creating a thread takes ~1-5 ms
+- **Memory cost**: ~2 MB per thread
+- **GIL limitation**: Python's Global Interpreter Lock prevents true parallel CPU execution
+- **Best for**: I/O-bound work (reading files, network requests, database queries)
+- **Created with**: `threading.Thread(target=function)`
+
+**Why threads work for I/O:**
+When a thread does I/O (like reading a file), Python releases the GIL, allowing other threads to run. This means multiple threads can wait for I/O simultaneously.
+
+#### Process
+
+A **process** is a completely separate Python interpreter with its own memory space.
+
+**Key characteristics:**
+
+- **Isolated memory**: Each process has its own memory, cannot access other processes' variables
+- **Communication overhead**: Must serialize (pickle) data to send between processes
+- **High overhead**: Creating a process takes ~25-50 ms
+- **Memory cost**: ~80 MB per process (full Python interpreter)
+- **No GIL limitation**: Each process has its own GIL, enabling true parallel CPU execution
+- **Best for**: CPU-bound work (hashing, compression, parsing, computation)
+- **Created with**: `multiprocessing.Process()` or `multiprocessing.Pool()`
+
+**Why processes work for CPU:**
+Each process has its own Python interpreter and GIL. CPU-intensive work in one process doesn't block other processes, achieving true parallelism on multi-core CPUs.
+
+### Visual Comparison
+
+#### One Python Process with Multiple Threads
+
+```text
+┌─────────────────────────────────────────────────────────────┐
+│              MAIN PYTHON PROCESS                            │
+│              (One Python Interpreter)                       │
+│                                                             │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐     │
+│  │ Thread 1 │  │ Thread 2 │  │ Thread 3 │  │ Thread N │     │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────┘     │
+│       │             │             │             │           │
+│       └─────────────┴─────────────┴─────────────┘           │
+│                     │                                       │
+│              Shared Memory:                                 │
+│              • Variables                                    │
+│              • Queues                                       │
+│              • Database connection                          │
+│              • File handles                                 │
+│                                                             │
+│  Global Interpreter Lock (GIL):                             │
+│  Only ONE thread can execute Python bytecode at a time      │
+│  (but I/O operations release the GIL)                       │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### Multiple Separate Processes
+
+```text
+┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
+│   Process 1     │  │   Process 2     │  │   Process M     │
+│                 │  │                 │  │                 │
+│  Python         │  │  Python         │  │  Python         │
+│  Interpreter    │  │  Interpreter    │  │  Interpreter    │
+│                 │  │                 │  │                 │
+│  Own Memory:    │  │  Own Memory:    │  │  Own Memory:    │
+│  • Variables    │  │  • Variables    │  │  • Variables    │
+│  • GIL          │  │  • GIL          │  │  • GIL          │
+│  • Stack        │  │  • Stack        │  │  • Stack        │
+│                 │  │                 │  │                 │
+│  ~80 MB         │  │  ~80 MB         │  │  ~80 MB         │
+└─────────────────┘  └─────────────────┘  └─────────────────┘
+        ▲                    ▲                    ▲
+        │                    │                    │
+        └────────────────────┴────────────────────┘
+                             │
+                  IPC (Inter-Process Communication)
+                  Data must be serialized (pickled)
+```
+
+### Why Use Both?
+
+Our architecture uses **threads for I/O coordination** and **processes for CPU work**:
+
+```text
+Main Process (Threads):
+├─ Orchestrator Thread: Manages lifecycle
+├─ Worker Thread 1: Read file → Send to process → Wait → Write result
+├─ Worker Thread 2: Read file → Send to process → Wait → Write result
+├─ Worker Thread N: Read file → Send to process → Wait → Write result
+└─ Writer Thread: Batch write to database
+
+Process Pool (Processes):
+├─ Process 1: EXIF extraction, CRC32 hashing, MIME detection
+├─ Process 2: EXIF extraction, CRC32 hashing, MIME detection
+└─ Process M: EXIF extraction, CRC32 hashing, MIME detection
+```
+
+**The workflow:**
+
+1. **Worker Thread** (I/O): Reads JSON file from disk (releases GIL)
+2. **Worker Thread** (coordination): Submits file path to Process Pool
+3. **Process** (CPU): Does heavy computation (EXIF, CRC32, MIME) in parallel
+4. **Worker Thread** (I/O): Receives result, puts in results queue
+5. **Writer Thread** (I/O): Batch writes to database (releases GIL)
+
+### Performance Characteristics
+
+| Aspect | Thread | Process |
+|--------|--------|---------|
+| **Creation time** | 1-5 ms | 25-50 ms |
+| **Memory per unit** | ~2 MB | ~80 MB |
+| **Startup cost (N=16)** | ~5 ms | - |
+| **Startup cost (M=8)** | - | ~200 ms |
+| **Communication** | Direct (shared memory) | Serialization (pickle) |
+| **Parallelism** | No (GIL blocks CPU) | Yes (separate GIL) |
+| **Use case** | I/O-bound | CPU-bound |
+
+### Configuration Rules
+
+**Worker Threads (N):**
+
+- **Rule**: 2-4x CPU cores
+- **Reason**: Threads block on I/O, so oversubscribe to keep CPU busy
+- **Example**: 16-32 threads for 8-core CPU
+- **Cost**: 16 × 2 MB = 32 MB
+
+**Worker Processes (M):**
+
+- **Rule**: Match CPU cores
+- **Reason**: CPU-bound work, more processes = contention
+- **Example**: 8 processes for 8-core CPU
+- **Cost**: 8 × 80 MB = 640 MB
 
 ### Main Process vs Process Pool
 
