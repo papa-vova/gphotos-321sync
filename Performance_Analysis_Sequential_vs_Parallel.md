@@ -25,9 +25,11 @@ This document compares the performance characteristics of two scanning approache
 │    1. Walk filesystem                       │
 │    2. For each file:                        │
 │       • Read JSON sidecar                   │
-│       • Extract EXIF                        │
+│       • Extract EXIF + resolution           │
+│       • Extract video metadata (if video)   │
 │       • Calculate CRC32                     │
 │       • Detect MIME type                    │
+│       • Content fingerprint (head+tail)     │
 │       • Write to database                   │
 │    3. Done                                  │
 └─────────────────────────────────────────────┘
@@ -57,7 +59,8 @@ This document compares the performance characteristics of two scanning approache
 │         SEPARATE PROCESS POOL               │
 │                                             │
 │  • M Worker Processes (CPU-bound work)      │
-│  • EXIF, CRC32, MIME detection              │
+│  • EXIF, resolution, video metadata         │
+│  • CRC32, MIME, content fingerprint         │
 └─────────────────────────────────────────────┘
 ```
 
@@ -96,16 +99,22 @@ This document compares the performance characteristics of two scanning approache
 | Parse JSON | 0.2 ms | CPU (light) |
 | Stream full file (7.7 MB avg) | 15.4 ms | I/O |
 | Extract EXIF (from stream headers) | 5 ms | CPU |
+| Extract resolution (width × height) | 1 ms | CPU |
+| Extract video metadata (ffprobe spawn) | 50-100 ms | CPU+I/O (videos only) |
 | Calculate CRC32 (from stream) | 10 ms | CPU |
 | MIME detection (from stream start) | 1 ms | CPU |
+| Calculate content fingerprint (head+tail) | 2-5 ms | I/O+CPU |
 | DB write (batched) | 0.1 ms | I/O |
-| **Total per file** | **~32 ms** | |
+| **Total per file (images)** | **~40 ms** | |
+| **Total per file (videos)** | **~90-140 ms** | |
 
-**I/O Constraint:** At 500 MB/s SSD bandwidth, reading 7.7 MB takes minimum 15.4 ms. This is the bottleneck.
+**I/O Constraint:** At 500 MB/s SSD bandwidth, reading 7.7 MB takes minimum 15.4 ms. This is the bottleneck for images.
 
-**Implementation Note:** File is streamed once; EXIF reads headers, CRC32 processes full stream, MIME detects from initial bytes. All operations consume the same file read.
+**Video Bottleneck:** ffprobe process spawn + I/O adds 50-100ms per video, dominating video processing time.
 
-**Note:** Content fingerprint (SHA-256 of last 8KB) is calculated lazily during rescans, only when `(path, size)` match. Not included in initial scan timing.
+**Implementation Note:** File is streamed once; EXIF reads headers, resolution extracted from image/video headers, video metadata via ffprobe (separate process), CRC32 processes full stream, MIME detects from initial bytes. Content fingerprint reads first 64KB + last 64KB (head+tail).
+
+**Note:** Content fingerprint (SHA-256 of first 64KB + last 64KB) is always calculated and compared on rescans for change detection. Detects in-place edits, metadata tweaks, lossless rotations.
 
 **Parallel configuration:**
 
@@ -124,8 +133,8 @@ This document compares the performance characteristics of two scanning approache
 
 **Per-file cost:**
 
-- All operations sequential: 32 ms/file
-- Bottleneck: I/O (15.4 ms to read 7.7 MB at 500 MB/s)
+- Images: ~40 ms/file (I/O bottleneck: 15.4 ms)
+- Videos: ~90-140 ms/file (ffprobe bottleneck: 50-100 ms)
 
 **Shutdown cost:**
 
@@ -156,7 +165,7 @@ This document compares the performance characteristics of two scanning approache
 - **Disk bandwidth limit:** 500 MB/s ÷ 7.7 MB/file = 65 files/sec max
 - **Minimum time per file:** 15.4 ms (I/O bound)
 - **Theoretical best:** 15.4 ms I/O + 0 ms CPU (perfect overlap) = 15.4 ms
-- **Realistic:** ~19 ms/file (≈**1.7x speedup**, accounting for coordination overhead)
+- **Realistic:** ~20 ms/file (≈**1.75x speedup**, accounting for coordination overhead)
 - CPU parallelism hides most CPU time but cannot exceed disk I/O limits
 
 **Shutdown cost:**
@@ -186,10 +195,10 @@ This document compares the performance characteristics of two scanning approache
 
 ```text
 Startup:     0.01 s
-Processing:  32.0 s  (1,000 × 32 ms)
+Processing:  35.0 s  (1,000 × 35 ms)
 Shutdown:    0.005 s
 ─────────────────────
-Total:       32.0 s
+Total:       35.0 s
 Memory:      70 MB
 ```
 
@@ -197,12 +206,12 @@ Memory:      70 MB
 
 ```text
 Startup:     0.22 s
-Processing:  19.0 s  (1,000 × 19 ms effective, disk I/O bound)
+Processing:  20.0 s  (1,000 × 20 ms effective, disk I/O bound)
 Shutdown:    0.07 s
 ─────────────────────
-Total:       19.3 s
+Total:       20.3 s
 Memory:      736 MB
-Speedup:     1.7x
+Speedup:     1.72x
 ```
 
 **Analysis:**
@@ -220,10 +229,10 @@ Speedup:     1.7x
 
 ```text
 Startup:     0.01 s
-Processing:  320 s   (10,000 × 32 ms)
+Processing:  350 s   (10,000 × 35 ms)
 Shutdown:    0.005 s
 ─────────────────────
-Total:       320 s (5.3 min)
+Total:       350 s (5.8 min)
 Memory:      70 MB
 ```
 
@@ -231,12 +240,12 @@ Memory:      70 MB
 
 ```text
 Startup:     0.22 s
-Processing:  190 s   (10,000 × 19 ms effective, disk I/O bound)
+Processing:  200 s   (10,000 × 20 ms effective, disk I/O bound)
 Shutdown:    0.07 s
 ─────────────────────
-Total:       190.3 s (3.2 min)
+Total:       200.3 s (3.3 min)
 Memory:      736 MB
-Speedup:     1.7x
+Speedup:     1.75x
 ```
 
 **Analysis:**
@@ -253,10 +262,10 @@ Speedup:     1.7x
 
 ```text
 Startup:     0.01 s
-Processing:  3,200 s  (100,000 × 32 ms)
+Processing:  3,500 s  (100,000 × 35 ms)
 Shutdown:    0.005 s
 ─────────────────────
-Total:       3,200 s (53.3 min)
+Total:       3,500 s (58.3 min)
 Memory:      70 MB
 ```
 
@@ -264,12 +273,12 @@ Memory:      70 MB
 
 ```text
 Startup:     0.22 s
-Processing:  1,900 s  (100,000 × 19 ms effective, disk I/O bound)
+Processing:  2,000 s  (100,000 × 20 ms effective, disk I/O bound)
 Shutdown:    0.07 s
 ─────────────────────
-Total:       1,900.3 s (31.7 min)
+Total:       2,000.3 s (33.3 min)
 Memory:      736 MB
-Speedup:     1.7x
+Speedup:     1.75x
 ```
 
 **Analysis:**
@@ -277,7 +286,7 @@ Speedup:     1.7x
 - Parallel wins massively
 - Startup/shutdown overhead is negligible (<0.1%)
 - Memory cost: 10.5x higher (still reasonable for modern systems)
-- Time savings: 22 minutes
+- Time savings: 25 minutes
 - Disk I/O is the bottleneck, not CPU
 
 ---
@@ -288,10 +297,10 @@ Speedup:     1.7x
 
 ```text
 Startup:     0.01 s
-Processing:  16,000 s  (500,000 × 32 ms)
+Processing:  17,500 s  (500,000 × 35 ms)
 Shutdown:    0.005 s
 ─────────────────────
-Total:       16,000 s (4.4 hours)
+Total:       17,500 s (4.9 hours)
 Memory:      70 MB
 ```
 
@@ -299,12 +308,12 @@ Memory:      70 MB
 
 ```text
 Startup:     0.22 s
-Processing:  9,500 s   (500,000 × 19 ms effective, disk I/O bound)
+Processing:  10,000 s   (500,000 × 20 ms effective, disk I/O bound)
 Shutdown:    0.07 s
 ─────────────────────
-Total:       9,500.3 s (2.6 hours)
+Total:       10,000.3 s (2.8 hours)
 Memory:      736 MB
-Speedup:     1.7x
+Speedup:     1.75x
 ```
 
 **Analysis:**
@@ -312,7 +321,7 @@ Speedup:     1.7x
 - Parallel wins overwhelmingly
 - Startup/shutdown overhead is negligible
 - Memory cost: 10.5x higher (acceptable)
-- Time savings: 1.8 hours
+- Time savings: 2.1 hours
 - Disk I/O is the bottleneck, not CPU
 
 ---
@@ -321,12 +330,12 @@ Speedup:     1.7x
 
 | Library Size | Files | Sequential Time | Parallel Time | Speedup | Memory Cost |
 |--------------|-------|-----------------|---------------|---------|-------------|
-| **Small** | 1K | 32 s | 19 s | 1.7x | 10.5x (736 MB) |
-| **Medium** | 10K | 5.3 min | 3.2 min | 1.7x | 10.5x (736 MB) |
-| **Large** | 100K | 53.3 min | 31.7 min | 1.7x | 10.5x (736 MB) |
-| **Very Large** | 500K | 4.4 hours | 2.6 hours | 1.7x | 10.5x (736 MB) |
+| **Small** | 1K | 35 s | 20 s | 1.75x | 10.5x (736 MB) |
+| **Medium** | 10K | 5.8 min | 3.3 min | 1.75x | 10.5x (736 MB) |
+| **Large** | 100K | 58.3 min | 33.3 min | 1.75x | 10.5x (736 MB) |
+| **Very Large** | 500K | 4.9 hours | 2.8 hours | 1.75x | 10.5x (736 MB) |
 
-**Note:** Speedup limited to ~1.7x by disk I/O bandwidth (500 MB/s). Sequential already spends 15.4ms of 32ms on I/O; parallelism can only hide the 16.6ms CPU overhead, achieving theoretical max of 2.08x but realistic 1.7x due to coordination overhead.
+**Note:** Speedup limited to ~1.75x by disk I/O bandwidth (500 MB/s). Sequential already spends 15.4ms of 35ms on I/O; parallelism can only hide the 19.6ms CPU overhead, achieving theoretical max of 2.27x but realistic 1.75x due to coordination overhead.
 
 ---
 
@@ -356,10 +365,10 @@ Speedup:     1.7x
 
 - Bottleneck: Disk I/O bandwidth (500 MB/s physical limit)
 - CPU work happens in parallel but cannot exceed disk throughput
-- Effective speedup: ~1.7x (limited by disk bandwidth, not CPU cores)
-- Sequential spends 15.4ms on I/O + 16.6ms on CPU = 32ms total
-- Parallel can hide most CPU time but not I/O: 15.4ms I/O + ~3.6ms CPU overhead = 19ms
-- Theoretical max: 32/15.4 = 2.08x, realistic: 32/19 = 1.7x
+- Effective speedup: ~1.75x (limited by disk bandwidth, not CPU cores)
+- Sequential spends 15.4ms on I/O + 19.6ms on CPU = 35ms total
+- Parallel can hide most CPU time but not I/O: 15.4ms I/O + ~4.6ms CPU overhead = 20ms
+- Theoretical max: 35/15.4 = 2.27x, realistic: 35/20 = 1.75x
 
 ### Optimization Opportunities
 
@@ -477,11 +486,11 @@ process_pool.join()
 
 **Rationale:**
 
-- ~1.7x speedup on realistic workloads (local SSD, I/O bound)
+- ~1.75x speedup on realistic workloads (local SSD, I/O bound)
 - Memory cost (736 MB) is acceptable on modern systems
 - Startup/shutdown overhead becomes negligible at scale
 - Time savings are substantial (1-2 hours saved on large libraries)
-- File streamed once: EXIF from headers, CRC32 from full stream, MIME from start
+- File streamed once: EXIF from headers, resolution from image/video headers, video metadata via ffprobe, CRC32 from full stream, MIME from start
 - CRC32 for duplicate detection, content fingerprint for change detection
 - **Disk I/O is the bottleneck**, not CPU - parallelism hides CPU overhead but can't exceed 500 MB/s
 
@@ -670,16 +679,16 @@ Main Process (Threads):
 └─ Writer Thread: Batch write to database
 
 Process Pool (Processes):
-├─ Process 1: EXIF extraction, CRC32 hashing, MIME detection
-├─ Process 2: EXIF extraction, CRC32 hashing, MIME detection
-└─ Process M: EXIF extraction, CRC32 hashing, MIME detection
+├─ Process 1: EXIF, resolution, video metadata, CRC32, MIME detection
+├─ Process 2: EXIF, resolution, video metadata, CRC32, MIME detection
+└─ Process M: EXIF, resolution, video metadata, CRC32, MIME detection
 ```
 
 **The workflow:**
 
 1. **Worker Thread** (I/O): Reads JSON file from disk (releases GIL)
 2. **Worker Thread** (coordination): Submits file path to Process Pool
-3. **Process** (CPU): Does heavy computation (EXIF, CRC32, MIME) in parallel
+3. **Process** (CPU): Does heavy computation (EXIF, resolution, video metadata, CRC32, MIME) in parallel
 4. **Worker Thread** (I/O): Receives result, puts in results queue
 5. **Writer Thread** (I/O): Batch writes to database (releases GIL)
 
@@ -778,7 +787,9 @@ def worker_function(work_queue, results_queue, process_pool):
 def cpu_intensive_work(file_path):
     """This runs in a separate process"""
     exif = extract_exif(file_path)  # CPU-intensive
+    resolution = extract_resolution(file_path)  # CPU-intensive
+    video_meta = extract_video_metadata(file_path) if is_video(file_path) else None  # CPU-intensive
     crc32 = calculate_crc32(file_path)  # CPU-intensive
     mime = detect_mime(file_path)  # CPU-intensive
-    return {'exif': exif, 'crc32': crc32, 'mime': mime}
+    return {'exif': exif, 'resolution': resolution, 'video_meta': video_meta, 'crc32': crc32, 'mime': mime}
 ```

@@ -26,23 +26,47 @@ This document outlines the architecture for scanning and cataloging Google Photo
 ### 1. Resumability
 
 - Scanning can be interrupted and resumed without duplicate work
-- Change detection: `(relative_path, file_size)` → if match, verify with content fingerprint
-- Content fingerprint: SHA-256 of last 8KB (calculated lazily, only when path+size match)
-- Tracks scan sessions in `scan_runs` table with progress cursor
-- Filesystem mtime is unreliable (gets overwritten during extraction)
+- Change detection (two-tier approach):
+  1. **Fast check:** `(relative_path, file_size)` used only as an index lookup shortcut.
+  2. **Content verification:** On every rescan, the scanner **always recomputes** the head+tail SHA-256 fingerprint and compares it with the stored value before deciding to skip. No early "continue" is allowed prior to this step.
+  3. If fingerprint matches: skip full processing, update `scan_run_id` and `last_seen_timestamp`
+  4. If fingerprint differs: full reprocessing (detects in-place edits, metadata changes, lossless rotations)
+
+```python
+# Pseudocode
+row = db.get(path, size)
+if row:
+    fp_now = compute_head_tail_sha256(path, size)
+    if fp_now == row.content_fingerprint:
+        mark_seen(path)  # updates scan_run_id + timestamp
+        skip_metadata()
+    else:
+        reprocess(path)
+else:
+    process_first_time(path)
+```
+
+- Tracks scan sessions in `scan_runs` table with statistics
+- **Design Decision:** Filesystem modification time is unreliable (gets overwritten during extraction), that's why we need fingerprinting instead of relying on mtime alone
+- **Note:** Files <128KB are hashed entirely; larger files use head+tail to detect changes anywhere in the file
 
 ### 2. Parallel Processing
 
-- CPU-bound work (EXIF, fingerprinting, MIME detection) uses process pool for true parallelism
+- CPU-bound work (EXIF extraction, fingerprinting, MIME detection) uses process pool for true parallelism
 - I/O-bound work (file reading, JSON parsing, DB writes) uses thread pool
-- Configuration: N=16 threads (2x CPU cores), M=8 processes (match CPU cores)
+- Configuration: N=16 threads (2× CPU cores for I/O overlap), M=8 processes (1× CPU cores for parallelism)
+- CPU core detection: Use `multiprocessing.cpu_count()` or equivalent
 - Single-pass read per file in process pool
+- **Note:** EXIF extraction includes timestamps, GPS, camera info, orientation (all available fields); resolution (width × height) extracted for all media; video metadata (duration, frame rate) extracted via ffprobe
 
 ### 3. Duplicate Tolerance
 
-- All file instances are cataloged (duplicates detected by file size + CRC32)
+- All file instances are cataloged (duplicates detected by `file_size + CRC32`)
+- **Duplicate resolution strategy:** `file_size + CRC32` for fast candidate detection; on collision, compute SHA-256 to confirm
 - Deduplication is a query-time concern, not a storage constraint
-- Same photo in multiple albums = multiple database entries (correct for Takeout structure)
+- Same photo in multiple albums = multiple database entries
+- Path parsing handles Google Takeout's specific folder structure (Takeout/Google Photos/Album Name/...)
+- **Rationale:** CRC32 is fast (~1-2 GB/s) vs SHA-256 (~100-200 MB/s); collisions are rare, resolved on-demand
 
 ### 4. Database Portability
 
@@ -58,7 +82,10 @@ This document outlines the architecture for scanning and cataloging Google Photo
 
 ### 6. Configuration and Error Handling
 
-- Configuration stored separately from code (config file or environment variables)
+- **Configuration storage:** Cross-platform using `platformdirs` library
+  - Desktop: `~/.config/gphotos-321sync/config.yaml` (Linux/Mac) or `%APPDATA%/gphotos-321sync/config.yaml` (Windows)
+  - Cloud: Environment variables (12-factor app pattern)
+  - Priority: Environment variables override config file
 - Comprehensive error handling with graceful degradation
 - Detailed logging for debugging and audit trail
 - Reasonable defaults for all configurable parameters
@@ -79,7 +106,7 @@ This document outlines the architecture for scanning and cataloging Google Photo
 ┌─────────────────────────────────────────────────────────────┐
 │                      Discovery Phase                        │
 │  - Walk directory tree                                      │
-│  - Identify albums                                          │
+│  - Process albums (parse metadata.json, record errors)      │
 │  - Identify media files and their sidecars                  │
 │  - Build work queue                                         │
 └─────────────────────────────────────────────────────────────┘
@@ -89,10 +116,13 @@ This document outlines the architecture for scanning and cataloging Google Photo
 │                     Processing Phase                        │
 │  - Extract metadata from JSON sidecars                      │
 │  - Stream the full file once:                               │
-│    • EXIF reads headers from stream                         │
+│    • EXIF extraction (timestamps, GPS, camera, orientation) │
+│    • Resolution extraction (width × height)                 │
+│    • Video metadata (duration, frame rate)                  │
+│    • MIME/content type detection from initial bytes         │
 │    • CRC32 processes entire stream                          │
-│    • MIME detects from initial bytes                        │
-│  - Calculate content fingerprint (last 8KB, lazy/on-demand) │
+│  - Calculate content fingerprint (first 64KB + last 64KB)   │
+│  - On error: record in processing_errors table + logs       │
 │  - Process in parallel (N=16 threads, M=8 processes)        │
 └─────────────────────────────────────────────────────────────┘
                               │
@@ -101,14 +131,17 @@ This document outlines the architecture for scanning and cataloging Google Photo
 │                      Storage Phase                          │
 │  - Batch writes to database (100-500 records per commit)    │
 │  - Single writer thread (SQLite WAL mode)                   │
-│  - Progress cursor for crash recovery                       │
 │  - Update last_seen_timestamp for each file                 │
+│  - Update files_processed count every 100 files             │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                   Post-Processing Phase                     │
 │  - Link edited versions to originals (match filenames)      │
+│  - Mark inconsistent: current scan_run_id + old timestamp   │
+│  - Mark missing: old scan_run_id (files deleted from disk)  │
+│  - Verify: all present files have current scan_run_id       │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -140,9 +173,10 @@ This document outlines the architecture for scanning and cataloging Google Photo
 ║  ┌────────────────────────────────────────────────────────────────┐ ║
 ║  │ Worker Thread 1  │  Worker Thread 2  │  ...  │ Worker Thread N │ ║
 ║  │                                                                │ ║
-║  │ Each thread (N=16, 2x CPU cores for I/O):                      │ ║
+║  │ Each thread (N=16, 2× CPU cores for I/O):                      │ ║
 ║  │   • Get work from queue (maxsize=1000)                         │ ║
 ║  │   • Parse JSON sidecar                                         │ ║
+║  │   • Check if file changed (path+size heuristic)                │ ║
 ║  │   • Submit file path to Process Pool ──┐                       │ ║
 ║  │   • Wait for result (blocks on I/O)    │                       │ ║
 ║  │   • Put result in Results Queue        │                       │ ║
@@ -176,12 +210,15 @@ This document outlines the architecture for scanning and cataloging Google Photo
 ║  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌───────────┐   ║
 ║  │ Process 1   │  │ Process 2   │  │ Process 3   │  │ Process M │   ║
 ║  │             │  │             │  │             │  │           │   ║
-║  │ CPU work (M=8, match CPU cores):                             │   ║
+║  │ CPU work (M=8, 1× CPU cores):                                │   ║
 ║  │ • Stream file once (7.7 MB avg):                             │   ║
-║  │   - EXIF extraction from headers (Pillow)                    │   ║
+║  │   - EXIF extraction (timestamps, GPS, camera, orientation)   │   ║
+║  │   - Resolution extraction (width × height)                   │   ║
+║  │   - Video metadata (duration, frame rate via ffprobe)        │   ║
+║  │   - MIME/content type detection (initial bytes, python-magic)│   ║
 ║  │   - CRC32 calculation (full stream)                          │   ║
-║  │   - MIME detection (initial bytes)                           │   ║
-║  │ • Content fingerprint (last 8KB, lazy/on-demand)             │   ║
+║  │ • Content fingerprint (first 64KB + last 64KB, SHA-256)      │   ║
+║  │ • On error: return error details for database recording      │   ║
 ║  └─────────────┘  └─────────────┘  └─────────────┘  └───────────┘   ║
 ║                                                                     ║
 ║                          (returns result to caller)                 ║
@@ -190,24 +227,50 @@ This document outlines the architecture for scanning and cataloging Google Photo
 
 ## Database Schema
 
+### Indexes
+
+**Critical indexes for performance:**
+
+```sql
+CREATE INDEX idx_media_items_path ON media_items(relative_path);
+CREATE INDEX idx_media_items_scan_run ON media_items(scan_run_id);
+CREATE INDEX idx_media_items_status ON media_items(status);
+CREATE INDEX idx_media_items_last_seen ON media_items(last_seen_timestamp);
+CREATE INDEX idx_errors_scan_run ON processing_errors(scan_run_id);
+CREATE INDEX idx_errors_path ON processing_errors(relative_path);
+```
+
 ### Entities
 
 #### 1. Media Items
 
-- `media_item_id` (UUID) - Primary key, random UUID (no stable ID in Takeout)
-- `relative_path` (UNIQUE, normalized NFC) - Full path within Takeout
-- `album_id` - UUID of the album
+- `media_item_id` (UUID4) - Primary key, random UUID generated on first discovery (stable internal ID)
+- `relative_path` (UNIQUE, normalized NFC, indexed) - Full path within Takeout
+- `album_id` - UUID of the album (NULL if album processing failed)
 - `title` - From JSON metadata
+- `mime_type` - MIME/content type (e.g., image/jpeg, video/mp4)
 - `file_size` - File size in bytes
-- `crc32` - CRC32 of full file (for duplicate detection: WHERE file_size = X AND crc32 = Y)
-- `content_fingerprint` - SHA-256 of last 8KB (for change detection, calculated lazily)
+- `crc32` - CRC32 of full file (for fast duplicate candidate detection)
+- `content_fingerprint` - SHA-256 of (first 64KB + last 64KB) for change detection (always verified on rescans)
+- **Duplicate detection:** Query by `file_size + CRC32` for candidates; on collision, compute SHA-256 to confirm
+- `width` - Image/video width in pixels
+- `height` - Image/video height in pixels
+- `duration_seconds` - Video duration (NULL for images)
+- `frame_rate` - Video frame rate (NULL for images)
 - `capture_timestamp` - When photo was taken (JSON > EXIF > filename > NULL)
 - `first_seen_timestamp` - When file first entered database
 - `last_seen_timestamp` - When file was last seen in a scan
-- `status` - CHECK('present', 'missing')
+- `scan_run_id` - UUID of the scan run that last processed this file (for debugging/audit trail)
+- `status` - CHECK('present', 'missing', 'error', 'inconsistent')
 - `original_media_item_id` - For edited variants (-edited suffix)
 - `live_photo_pair_id` - For Live Photos (HEIC+MOV pairs)
-- Other metadata from JSON sidecar and EXIF
+- EXIF metadata (timestamps, GPS coordinates, camera info, orientation, and all other available fields)
+- Other metadata from JSON sidecar
+
+**Lookup Strategy:**
+
+- `media_item_id`: UUID4 (random), generated once on first discovery, provides stable internal ID
+- File lookup: Query by `relative_path` (UNIQUE, indexed) to check if file exists in database
 
 #### 2. Albums
 
@@ -215,13 +278,15 @@ This document outlines the architecture for scanning and cataloging Google Photo
 - `folder_path` (UNIQUE, normalized NFC) - Path to album folder
 - `title`, `description`, `creation_timestamp`, `access_level`
 - Two types: User Albums (with metadata.json) and Synthetic Albums (Photos from YYYY/)
-- Note: Google Takeout does not provide stable album IDs, we derive from path
+- **Note:** Google Takeout does not provide stable album IDs, we derive from path
+- **TODO:** Album identity across Takeout exports is complex (no stable IDs, path changes, merges/splits possible). Requires dedicated design session to handle rename detection, merge detection, and identity reconciliation
 
 #### 3. People
 
 - `person_id` (UUID) - Generated by us
 - `person_name` (unique) - From JSON metadata (e.g., "Alice")
-- Note: Google Takeout does not provide stable person IDs
+- **Note**: Google Takeout does not provide stable person IDs
+- **Design decision:** `person_name` is unique (conscious choice). Limitation: same name = same person. Acceptable for personal photo libraries.
 - Algorithm: Look up name, if exists use that person_id, else insert new row
 
 #### 4. People Tags
@@ -233,14 +298,55 @@ This document outlines the architecture for scanning and cataloging Google Photo
 
 #### 5. Scan Runs
 
-- `scan_id` (UUID) - Primary key
+- `scan_run_id` (UUID4) - Primary key
 - `start_timestamp` - When scan started
 - `end_timestamp` - When scan completed (NULL if in progress)
-- `last_processed_path` - Progress cursor for resume
-- `files_processed` - Count of files processed
 - `status` - CHECK('running', 'completed', 'failed')
 
-#### 6. Schema Version
+**Statistics:**
+
+- `total_files_discovered` - Total files found on disk
+- `media_files_discovered` - Media files (photos/videos)
+- `metadata_files_discovered` - JSON sidecar files
+- `files_processed` - Count of files processed
+- `new_files` - Files added since last scan
+- `unchanged_files` - Files skipped (path+size match)
+- `changed_files` - Files reprocessed (path or size changed)
+- `missing_files` - Files marked as status='missing'
+- `error_files` - Files that failed to process
+- `inconsistent_files` - Files with current scan_run_id but old timestamp
+- `albums_total` - Total number of albums
+- `files_in_albums` - Files associated with albums
+
+**Performance:**
+
+- `duration_seconds` - Total scan duration
+- `files_per_second` - Processing rate
+
+#### 6. Processing Errors
+
+- `error_id` (INTEGER) - Primary key (autoincrement)
+- `scan_run_id` (UUID) - References Scan Runs
+- `relative_path` (TEXT) - Path to file that failed
+- `error_type` - CHECK('media_file', 'json_sidecar', 'album_metadata')
+- `error_category` - CHECK('permission_denied', 'corrupted', 'io_error', 'parse_error', 'unsupported_format')
+- `error_message` (TEXT) - Detailed error message
+- `timestamp` (TIMESTAMP) - When error occurred
+
+**Error Types:**
+
+- `media_file` - Failed to process photo/video file
+- `json_sidecar` - Failed to parse JSON metadata sidecar
+- `album_metadata` - Failed to process album metadata.json (during discovery phase)
+
+**Indexes:**
+
+- `idx_errors_scan_run` on `scan_run_id`
+- `idx_errors_path` on `relative_path`
+
+**Note:** Errors are recorded in both database (for querying) and logs (for real-time monitoring)
+
+#### 7. Schema Version
 
 - `version` (INTEGER) - Current schema version
 - Single row table for migration tracking
@@ -251,18 +357,25 @@ This document outlines the architecture for scanning and cataloging Google Photo
 
 - Store all file instances (duplicates detected by file size + CRC32)
 - Deduplication is a query concern, not a storage constraint
-- Same photo in multiple albums = multiple rows (correct for Takeout)
+- Same photo in multiple albums = multiple rows
 
 #### Resumability
 
 - Track file lifecycle with timestamps
-- Skip unchanged files:
+- Skip unchanged files (verified change detection):
   1. Check `(relative_path, file_size)` in DB
-  2. If match: calculate content fingerprint (last 8KB) to verify unchanged
-  3. If fingerprint matches: skip, update `last_seen_timestamp`
-  4. If no match: process fully (new file or changed)
-- Detect deletions: files with old `last_seen_timestamp` marked as `status='missing'`
-- Progress cursor in `scan_runs` table for crash recovery
+  2. If both match: compute content fingerprint (first 64KB + last 64KB)
+  3. Compare fingerprint with stored value:
+     - **Match:** Skip full processing (metadata extraction)
+     - **Mismatch:** Full reprocessing (detects in-place edits, metadata tweaks, lossless rotations)
+  4. If path or size differs: full reprocessing (new file or changed)
+- Content fingerprint always computed on rescans (cheap: ~2-5ms for head+tail read)
+- **Critical:** Every file seen in current scan gets `scan_run_id = current` and `last_seen_timestamp = now`, regardless of whether full processing or skipped
+- Detect deletions and inconsistencies after scan completes:
+  1. **Inconsistent data**: Files with `scan_run_id = current` BUT `last_seen_timestamp < scan_start_time` → `status='inconsistent'`
+  2. **Missing files**: Files with `scan_run_id != current` AND `status='present'` → `status='missing'` (deleted from disk)
+  3. **Verification**: All files with `status='present'` must have `scan_run_id = current`
+- Progress tracking: `files_processed` count in `scan_runs` table for percentage calculation
 
 #### No foreign keys
 
@@ -289,23 +402,32 @@ PRAGMA temp_store=MEMORY;       -- Temp tables in RAM
 
 ### Writer Configuration
 
-- **Batch size:** 100-500 records per commit
+- **Transaction batching:** Explicit `BEGIN...COMMIT` per batch (100-500 records)
+- **Single-writer invariant:** Exactly one writer thread performs all database commits. Retries with exponential backoff are purely defensive; no concurrent writers exist.
+- **WAL checkpointing:** `PRAGMA wal_autocheckpoint=1000` (checkpoint every 1000 pages)
+- **Manual checkpoint:** Run `PRAGMA wal_checkpoint(TRUNCATE)` after scan completes
 - **Retry policy:** Exponential backoff, max 3 retries on lock
-- **Progress tracking:** Update `scan_runs.last_processed_path` after each batch
-- **Queue size:** Results queue maxsize=1000 (backpressure)
+- **Progress tracking:** Update `scan_runs.files_processed` every 100 files
+- **Queue sizing:** Results queue maxsize=1000 (backpressure)
+- **TODO:** Implement memory-aware queue throttling. Track total bytes buffered across queues, apply backpressure if exceeds threshold (e.g., 100MB). Design at implementation time.
 
 ## Metadata Extraction
 
 ### Tools
 
-- **Images:** Pillow (PIL) for JPEG, PNG, HEIC
-- **Complex formats:** exiftool for RAW, maker notes
-- **Videos:** ffprobe (from ffmpeg) for video metadata
+- **EXIF extraction:** Pillow (PIL) for JPEG/PNG/HEIC, exiftool for RAW formats
+  - Extract: timestamps, GPS coordinates, camera info, orientation, and all other available EXIF fields
+- **Image metadata:** Resolution (width × height) for all images
+- **Video metadata:** ffprobe for duration, resolution (width × height), and frame rate
+  - **Note:** ffprobe process spawn + I/O adds ~50-100ms per video (not 2ms CPU-only)
+  - Videos reduce effective throughput; adjust M (process pool size) if video-heavy library
+- **MIME/content type detection:** `python-magic` library (reads file headers)
+- **TODO:** Tool availability check at startup (ffprobe, exiftool, python-magic). Decision: auto-install, bundle binaries, or fail-fast with clear error (TBD at implementation time)
 
 ### Metadata Precedence
 
 1. **Google JSON sidecar** (`photoTakenTime`, `geoData`, `description`, `people`)
-2. **EXIF/IPTC** from media file (`DateTimeOriginal`, `GPSInfo`)
+2. **EXIF/IPTC** from media file (`DateTimeOriginal`, `GPSInfo`, camera info)
 3. **Filename parsing** (e.g., `IMG_20130608_143022.jpg` → 2013-06-08 14:30:22)
 4. **NULL** (unknown)
 
@@ -337,18 +459,111 @@ PRAGMA temp_store=MEMORY;       -- Temp tables in RAM
 
 ## Error Handling
 
-### Recoverable Errors (skip file, log, continue)
+### File Status Values
 
-- I/O errors (permission denied, file locked)
-- Corrupted EXIF (malformed headers)
-- Missing JSON sidecar
-- Unsupported format
+- **`present`**: File exists on disk, successfully processed in current scan
+- **`missing`**: File was in database but not found in current scan (deleted from disk)
+- **`error`**: File exists on disk but failed to process (permission denied, corrupted, etc.)
+- **`inconsistent`**: File has current `scan_run_id` but old `last_seen_timestamp`
+  - Indicates data anomaly (timing issue, incomplete transaction, or bug)
+  - Not a critical error - user can investigate or ignore
+  - Future: build reconciliation UI for inconsistent records
+  - For now: log, mark, continue scan
+
+### Recoverable Errors (record in database + logs, continue scan)
+
+- **I/O errors:** Permission denied, file locked
+- **Corrupted data:** Malformed EXIF, corrupted file headers
+- **Missing metadata:** Missing JSON sidecar (file still processed)
+- **Unsupported format:** Unknown file type
+
+**Handling:**
+
+```python
+try:
+    process_file(file)
+    db.update_media_item(status='present', scan_run_id=current_scan_run_id, last_seen_timestamp=now())
+except Exception as e:
+    logger.error(f"Failed to process {file.path}: {e}", exc_info=True)
+    db.insert_error(scan_run_id, file.path, 'media_file', classify_error(e), str(e))
+    db.insert_or_update_media_item(status='error', scan_run_id=current_scan_run_id, last_seen_timestamp=now())
+```
+
+**Result:** File recorded in database with `status='error'`, error details in `processing_errors` table
+
+### Post-Scan Validation
+
+**After scan completes, detect inconsistencies and deletions:**
+
+```python
+# 1. Mark data inconsistencies
+inconsistent_count = db.execute("""
+    UPDATE media_items 
+    SET status = 'inconsistent'
+    WHERE last_seen_timestamp < ? AND scan_run_id = ?
+""", (scan_start_time, current_scan_run_id))
+
+if inconsistent_count > 0:
+    logger.error(f"INCONSISTENCY: {inconsistent_count} files have current scan_run_id but old timestamp")
+
+# 2. Mark deletions (normal operation)
+deleted_count = db.execute("""
+    UPDATE media_items 
+    SET status = 'missing'
+    WHERE scan_run_id != ? AND status = 'present'
+""", (current_scan_run_id,))
+
+logger.info(f"Marked {deleted_count} files as missing")
+
+# 3. Verification: all present files should have current scan_run_id
+verification = db.query("""
+    SELECT COUNT(*) FROM media_items 
+    WHERE status = 'present' AND scan_run_id != ?
+""", (current_scan_run_id,))
+
+if verification > 0:
+    logger.error(f"VERIFICATION FAILED: {verification} present files have old scan_run_id")
+```
 
 ### Fatal Errors (abort scan)
 
-- Database connection lost (after retries exhausted)
+- Database connection lost or corrupted (SQLite: file locks, corruption, disk full)
 - Disk full
 - Schema version mismatch
+
+**SQLite Error Handling:**
+
+- Connection validation on startup
+- Retry on `SQLITE_BUSY` with exponential backoff (max 3 retries)
+- For local SQLite, connection loss is rare but possible (antivirus locks, network drives, corruption)
+
+## Worker Pool Optimization
+
+### Process Pool Saturation
+
+**Problem:** Using `apply_async()` + immediate `future.get()` blocks worker threads, underutilizing the process pool.
+
+**Solution:** Use `pool.imap_unordered()` or collect futures and drain asynchronously:
+
+```python
+# BAD: Blocks on each job
+future = pool.apply_async(cpu_work, (file,))
+result = future.get()  # Blocks thread, pool underutilized
+
+# GOOD: Saturate pool with pending work
+futures = []
+for file in work_batch:
+    futures.append(pool.apply_async(cpu_work, (file,)))
+
+# Drain results asynchronously
+for future in futures:
+    result = future.get()  # Pool stays saturated
+    results_queue.put(result)
+
+# BETTER: Use imap_unordered for automatic saturation
+for result in pool.imap_unordered(cpu_work, work_batch, chunksize=10):
+    results_queue.put(result)
+```
 
 ## Hardware Profiles
 
@@ -381,20 +596,77 @@ PRAGMA temp_store=MEMORY;       -- Temp tables in RAM
 - Files/sec, bytes/sec
 - Work queue depth, results queue depth
 - Writer commit latency
-- EXIF extraction errors
+- EXIF/MIME extraction errors
 - Database lock retries
 - Progress: % complete, ETA
 
+**Implementation:** Simple counter in processing loop: `if counter % 100 == 0: log.info(...)`
+
+### Progress Tracking
+
+**Real-time (during scan):**
+
+- Total files discovered (from filesystem walk)
+- Media files vs metadata files breakdown
+- Files processed so far (updated every 100 files)
+- Progress percentage: `(files_processed / total_files_discovered) × 100`
+- Processing rate (files/sec)
+- Estimated time remaining: `(total_files - processed) / rate`
+
+**Summary (after scan):**
+
+- New files added
+- Unchanged files (skipped via path+size heuristic)
+- Changed files (reprocessed)
+- Missing files (deleted from disk)
+- Error files (failed to process)
+- Inconsistent files (current scan_run_id but old timestamp)
+- Error breakdown by category
+
 ### Structured Logging
+
+**During scan (every 100 files):**
 
 ```json
 {
   "timestamp": "2025-10-12T21:30:00Z",
-  "files_processed": 1500,
+  "total_files_discovered": 125000,
+  "media_files": 100000,
+  "metadata_files": 25000,
+  "files_processed": 45000,
+  "progress_percent": 45.0,
   "files_per_sec": 12.3,
   "work_queue_depth": 234,
   "results_queue_depth": 45,
-  "exif_errors": 2
+  "exif_errors": 2,
+  "eta_seconds": 4472
+}
+```
+
+**After scan completes:**
+
+```json
+{
+  "timestamp": "2025-10-12T22:15:00Z",
+  "scan_run_id": "abc-123-def",
+  "status": "completed",
+  "duration_seconds": 2700,
+  "total_discovered": 100000,
+  "new_files": 1500,
+  "unchanged_files": 97500,
+  "changed_files": 800,
+  "missing_files": 200,
+  "error_files": 50,
+  "inconsistent_files": 0,
+  "albums_total": 450,
+  "files_in_albums": 85000,
+  "files_per_second": 37.0,
+  "error_breakdown": {
+    "permission_denied": 25,
+    "corrupted": 15,
+    "io_error": 8,
+    "parse_error": 2
+  }
 }
 ```
 
@@ -411,3 +683,5 @@ PRAGMA temp_store=MEMORY;       -- Temp tables in RAM
 
 - 2025-10-12: Initial architecture
 - 2025-10-12: Added SQLite config, metadata extraction, edge cases, error handling, hardware profiles
+- 2025-10-13: Added processing_errors table, scan statistics, progress tracking, 4-status model (present/missing/error/inconsistent), post-scan validation logic
+- 2025-10-13: Design review responses: head+tail fingerprint, CRC32+SHA-256 duplicate resolution, verified change detection, WAL checkpointing, memory-aware queues, ffprobe overhead, tool availability checks, worker pool saturation, person_name uniqueness clarification
