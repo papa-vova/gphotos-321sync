@@ -4,9 +4,11 @@ import logging
 import argparse
 from pathlib import Path
 import sys
+from typing import Optional
 
 from .extractor import TakeoutExtractor
-from gphotos_321sync.common import setup_logging
+from .config import TakeoutExtractorConfig
+from gphotos_321sync.common import setup_logging, ConfigLoader
 
 
 def progress_callback(logger: logging.Logger, current: int, total: int, name: str) -> None:
@@ -103,27 +105,49 @@ def main() -> int:
     parser.add_argument(
         "--source-dir",
         type=Path,
-        required=True,
-        help="Directory containing Takeout archives"
+        required=False,
+        help="Directory containing Takeout archives (overrides config)"
     )
     parser.add_argument(
         "--target-dir",
         type=Path,
-        required=True,
-        help="Directory to extract archives to"
+        required=False,
+        help="Directory to extract archives to (overrides config)"
     )
     parser.add_argument(
         "--no-verify",
         action="store_true",
         help="Skip checksum verification"
     )
+    parser.add_argument(
+        "--config",
+        type=Path,
+        help="Path to config file (defaults.toml)"
+    )
     
     args = parser.parse_args()
     
+    # Load config
+    loader = ConfigLoader(
+        app_name="gphotos-321sync-takeout-extractor",
+        config_class=TakeoutExtractorConfig
+    )
+    
+    try:
+        config = loader.load(defaults_path=args.config)
+    except Exception as e:
+        # If config fails to load, use defaults
+        config = TakeoutExtractorConfig()
+    
+    # CLI arguments override config
+    source_dir = args.source_dir if args.source_dir else Path(config.extraction.source_dir)
+    target_dir = args.target_dir if args.target_dir else Path(config.extraction.target_dir)
+    verify = not args.no_verify if args.no_verify else config.extraction.verify_checksums
+    
     return extract_command(
-        source_dir=args.source_dir,
-        target_dir=args.target_dir,
-        verify=not args.no_verify
+        source_dir=source_dir,
+        target_dir=target_dir,
+        verify=verify
     )
 
 

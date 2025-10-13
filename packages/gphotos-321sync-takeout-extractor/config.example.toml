@@ -1,0 +1,9 @@
+# Example configuration for gphotos-321sync-takeout-extractor
+# Copy this file to:
+#   Windows: %APPDATA%\gphotos-321sync-takeout-extractor\config.toml
+#   Linux:   ~/.config/gphotos-321sync-takeout-extractor/config.toml
+#   Mac:     ~/Library/Application Support/gphotos-321sync-takeout-extractor/config.toml
+
+[extraction]
+source_dir = "G:\\My Drive\\Takeout"
+target_dir = "C:\\Users\\papav\\takeout_tests"
