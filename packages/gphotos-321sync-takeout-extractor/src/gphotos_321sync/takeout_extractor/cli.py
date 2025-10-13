@@ -157,11 +157,7 @@ def main() -> int:
         config_class=TakeoutExtractorConfig
     )
     
-    try:
-        config = loader.load(defaults_path=args.config)
-    except Exception as e:
-        # If config fails to load, use defaults
-        config = TakeoutExtractorConfig()
+    config = loader.load(defaults_path=args.config)
     
     # CLI arguments override config
     source_dir = args.source_dir if args.source_dir else Path(config.extraction.source_dir)

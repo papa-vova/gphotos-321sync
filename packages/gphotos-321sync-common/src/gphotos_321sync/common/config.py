@@ -88,12 +88,20 @@ class ConfigLoader:
 
     def _load_user_config(self) -> Optional[Dict[str, Any]]:
         """Load user-specific configuration."""
-        user_config_dir = platformdirs.user_config_dir(self.app_name)
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        # Use appname for both appname and appauthor to get simple path
+        user_config_dir = platformdirs.user_config_dir(appname=self.app_name, appauthor=False)
         user_config_path = Path(user_config_dir) / "config.toml"
+        
+        logger.debug(f"Looking for user config: app_name={self.app_name}, path={user_config_path}, exists={user_config_path.exists()}")
 
         if user_config_path.exists():
+            logger.debug(f"Loading user config from {user_config_path}")
             return toml.load(user_config_path)
 
+        logger.debug(f"User config not found at {user_config_path}")
         return None
 
     def _deep_merge(self, base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
