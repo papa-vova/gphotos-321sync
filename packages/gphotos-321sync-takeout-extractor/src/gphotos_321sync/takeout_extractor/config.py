@@ -2,6 +2,20 @@
 
 from pydantic import BaseModel, Field
 from pathlib import Path
+from typing import Literal
+
+
+class LoggingConfig(BaseModel):
+    """Logging configuration."""
+    
+    level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = Field(
+        default="INFO",
+        description="Log level"
+    )
+    format: Literal["simple", "detailed", "json"] = Field(
+        default="json",
+        description="Log format"
+    )
 
 
 class ExtractionConfig(BaseModel):
@@ -42,4 +56,5 @@ class ExtractionConfig(BaseModel):
 class TakeoutExtractorConfig(BaseModel):
     """Root configuration for takeout extractor."""
     
+    logging: LoggingConfig = Field(default_factory=LoggingConfig)
     extraction: ExtractionConfig = Field(default_factory=ExtractionConfig)

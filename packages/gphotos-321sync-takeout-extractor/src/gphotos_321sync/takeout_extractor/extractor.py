@@ -1131,7 +1131,16 @@ class TakeoutExtractor:
             enable_resume: Whether to enable resumption of interrupted extractions
             state_file: Path to state file for tracking progress
             verify_extracted_files: Whether to verify extracted files exist before skipping
+            
+        Raises:
+            FileNotFoundError: If source_dir or target_dir does not exist
         """
+        # Validate directories exist
+        if not source_dir.exists():
+            raise FileNotFoundError(f"Source directory does not exist: {source_dir}")
+        if not target_dir.exists():
+            raise FileNotFoundError(f"Target directory does not exist: {target_dir}")
+        
         self.discovery = ArchiveDiscovery(source_dir)
         self.extractor = ArchiveExtractor(
             target_dir,

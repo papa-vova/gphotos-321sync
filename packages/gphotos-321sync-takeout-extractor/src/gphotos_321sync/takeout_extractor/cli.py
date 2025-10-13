@@ -2,6 +2,7 @@
 
 import logging
 import argparse
+import tempfile
 from pathlib import Path
 import sys
 from typing import Optional
@@ -9,6 +10,10 @@ from typing import Optional
 from .extractor import TakeoutExtractor
 from .config import TakeoutExtractorConfig
 from gphotos_321sync.common import setup_logging, ConfigLoader
+
+# Application name derived from package name
+# Package: gphotos_321sync.takeout_extractor -> App: gphotos-321sync-takeout-extractor
+APP_NAME = __name__.rsplit('.', 1)[0].replace('_', '-').replace('.', '-')
 
 
 def progress_callback(logger: logging.Logger, current: int, total: int, name: str) -> None:
@@ -27,19 +32,31 @@ def progress_callback(logger: logging.Logger, current: int, total: int, name: st
         logger.info(f"Extracting archive {current}/{total} ({percent:.1f}%): {name}")
 
 
-def extract_command(source_dir: Path, target_dir: Path, verify: bool = True) -> int:
+def extract_command(
+    source_dir: Path,
+    target_dir: Path,
+    verify: bool = True,
+    max_retry_attempts: int = 10,
+    initial_retry_delay: float = 32.0,
+    enable_resume: bool = True,
+    verify_extracted_files: bool = True,
+    log_level: str = "INFO",
+    log_format: str = "json"
+) -> int:
     """Extract Takeout archives.
     
     Args:
         source_dir: Directory containing archives
         target_dir: Directory to extract to
         verify: Whether to verify checksums
+        log_level: Logging level
+        log_format: Logging format
     
     Returns:
         Exit code (0 for success)
     """
     # Setup logging
-    setup_logging(level="INFO", format_type="simple")
+    setup_logging(level=log_level, format_type=log_format)
     logger = logging.getLogger(__name__)
     
     try:
@@ -51,8 +68,15 @@ def extract_command(source_dir: Path, target_dir: Path, verify: bool = True) -> 
             logger.error(f"Source directory does not exist: {source_dir}")
             return 1
         
-        # Create target directory
-        target_dir.mkdir(parents=True, exist_ok=True)
+        # Validate target exists
+        if not target_dir.exists():
+            logger.error(f"Target directory does not exist: {target_dir}")
+            return 1
+        
+        # Create state file in temp directory
+        temp_dir = Path(tempfile.gettempdir()) / APP_NAME
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        state_file = temp_dir / "extraction_state.json"
         
         # Create extractor and run
         extractor = TakeoutExtractor(
@@ -60,11 +84,11 @@ def extract_command(source_dir: Path, target_dir: Path, verify: bool = True) -> 
             target_dir=target_dir,
             verify_integrity=verify,
             preserve_structure=False,
-            max_retry_attempts=3,
-            initial_retry_delay=1.0,
-            enable_resume=True,
-            state_file=target_dir / ".extraction_state.json",
-            verify_extracted_files=verify
+            max_retry_attempts=max_retry_attempts,
+            initial_retry_delay=initial_retry_delay,
+            enable_resume=enable_resume,
+            state_file=state_file,
+            verify_extracted_files=verify_extracted_files
         )
         
         results = extractor.run(
@@ -129,7 +153,7 @@ def main() -> int:
     
     # Load config
     loader = ConfigLoader(
-        app_name="gphotos-321sync-takeout-extractor",
+        app_name=APP_NAME,
         config_class=TakeoutExtractorConfig
     )
     
@@ -147,7 +171,13 @@ def main() -> int:
     return extract_command(
         source_dir=source_dir,
         target_dir=target_dir,
-        verify=verify
+        verify=verify,
+        max_retry_attempts=config.extraction.max_retry_attempts,
+        initial_retry_delay=config.extraction.initial_retry_delay,
+        enable_resume=config.extraction.enable_resume,
+        verify_extracted_files=config.extraction.verify_extracted_files,
+        log_level=config.logging.level,
+        log_format=config.logging.format
     )
 
 
