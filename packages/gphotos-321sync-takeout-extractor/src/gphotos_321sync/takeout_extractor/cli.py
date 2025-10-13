@@ -153,9 +153,6 @@ def main() -> int:
     
     args = parser.parse_args()
     
-    # Setup DEBUG logging first to see config loading
-    setup_logging(level="DEBUG", format_type="json")
-    
     # Load config
     loader = ConfigLoader(
         app_name=APP_NAME,
@@ -164,7 +161,7 @@ def main() -> int:
     
     config = loader.load(defaults_path=args.config)
     
-    # Reconfigure logging with config values
+    # Setup logging with config values
     setup_logging(level=config.logging.level, format_type=config.logging.format)
     
     # Pass config and overrides to extract_command (which will setup logging)

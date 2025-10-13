@@ -14,9 +14,15 @@ T = TypeVar('T', bound=BaseModel)
 class ConfigLoader:
     """Loads configuration from multiple sources with priority."""
 
-    def __init__(self, app_name: str = "gphotos-321sync", config_class: Type[T] = None) -> None:
+    def __init__(
+        self, 
+        app_name: str,
+        config_class: Type[T] = None,
+        env_prefix: Optional[str] = None
+    ) -> None:
         self.app_name = app_name
         self.config_class = config_class
+        self.env_prefix = env_prefix or f"{app_name.upper().replace('-', '_')}_"
         self._config: Optional[T] = None
 
     def load(self, defaults_path: Optional[Path] = None) -> T:
@@ -43,8 +49,15 @@ class ConfigLoader:
 
         # 4. Override with environment variables
         config_dict = self._apply_env_overrides(config_dict)
+        
+        # 5. Check if we have any config at all
+        if not config_dict:
+            raise ValueError(
+                f"No configuration found for {self.app_name}. "
+                f"Please create a config file at: {platformdirs.user_config_dir(appname=self.app_name, appauthor=False)}/config.toml"
+            )
 
-        # 5. Validate and create Config object
+        # 6. Validate and create Config object
         if self.config_class:
             self._config = self.config_class(**config_dict)
         else:
@@ -118,15 +131,12 @@ class ConfigLoader:
 
     def _apply_env_overrides(self, config: Dict[str, Any]) -> Dict[str, Any]:
         """Override config with environment variables."""
-        # Environment variables format: GPHOTOS_SECTION_SUBSECTION_KEY
-        prefix = f"{self.app_name.upper().replace('-', '_')}_"
-
         for env_key, env_value in os.environ.items():
-            if not env_key.startswith(prefix):
+            if not env_key.startswith(self.env_prefix):
                 continue
 
-            # Parse key path: GPHOTOS_DATABASE_POSTGRESQL_HOST -> database.postgresql.host
-            key_path = env_key[len(prefix):].lower().split("_")
+            # Parse key path: GPHOTOS321SYNC_EXTRACTION_SOURCE_DIR -> extraction.source_dir
+            key_path = env_key[len(self.env_prefix):].lower().split("_")
 
             # Navigate to the right place in config dict
             current = config
