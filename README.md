@@ -1,6 +1,6 @@
-# Google Photos 3-2-1 Sync (gphotos-321sync)
+# Google Photos 3-2-1 Sync
 
-A comprehensive backup and synchronization tool for Google Photos Takeout archives.
+Monorepo for Google Photos backup and synchronization tools.
 
 ## Goals
 
@@ -19,114 +19,49 @@ A comprehensive backup and synchronization tool for Google Photos Takeout archiv
 - Duplicate detection and file integrity verification
 - Scalable architecture for processing large photo collections
 
+## Packages
+
+This monorepo contains three independent packages under the `gphotos_321sync` namespace:
+
+| Package | Description | Status |
+|---------|-------------|--------|
+| **[gphotos-321sync-common](packages/gphotos-321sync-common/)** | Shared utilities (logging, errors, config) | Ready |
+| **[gphotos-321sync-takeout-extractor](packages/gphotos-321sync-takeout-extractor/)** | Extract Google Takeout archives | Working |
+| **[gphotos-321sync-media-scanner](packages/gphotos-321sync-media-scanner/)** | Scan and catalog media files | In Progress |
+
+Each package can be installed and used independently. See individual package READMEs for detailed documentation.
+
 ## Quick Start
 
-### Installation
-
-1. Clone the repository:
-
-    ```bash
-    git clone https://github.com/yourusername/gphotos-321sync.git
-    cd gphotos-321sync
-    ```
-
-2. Create a virtual environment:
-
-    ```bash
-    python -m venv .venv
-    # On Windows PowerShell:
-    .venv\Scripts\Activate.ps1
-    # On Linux/Mac:
-    source .venv/bin/activate
-    ```
-
-3. Install dependencies:
-
-    ```bash
-    pip install -e .[dev]
-    ```
-
-### Running the Application
-
-Start the application:
-
 ```bash
-python -m gphotos_321sync.main
+# Clone repository
+git clone https://github.com/papa-vova/gphotos-321sync.git
+cd gphotos-321sync
+
+# Create virtual environment
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\Activate.ps1
+
+# Install packages
+pip install -e ./packages/gphotos-321sync-common
+pip install -e ./packages/gphotos-321sync-takeout-extractor
+pip install -e ./packages/gphotos-321sync-media-scanner
 ```
 
-The web interface will be available at `http://localhost:8080`
+## Usage
 
-**Verify installation:**
+See individual package READMEs for detailed usage:
 
-- Health check: `http://localhost:8080/api/health`
-- API documentation: `http://localhost:8080/api/docs`
-- Current config: `http://localhost:8080/api/config`
-
-### Configuration
-
-Configuration is managed through multiple sources (in priority order):
-
-1. **Environment variables** - `GPHOTOS_SECTION_KEY=value`
-2. **User config** - `~/.config/gphotos-sync/config.toml` (Linux/Mac) or `%APPDATA%\gphotos-sync\config.toml` (Windows)
-3. **System config** - `/etc/gphotos-sync/config.toml` (Linux/Mac) or `%PROGRAMDATA%\gphotos-sync\config.toml` (Windows)
-4. **Default config** - `config/defaults.toml` (shipped with app)
-
-**Configuration example:**
-
-```toml
-[paths]
-takeout_archives = "C:/Users/YourName/Downloads"  # Use forward slashes
-working_directory = "D:/GooglePhotos"
-
-[resources]
-max_cpu_percent = 80.0
-max_memory_percent = 60.0
-```
-
-**Environment variable examples:**
-
-```bash
-# Windows PowerShell
-$env:GPHOTOS_LOGGING_LEVEL="DEBUG"
-$env:GPHOTOS_API_PORT="9000"
-
-# Linux/Mac
-export GPHOTOS_LOGGING_LEVEL=DEBUG
-export GPHOTOS_API_PORT=9000
-```
-
-See `config/defaults.toml` for all available options or `.env.example` for environment variable format.
+- [Common utilities](packages/gphotos-321sync-common/README.md)
+- [Takeout extractor](packages/gphotos-321sync-takeout-extractor/README.md)
+- [Media scanner](packages/gphotos-321sync-media-scanner/README.md)
 
 ## Development
 
-### Setup Development Environment
-
 ```bash
-pip install -r requirements-dev.txt
-```
+# Run tests
+python -m pytest packages/
 
-### Running Tests
-
-```bash
-# Run all tests
-python -m pytest tests/ -v
-
-# Run with coverage report
-python -m pytest tests/ --cov=src/gphotos_321sync --cov-report=term-missing
-
-# Run specific test file
-python -m pytest tests/test_config.py -v
-```
-
-### Code Formatting
-
-```bash
-black src/
-ruff check src/
-```
-
-### Type Checking
-
-```bash
-mypy src/
-```
+# Format code
+python -m black packages/
+python -m ruff check packages/
