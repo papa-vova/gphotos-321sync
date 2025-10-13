@@ -702,9 +702,14 @@ class ArchiveExtractor:
                         bad_files.append(sanitized_to_original[member_path])
                 
                 if bad_files:
-                    logger.warning(
-                        f"Archive {archive.name} has {len(bad_files)} missing files: {bad_files}"
-                    )
+                    if logger.isEnabledFor(logging.DEBUG):
+                        logger.warning(
+                            f"Archive {archive.name} has {len(bad_files)} missing files: {bad_files}"
+                        )
+                    else:
+                        logger.warning(
+                            f"Archive {archive.name} has {len(bad_files)} missing files"
+                        )
                     return (False, bad_files)
                 
                 # Step 3: Verify CRC32 for all files (expensive, but only if all exist)
@@ -741,9 +746,14 @@ class ArchiveExtractor:
                         logger.debug(f"Verified {verified_count}/{total} files")
                 
                 if bad_files:
-                    logger.warning(
-                        f"Archive {archive.name} has {len(bad_files)} corrupted files: {bad_files}"
-                    )
+                    if logger.isEnabledFor(logging.DEBUG):
+                        logger.warning(
+                            f"Archive {archive.name} has {len(bad_files)} corrupted files: {bad_files}"
+                        )
+                    else:
+                        logger.warning(
+                            f"Archive {archive.name} has {len(bad_files)} corrupted files"
+                        )
                     return (False, bad_files)
                 
                 logger.info(f"Successfully verified all {total} files from {archive.name}")
