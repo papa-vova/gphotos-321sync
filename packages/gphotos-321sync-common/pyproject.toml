@@ -24,6 +24,8 @@ classifiers = [
 
 dependencies = [
     "platformdirs>=4.0.0",
+    "toml>=0.10.2",
+    "pydantic>=2.5.0",
 ]
 
 [project.optional-dependencies]

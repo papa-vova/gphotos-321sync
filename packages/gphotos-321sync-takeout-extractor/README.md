@@ -14,14 +14,15 @@ pip install gphotos-321sync-takeout-extractor
 
 ```python
 from gphotos_321sync.takeout_extractor import TakeoutExtractor
+from pathlib import Path
 
 extractor = TakeoutExtractor(
-    archives_dir="/path/to/takeout/archives",
-    output_dir="/path/to/output"
+    source_dir=Path("/path/to/archives"),
+    target_dir=Path("/path/to/output")
 )
 
-result = extractor.extract_all()
-print(f"Extracted {result.files_extracted} files")
+results = extractor.run(recursive=True)
+print(f"Extracted {len(results)} archives")
 ```
 
 ### Command Line
