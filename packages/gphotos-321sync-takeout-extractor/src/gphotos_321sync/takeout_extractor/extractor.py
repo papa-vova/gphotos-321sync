@@ -787,19 +787,26 @@ class ArchiveExtractor:
                     if was_sanitized:
                         logger.info(f"Sanitized filename: '{member}' -> '{sanitized_member}'")
                     
-                    # Extract to sanitized path
-                    target_path = extract_to / sanitized_member
-                    target_path.parent.mkdir(parents=True, exist_ok=True)
+                    # Extract to sanitized path with retry logic
+                    def extract_operation():
+                        # Extract to sanitized path
+                        target_path = extract_to / sanitized_member
+                        target_path.parent.mkdir(parents=True, exist_ok=True)
+                        
+                        # Read from archive and write to sanitized path
+                        with zip_ref.open(member) as source:
+                            with open(target_path, 'wb') as target:
+                                # Use smaller buffer (8KB) and explicit copying to reduce memory usage
+                                while True:
+                                    chunk = source.read(8192)
+                                    if not chunk:
+                                        break
+                                    target.write(chunk)
                     
-                    # Read from archive and write to sanitized path
-                    with zip_ref.open(member) as source:
-                        with open(target_path, 'wb') as target:
-                            # Use smaller buffer (8KB) and explicit copying to reduce memory usage
-                            while True:
-                                chunk = source.read(8192)
-                                if not chunk:
-                                    break
-                                target.write(chunk)
+                    self._retry_with_backoff(
+                        extract_operation,
+                        f"Re-extraction of {member}"
+                    )
                     
                     logger.debug(f"Re-extracted {i}/{len(files_to_extract)}: {member}")
                     
