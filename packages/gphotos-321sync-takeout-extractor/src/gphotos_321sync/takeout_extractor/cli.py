@@ -50,7 +50,9 @@ def extract_command(
         Exit code (0 for success)
     """
     # Logging already set up in main(), just get logger
-    logger = logging.getLogger(__name__)
+    # Use __package__ to avoid __main__ when run as module
+    logger_name = __package__ or __name__
+    logger = logging.getLogger(logger_name)
     
     # Apply overrides
     source_dir = source_dir_override if source_dir_override else Path(config.extraction.source_dir)
