@@ -29,13 +29,13 @@ This document provides a step-by-step implementation plan for the media scanning
 | Phase | Status | Completion |
 |-------|--------|------------|
 | Phase 1: Foundation | ✅ | 8/8 |
-| Phase 2: Database Layer | ⬜ | 0/6 |
+| Phase 2: Database Layer | ✅ | 6/6 |
 | Phase 3: Metadata Extraction | 🔄 | 1/5 |
 | Phase 4: Discovery & Processing | ⬜ | 0/4 |
 | Phase 5: Parallel Scanner | ⬜ | 0/6 |
 | Phase 6: Post-Scan & Validation | ⬜ | 0/2 |
 | Phase 7: Edge Cases | ⬜ | 0/2 |
-| **Total** | **27%** | **9/33** |
+| **Total** | **45%** | **15/33** |
 
 **Legend:** ⬜ Not Started | 🔄 In Progress | ✅ Completed | ⚠️ Blocked | ❌ Failed
 
@@ -200,7 +200,7 @@ This document provides a step-by-step implementation plan for the media scanning
 
 ### 2.1 Database Schema Definition
 
-- **Status:** ⬜
+- **Status:** ✅
 - **File:** `src/gphotos_321sync/media_scanner/schema/001_initial_schema.sql`
 - **Tables:** `schema_version`, `scan_runs`, `media_items`, `albums`, `people`, `people_tags`, `processing_errors`
 - **Tests:** SQL validity, table creation
@@ -208,7 +208,7 @@ This document provides a step-by-step implementation plan for the media scanning
 
 ### 2.2 Database Connection Manager
 
-- **Status:** ⬜
+- **Status:** ✅
 - **File:** `src/gphotos_321sync/media_scanner/database.py`
 - **Class:** `DatabaseConnection` with:
   - `connect(db_path: Path) -> Connection`
@@ -219,7 +219,7 @@ This document provides a step-by-step implementation plan for the media scanning
 
 ### 2.3 Migration System
 
-- **Status:** ⬜
+- **Status:** ✅
 - **File:** `src/gphotos_321sync/media_scanner/migrations.py`
 - **Class:** `MigrationRunner` with:
   - `get_current_version() -> int`
@@ -229,7 +229,7 @@ This document provides a step-by-step implementation plan for the media scanning
 
 ### 2.4 Data Access Layer - Scan Runs
 
-- **Status:** ⬜
+- **Status:** ✅
 - **File:** `src/gphotos_321sync/media_scanner/dal/scan_runs.py`
 - **Class:** `ScanRunDAL` with:
   - `create_scan_run() -> str`
@@ -241,7 +241,7 @@ This document provides a step-by-step implementation plan for the media scanning
 
 ### 2.5 Data Access Layer - Albums
 
-- **Status:** ⬜
+- **Status:** ✅
 - **File:** `src/gphotos_321sync/media_scanner/dal/albums.py`
 - **Class:** `AlbumDAL` with:
   - `insert_album(album: dict) -> str` (returns album_id)
@@ -254,7 +254,7 @@ This document provides a step-by-step implementation plan for the media scanning
 
 ### 2.6 Data Access Layer - Media Items & Errors
 
-- **Status:** ⬜
+- **Status:** ✅
 - **Files:**
   - `src/gphotos_321sync/media_scanner/dal/media_items.py`
   - `src/gphotos_321sync/media_scanner/dal/processing_errors.py`
@@ -609,3 +609,10 @@ As implementation progresses, update architecture documents:
 ## Document History
 
 - 2025-10-13: Initial implementation plan created
+- 2025-10-15: Phase 2 (Database Layer) completed with schema improvements
+  - Added CHECK constraints for numeric sanity (all counters, dimensions, GPS bounds)
+  - Added timestamp consistency checks (end >= start, last_seen >= first_seen)
+  - Added hash format validation (CRC32: 8 hex chars, SHA-256: 64 hex chars)
+  - Added EXIF orientation validation (1-8), tag_order validation (>= 0)
+  - Added performance indexes: content_fingerprint, (album_id, capture_timestamp), relationship fields, error timestamps
+  - See SCHEMA_IMPROVEMENTS.md for detailed documentation
