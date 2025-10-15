@@ -26,3 +26,5 @@ raise GPSyncError("Something went wrong", file_path="/path/to/file")
 - **Structured logging** - JSON and human-readable formatters
 - **Base error class** - With context support
 - **Config utilities** - Path expansion, CPU detection
+- **Path normalization** - Unicode NFC normalization + forward slash conversion
+- **Checksums** - CRC32 computation for file integrity

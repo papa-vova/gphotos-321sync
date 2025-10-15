@@ -1,73 +1,87 @@
-"""Path normalization and file type detection utilities."""
+"""Path utilities for media scanner."""
 
-import unicodedata
+import os
 from pathlib import Path
+from gphotos_321sync.common import normalize_path
 
-# Supported media file extensions
-MEDIA_EXTENSIONS = {
-    # Images
-    '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.heic', '.heif', '.tiff', '.tif',
-    # Videos
-    '.mp4', '.mov', '.avi', '.mkv', '.m4v', '.3gp', '.wmv', '.flv', '.webm',
+# Re-export normalize_path from common package for backward compatibility
+__all__ = ['normalize_path', 'should_scan_file', 'is_hidden']
+
+# System files to exclude (cross-platform)
+SYSTEM_FILES = {
+    'thumbs.db',      # Windows thumbnail cache
+    'desktop.ini',    # Windows folder settings
+    '.ds_store',      # macOS folder metadata
+    'icon\r',         # macOS custom folder icon (has literal carriage return!)
 }
 
-# JSON sidecar extension
-JSON_EXTENSION = '.json'
+# Temporary file extensions to exclude
+TEMP_EXTENSIONS = {'.tmp', '.temp', '.cache', '.bak', '.swp'}
 
 
-def normalize_path(path: Path) -> str:
+def is_hidden(path: Path) -> bool:
     """
-    Normalize a path for consistent storage and comparison.
+    Cross-platform hidden file detection.
     
-    - Applies Unicode NFC normalization (canonical composition)
-    - Converts to forward slashes for cross-platform consistency
-    - Converts to string representation
-    
-    Args:
-        path: Path object to normalize
-        
-    Returns:
-        Normalized path string with forward slashes
-    """
-    # Convert to string and normalize Unicode
-    path_str = str(path)
-    normalized = unicodedata.normalize('NFC', path_str)
-    
-    # Convert backslashes to forward slashes
-    normalized = normalized.replace('\\', '/')
-    
-    return normalized
-
-
-def is_media_file(path: Path) -> bool:
-    """
-    Check if a file is a supported media file based on extension.
+    Unix/Linux/macOS: Files starting with '.'
+    Windows: Files with FILE_ATTRIBUTE_HIDDEN flag
     
     Args:
         path: Path to check
         
     Returns:
-        True if the file has a supported media extension
+        True if file is hidden on the current platform
     """
-    return path.suffix.lower() in MEDIA_EXTENSIONS
-
-
-def is_json_sidecar(path: Path) -> bool:
-    """
-    Check if a file is a JSON sidecar file.
+    # Unix-style: starts with dot
+    if path.name.startswith('.'):
+        return True
     
-    JSON sidecars in Google Takeout have the pattern: <filename>.<ext>.json
-    For example: IMG_1234.JPG.json
+    # Windows: check file attributes
+    if os.name == 'nt' and path.exists():
+        try:
+            import ctypes
+            attrs = ctypes.windll.kernel32.GetFileAttributesW(str(path))
+            # FILE_ATTRIBUTE_HIDDEN = 2
+            return attrs != -1 and bool(attrs & 2)
+        except (AttributeError, OSError):
+            pass
+    
+    return False
+
+
+def should_scan_file(path: Path) -> bool:
+    """
+    Determine if a file should be scanned by the media scanner.
+    
+    IMPORTANT: This does NOT check file content! It only excludes obvious
+    system/temporary files to avoid wasting time on MIME detection.
+    
+    The actual media detection happens via MIME type checking (detect_mime_type).
+    
+    Excluded files:
+    - Hidden files (Unix: starts with '.', Windows: FILE_ATTRIBUTE_HIDDEN)
+    - System files (Thumbs.db, .DS_Store, desktop.ini, Icon\r)
+    - Temporary files (.tmp, .temp, .cache, .bak, .swp)
     
     Args:
         path: Path to check
         
     Returns:
-        True if the file is a JSON sidecar
+        True if the file should be scanned (MIME detection will determine if it's media)
     """
-    if path.suffix.lower() != JSON_EXTENSION:
+    filename = path.name.lower()
+    
+    # Skip hidden files (cross-platform)
+    if is_hidden(path):
         return False
     
-    # Check if the stem (without .json) has a media extension
-    stem_path = Path(path.stem)
-    return stem_path.suffix.lower() in MEDIA_EXTENSIONS
+    # Skip known system files
+    if filename in SYSTEM_FILES:
+        return False
+    
+    # Skip temporary files by extension
+    if path.suffix.lower() in TEMP_EXTENSIONS:
+        return False
+    
+    # Everything else should be scanned - MIME detection will determine if it's media
+    return True

@@ -4,8 +4,8 @@ import pytest
 from pathlib import Path
 from gphotos_321sync.media_scanner.path_utils import (
     normalize_path,
-    is_media_file,
-    is_json_sidecar,
+    should_scan_file,
+    is_hidden,
 )
 
 
@@ -35,54 +35,48 @@ class TestNormalizePath:
         assert result == "photos/2023/image.jpg"
 
 
-class TestIsMediaFile:
-    """Tests for is_media_file function."""
+class TestIsHidden:
+    """Tests for is_hidden function."""
     
-    def test_image_extensions(self):
-        """Test that image files are recognized."""
-        assert is_media_file(Path("photo.jpg"))
-        assert is_media_file(Path("photo.JPEG"))
-        assert is_media_file(Path("photo.png"))
-        assert is_media_file(Path("photo.heic"))
-        assert is_media_file(Path("photo.gif"))
+    def test_unix_hidden_files(self):
+        """Test Unix-style hidden files (starting with dot)."""
+        assert is_hidden(Path(".hidden"))
+        assert is_hidden(Path(".DS_Store"))
+        assert is_hidden(Path(".gitignore"))
     
-    def test_video_extensions(self):
-        """Test that video files are recognized."""
-        assert is_media_file(Path("video.mp4"))
-        assert is_media_file(Path("video.MOV"))
-        assert is_media_file(Path("video.avi"))
-        assert is_media_file(Path("video.mkv"))
-    
-    def test_non_media_files(self):
-        """Test that non-media files are not recognized."""
-        assert not is_media_file(Path("document.txt"))
-        assert not is_media_file(Path("data.json"))
-        assert not is_media_file(Path("script.py"))
-    
-    def test_case_insensitive(self):
-        """Test that extension matching is case-insensitive."""
-        assert is_media_file(Path("photo.JPG"))
-        assert is_media_file(Path("photo.Jpg"))
-        assert is_media_file(Path("video.MP4"))
+    def test_regular_files_not_hidden(self):
+        """Test that regular files are not hidden."""
+        assert not is_hidden(Path("photo.jpg"))
+        assert not is_hidden(Path("document.txt"))
 
 
-class TestIsJsonSidecar:
-    """Tests for is_json_sidecar function."""
+class TestShouldScanFile:
+    """Tests for should_scan_file function."""
     
-    def test_valid_sidecars(self):
-        """Test that valid JSON sidecars are recognized."""
-        assert is_json_sidecar(Path("IMG_1234.JPG.json"))
-        assert is_json_sidecar(Path("video.mp4.json"))
-        assert is_json_sidecar(Path("photo.HEIC.json"))
+    def test_regular_files_should_scan(self):
+        """Test that regular files should be scanned."""
+        # All regular files should be scanned - MIME detection will determine if media
+        assert should_scan_file(Path("photo.jpg"))
+        assert should_scan_file(Path("video.mp4"))
+        assert should_scan_file(Path("IMG_1234"))  # No extension
+        assert should_scan_file(Path("document.txt"))  # Wrong extension
+        assert should_scan_file(Path("data.json"))
     
-    def test_invalid_sidecars(self):
-        """Test that invalid JSON files are not recognized as sidecars."""
-        assert not is_json_sidecar(Path("metadata.json"))
-        assert not is_json_sidecar(Path("config.json"))
-        assert not is_json_sidecar(Path("data.txt.json"))
+    def test_hidden_files_should_skip(self):
+        """Test that hidden files are skipped."""
+        assert not should_scan_file(Path(".hidden"))
+        assert not should_scan_file(Path(".DS_Store"))
+        assert not should_scan_file(Path(".gitignore"))
     
-    def test_case_insensitive(self):
-        """Test that sidecar detection is case-insensitive."""
-        assert is_json_sidecar(Path("photo.jpg.json"))
-        assert is_json_sidecar(Path("photo.JPG.json"))
-        assert is_json_sidecar(Path("photo.Jpg.JSON"))
+    def test_system_files_should_skip(self):
+        """Test that system files are skipped."""
+        assert not should_scan_file(Path("Thumbs.db"))
+        assert not should_scan_file(Path("desktop.ini"))
+        assert not should_scan_file(Path("THUMBS.DB"))  # Case insensitive
+    
+    def test_temp_files_should_skip(self):
+        """Test that temporary files are skipped."""
+        assert not should_scan_file(Path("temp.tmp"))
+        assert not should_scan_file(Path("cache.temp"))
+        assert not should_scan_file(Path("backup.bak"))
+        assert not should_scan_file(Path("data.cache"))

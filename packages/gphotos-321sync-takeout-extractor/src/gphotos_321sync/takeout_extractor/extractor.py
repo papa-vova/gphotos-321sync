@@ -3,6 +3,7 @@
 import logging
 import zipfile
 import tarfile
+import tempfile
 import shutil
 import json
 import time
@@ -10,46 +11,14 @@ import hashlib
 import re
 import zlib
 import gc
-import unicodedata
 from pathlib import Path
-from typing import List, Dict, Optional, Callable, Set
+from typing import Optional, Callable, Dict, List, Set
 from dataclasses import dataclass, field, asdict
 from enum import Enum
 from datetime import datetime
+from gphotos_321sync.common import normalize_path, compute_crc32
 
 logger = logging.getLogger(__name__)
-
-
-def normalize_unicode_path(path: str) -> str:
-    """Normalize Unicode path to NFC form for consistent comparison.
-    
-    This ensures that paths with Unicode characters (Cyrillic, Chinese, Arabic, etc.)
-    are compared consistently regardless of how they're encoded in the archive
-    or filesystem.
-    
-    Args:
-        path: Path string to normalize
-        
-    Returns:
-        Normalized path string in NFC (Canonical Composition) form
-    """
-    return unicodedata.normalize('NFC', path)
-
-
-def calculate_crc32(file_path: Path) -> int:
-    """Calculate CRC32 checksum of a file.
-    
-    Args:
-        file_path: Path to file
-        
-    Returns:
-        CRC32 checksum as unsigned 32-bit integer
-    """
-    crc = 0
-    with open(file_path, 'rb') as f:
-        while chunk := f.read(65536):  # 64KB chunks
-            crc = zlib.crc32(chunk, crc)
-    return crc & 0xFFFFFFFF  # Ensure unsigned 32-bit
 
 # Windows invalid filename characters
 WINDOWS_INVALID_CHARS = r'[<>:"|?*]'
@@ -620,7 +589,7 @@ class ArchiveExtractor:
             
             # Check CRC32
             if expected_crc32 is not None:
-                actual_crc32 = calculate_crc32(file_path)
+                actual_crc32 = compute_crc32(file_path)
                 if actual_crc32 != expected_crc32:
                     logger.warning(
                         f"CRC32 mismatch for {member_path}: "
@@ -671,7 +640,7 @@ class ArchiveExtractor:
                     info = zip_ref.getinfo(member)
                     sanitized_member, _ = sanitize_filename(member)
                     # Normalize Unicode for consistent comparison
-                    sanitized_member = normalize_unicode_path(sanitized_member)
+                    sanitized_member = normalize_path(sanitized_member)
                     expected_files[sanitized_member] = info
                     sanitized_to_original[sanitized_member] = member
                 
@@ -684,10 +653,8 @@ class ArchiveExtractor:
                     for file_path in extract_to.rglob('*'):
                         if file_path.is_file():
                             rel_path = file_path.relative_to(extract_to)
-                            # Convert to forward slashes for consistency with ZIP paths
-                            rel_path_str = str(rel_path).replace('\\', '/')
-                            # Normalize Unicode for consistent comparison
-                            rel_path_str = normalize_unicode_path(rel_path_str)
+                            # Normalize path (Unicode NFC + forward slashes)
+                            rel_path_str = normalize_path(rel_path)
                             existing_files[rel_path_str] = file_path
                 except Exception as e:
                     logger.warning(f"Error scanning directory tree: {e}")
@@ -730,7 +697,7 @@ class ArchiveExtractor:
                         continue
                     
                     # Verify CRC32
-                    actual_crc32 = calculate_crc32(file_path)
+                    actual_crc32 = compute_crc32(file_path)
                     if actual_crc32 != info.CRC:
                         logger.warning(
                             f"CRC32 mismatch for {member_path}: "

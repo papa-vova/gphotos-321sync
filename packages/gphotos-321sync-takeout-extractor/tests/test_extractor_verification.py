@@ -10,8 +10,8 @@ from gphotos_321sync.takeout_extractor.extractor import (
     ArchiveExtractor,
     ArchiveFormat,
     ExtractionState,
-    normalize_unicode_path,
 )
+from gphotos_321sync.common import normalize_path as normalize_unicode_path
 
 
 @pytest.fixture

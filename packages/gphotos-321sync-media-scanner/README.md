@@ -12,8 +12,6 @@ pip install gphotos-321sync-media-scanner
 
 ```python
 from gphotos_321sync.media_scanner import MediaScanner
-
-# Coming soon - implementation in progress
 ```
 
 ## Features

@@ -1,8 +1,11 @@
 """File fingerprinting utilities for change detection."""
 
 import hashlib
-import zlib
 from pathlib import Path
+from gphotos_321sync.common import compute_crc32
+
+# Re-export compute_crc32 from common for backward compatibility
+__all__ = ['compute_content_fingerprint', 'compute_crc32']
 
 # Fingerprint configuration
 FINGERPRINT_HEAD_SIZE = 8192  # 8 KB from start
@@ -46,33 +49,3 @@ def compute_content_fingerprint(file_path: Path, file_size: int) -> str:
             hasher.update(tail)
     
     return hasher.hexdigest()
-
-
-def compute_crc32(file_path: Path) -> int:
-    """
-    Compute CRC32 checksum of entire file.
-    
-    This is used for duplicate detection. CRC32 is faster than full
-    SHA-256 but still requires reading the entire file.
-    
-    Args:
-        file_path: Path to the file
-        
-    Returns:
-        CRC32 checksum as unsigned 32-bit integer
-        
-    Raises:
-        OSError: If file cannot be read
-    """
-    crc = 0
-    chunk_size = 65536  # 64 KB chunks
-    
-    with open(file_path, 'rb') as f:
-        while True:
-            chunk = f.read(chunk_size)
-            if not chunk:
-                break
-            crc = zlib.crc32(chunk, crc)
-    
-    # Return as unsigned 32-bit integer
-    return crc & 0xFFFFFFFF

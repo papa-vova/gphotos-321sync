@@ -73,11 +73,14 @@ This document provides a step-by-step implementation plan for the media scanning
 - **Status:** ✅
 - **File:** `src/gphotos_321sync/media_scanner/path_utils.py`
 - **Functions:**
-  - `normalize_path(path: Path) -> str` (NFC normalization, forward slashes)
-  - `is_media_file(path: Path) -> bool`
-  - `is_json_sidecar(path: Path) -> bool`
-- **Tests:** Unicode handling, path normalization, file type detection
+  - `normalize_path(path: Path) -> str` (moved to common package - NFC normalization, forward slashes)
+  - `should_scan_file(path: Path) -> bool` (excludes only system/hidden/temp files)
+- **Tests:** Unicode handling, path normalization, file filtering
 - **Acceptance:** All path tests pass
+- **CRITICAL:** Does NOT filter by extension! MIME detection determines if file is media.
+  - Files without extensions: scanned ✅
+  - Files with wrong extensions: scanned ✅
+  - Actual media detection: via `detect_mime_type()` only
 
 ### 1.4 Fingerprint Utilities
 
@@ -85,10 +88,11 @@ This document provides a step-by-step implementation plan for the media scanning
 - **File:** `src/gphotos_321sync/media_scanner/fingerprint.py`
 - **Functions:**
   - `compute_content_fingerprint(file_path: Path, file_size: int) -> str` (SHA-256 head+tail)
-  - `compute_crc32(file_path: Path) -> int`
+  - `compute_crc32(file_path: Path) -> int` (moved to common package - re-exported for compatibility)
 - **Tests:** Small/large file handling, change detection
 - **Performance:** Fingerprint ~2-5ms, CRC32 ~10ms (7.7 MB avg)
 - **Acceptance:** Detects file changes correctly
+- **Note:** CRC32 is now in `gphotos_321sync.common.checksums` and shared with extractor
 
 ### 1.5 Configuration Module
 
