@@ -15,6 +15,13 @@ This document provides a step-by-step implementation plan for the media scanning
 - **Incremental** - Each step adds working functionality
 - **Trackable** - Progress tracked in this document
 
+**Dependencies:**
+
+- **Common Package:** This implementation uses `gphotos-321sync-common` for:
+  - Configuration management (`ConfigLoader`)
+  - Structured logging (`setup_logging`, `get_logger`, `LogContext`)
+  - Base error classes (`GPSyncError`)
+
 ---
 
 ## Progress Tracking
@@ -52,9 +59,13 @@ This document provides a step-by-step implementation plan for the media scanning
 
 - **Status:** ⬜
 - **Tasks:**
-  - Add to `requirements.txt`: `pillow>=10.0.0`, `python-magic>=0.4.27`, `platformdirs>=3.0.0`
+  - Add to `requirements.txt`:
+    - `gphotos-321sync-common` (for config, logging, errors)
+    - `pillow>=10.0.0`
+    - `python-magic>=0.4.27`
+    - `platformdirs>=3.0.0`
   - Install and verify imports
-- **Tests:** `test_pillow_import()`, `test_magic_import()`, `test_platformdirs_import()`
+- **Tests:** `test_common_import()`, `test_pillow_import()`, `test_magic_import()`, `test_platformdirs_import()`
 - **Acceptance:** All dependencies import successfully
 
 ### 1.3 Path Utilities
@@ -83,40 +94,86 @@ This document provides a step-by-step implementation plan for the media scanning
 
 - **Status:** ⬜
 - **File:** `src/gphotos_321sync/media_scanner/config.py`
-- **Class:** `ScannerConfig` with fields:
-  - `worker_threads: int` (default: 2 × CPU cores)
-  - `worker_processes: int` (default: CPU cores)
-  - `batch_size: int` (default: 100)
-  - `queue_maxsize: int` (default: 1000)
-- **Tests:** Default values, CPU auto-detection
-- **Acceptance:** Config loads with sensible defaults
+- **Classes:** (Pydantic BaseModel)
+  - `LoggingConfig`: `level` (INFO), `format` (json)
+  - `ScannerConfig`: `worker_threads` (2×CPU), `worker_processes` (CPU), `batch_size` (100), `queue_maxsize` (1000)
+  - `MediaScannerConfig`: Root config with `logging` and `scanner` sections
+- **Usage:** Use `ConfigLoader` from `gphotos_321sync.common.config`
+
+  ```python
+  from gphotos_321sync.common import ConfigLoader
+  from .config import MediaScannerConfig
+  
+  APP_NAME = "gphotos-321sync-media-scanner"
+  loader = ConfigLoader(app_name=APP_NAME, config_class=MediaScannerConfig)
+  config = loader.load(defaults_path=args.config)  # Optional defaults.toml path
+  ```
+
+- **Tests:** Default values, CPU auto-detection, config loading from TOML
+- **Acceptance:** Config loads with sensible defaults using common package utilities
+- **Reference:** See `takeout_extractor/config.py` for structure pattern
 
 ### 1.6 Error Classification
 
 - **Status:** ⬜
 - **File:** `src/gphotos_321sync/media_scanner/errors.py`
-- **Classes:**
-  - `ScannerError` (base)
+- **Classes:** (all inherit from `gphotos_321sync.common.errors.GPSyncError`)
+  - `ScannerError` (base scanner error, inherits from GPSyncError)
   - `PermissionDeniedError`
   - `CorruptedFileError`
   - `IOError`
   - `ParseError`
   - `UnsupportedFormatError`
   - `ToolNotFoundError`
+- **Example:**
+
+  ```python
+  from gphotos_321sync.common import GPSyncError
+  
+  class ScannerError(GPSyncError):
+      """Base error for media scanner."""
+      pass
+  
+  class CorruptedFileError(ScannerError):
+      """File is corrupted or unreadable."""
+      pass
+  ```
+
 - **Function:** `classify_error(exception: Exception) -> str`
 - **Tests:** Error classification for different exception types
-- **Acceptance:** Errors classified correctly
+- **Acceptance:** Errors classified correctly, inherit context support from GPSyncError
+- **Reference:** See `takeout_extractor/errors.py` for inheritance pattern
 
 ### 1.7 Logging Setup
 
 - **Status:** ⬜
-- **File:** `src/gphotos_321sync/media_scanner/logging_config.py`
+- **File:** No separate file needed - use `gphotos_321sync.common.logging`
 - **Tasks:**
-  - Configure JSON logging with structured fields
-  - Add context fields: `timestamp`, `scan_run_id`, `file_path`, `error_type`
-  - Support log levels: DEBUG, INFO, WARNING, ERROR
-- **Tests:** Logger initialization, JSON format verification, context fields
-- **Acceptance:** Structured logging works, can be used throughout implementation
+  - Use `setup_logging()` from common package for initialization (call once in CLI/main)
+  - Use `logging.getLogger(__name__)` for module-level loggers
+  - Use `LogContext` for adding structured fields: `scan_run_id`, `file_path`, `error_type`
+  - Configure via config: log level, format type (simple/detailed/json), log file path
+- **Example:**
+
+  ```python
+  # In CLI/main entry point:
+  from gphotos_321sync.common import setup_logging
+  
+  config = loader.load()
+  setup_logging(level=config.logging.level, format_type=config.logging.format)
+  
+  # In modules:
+  import logging
+  logger = logging.getLogger(__name__)
+  
+  logger.info(f"Processing file: {file_path}")
+  logger.debug(f"Extracted metadata: {metadata}")
+  logger.error(f"Failed to process {file_path}: {error}")
+  ```
+
+- **Tests:** Logger initialization, structured fields via LogContext, log file rotation
+- **Acceptance:** Structured logging works using common package utilities
+- **Reference:** See `takeout_extractor/cli.py` (lines 167, 55) and `extractor.py` (line 20) for usage pattern
 
 ### 1.8 Tool Availability Checker
 
