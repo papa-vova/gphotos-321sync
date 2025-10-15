@@ -35,3 +35,20 @@ def is_image_mime_type(mime_type: str) -> bool:
 def is_video_mime_type(mime_type: str) -> bool:
     """Check if a MIME type represents a video."""
     return mime_type.startswith('video/')
+
+
+def is_unknown_mime_type(mime_type: str) -> bool:
+    """
+    Check if MIME type is unknown/generic.
+    
+    When filetype library cannot determine the actual type,
+    it returns 'application/octet-stream'. These files may be
+    RAW camera formats or other exotic types that require ExifTool.
+    
+    Args:
+        mime_type: MIME type string
+        
+    Returns:
+        True if MIME type is generic/unknown
+    """
+    return mime_type == 'application/octet-stream'

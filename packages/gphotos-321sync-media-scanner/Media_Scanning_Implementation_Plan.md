@@ -30,12 +30,12 @@ This document provides a step-by-step implementation plan for the media scanning
 |-------|--------|------------|
 | Phase 1: Foundation | ✅ | 8/8 |
 | Phase 2: Database Layer | ✅ | 6/6 |
-| Phase 3: Metadata Extraction | 🔄 | 1/5 |
+| Phase 3: Metadata Extraction | ✅ | 5/5 |
 | Phase 4: Discovery & Processing | ⬜ | 0/4 |
 | Phase 5: Parallel Scanner | ⬜ | 0/6 |
 | Phase 6: Post-Scan & Validation | ⬜ | 0/2 |
 | Phase 7: Edge Cases | ⬜ | 0/2 |
-| **Total** | **45%** | **15/33** |
+| **Total** | **58%** | **19/33** |
 
 **Legend:** ⬜ Not Started | 🔄 In Progress | ✅ Completed | ⚠️ Blocked | ❌ Failed
 
@@ -280,7 +280,7 @@ This document provides a step-by-step implementation plan for the media scanning
 
 ### 3.1 JSON Sidecar Parser
 
-- **Status:** ⬜
+- **Status:** ✅
 - **File:** `src/gphotos_321sync/media_scanner/metadata/json_parser.py`
 - **Function:** `parse_json_sidecar(json_path: Path) -> dict`
 - **Extracts:** `title`, `description`, `photoTakenTime`, `geoData`, `people`
@@ -289,28 +289,36 @@ This document provides a step-by-step implementation plan for the media scanning
 
 ### 3.2 EXIF Extractor
 
-- **Status:** ⬜
+- **Status:** ✅
 - **File:** `src/gphotos_321sync/media_scanner/metadata/exif_extractor.py`
 - **Functions:**
   - `extract_exif(file_path: Path) -> dict` (Pillow for JPEG/PNG/HEIC)
+  - `extract_exif_with_exiftool(file_path: Path) -> dict` (ExifTool for RAW formats)
+  - `extract_exif_smart(file_path: Path, use_exiftool: bool) -> dict` (Smart routing based on MIME type)
   - `extract_resolution(file_path: Path) -> tuple[int, int]`
-- **Tests:** JPEG with/without EXIF, resolution extraction
-- **Performance:** ~5ms per file
-- **Acceptance:** Extracts EXIF and resolution correctly
+- **RAW Support:** CR2, NEF, ARW, DNG, RW2, ORF, PEF, RAF, etc. via ExifTool
+- **Routing:** Known formats (JPEG/PNG/HEIC) → Pillow (fast), Unknown formats → ExifTool (if enabled)
+- **Tests:** JPEG with/without EXIF, GPS extraction, resolution extraction, IFDRational handling
+- **Performance:** ~5ms per file (Pillow), ~50-100ms per file (ExifTool)
+- **Acceptance:** Extracts EXIF and resolution correctly from standard and RAW formats
 
 ### 3.3 MIME Type Detector
 
 - **Status:** ✅
 - **File:** `src/gphotos_321sync/media_scanner/mime_detector.py`
-- **Function:** `detect_mime_type(file_path: Path) -> str` (filetype library - pure Python)
+- **Functions:**
+  - `detect_mime_type(file_path: Path) -> str` (filetype library - pure Python)
+  - `is_image_mime_type(mime_type: str) -> bool`
+  - `is_video_mime_type(mime_type: str) -> bool`
+  - `is_unknown_mime_type(mime_type: str) -> bool` (detects when filetype returns generic type)
 - **Tests:** JPEG, PNG, MP4, unknown files
 - **Performance:** ~1ms per file
 - **Acceptance:** Detects MIME types correctly
-- **Note:** Uses `filetype` library (reads magic bytes) instead of libmagic for cross-platform compatibility
+- **Note:** Uses `filetype` library (reads magic bytes) instead of libmagic for cross-platform compatibility. RAW formats (except CR2) return `application/octet-stream` and are handled by ExifTool.
 
 ### 3.4 Video Metadata Extractor
 
-- **Status:** ⬜
+- **Status:** ✅
 - **File:** `src/gphotos_321sync/media_scanner/metadata/video_extractor.py`
 - **Functions:**
   - `extract_video_metadata(file_path: Path) -> dict` (ffprobe subprocess)
@@ -322,7 +330,7 @@ This document provides a step-by-step implementation plan for the media scanning
 
 ### 3.5 Metadata Aggregator
 
-- **Status:** ⬜
+- **Status:** ✅
 - **File:** `src/gphotos_321sync/media_scanner/metadata/aggregator.py`
 - **Function:** `aggregate_metadata(file_path: Path, json_metadata: dict, exif_data: dict, video_data: dict) -> dict`
 - **Precedence:** JSON > EXIF > filename > NULL
