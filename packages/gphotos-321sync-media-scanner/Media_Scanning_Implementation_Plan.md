@@ -28,14 +28,14 @@ This document provides a step-by-step implementation plan for the media scanning
 
 | Phase | Status | Completion |
 |-------|--------|------------|
-| Phase 1: Foundation | ⬜ Not Started | 0/8 |
+| Phase 1: Foundation | ✅ Completed | 8/8 |
 | Phase 2: Database Layer | ⬜ Not Started | 0/6 |
-| Phase 3: Metadata Extraction | ⬜ Not Started | 0/5 |
+| Phase 3: Metadata Extraction | ✅ Partial | 1/5 |
 | Phase 4: Discovery & Processing | ⬜ Not Started | 0/4 |
 | Phase 5: Parallel Scanner | ⬜ Not Started | 0/6 |
 | Phase 6: Post-Scan & Validation | ⬜ Not Started | 0/2 |
 | Phase 7: Edge Cases | ⬜ Not Started | 0/2 |
-| **Total** | **0%** | **0/33** |
+| **Total** | **27%** | **9/33** |
 
 **Legend:** ⬜ Not Started | 🔄 In Progress | ✅ Completed | ⚠️ Blocked | ❌ Failed
 
@@ -47,30 +47,30 @@ This document provides a step-by-step implementation plan for the media scanning
 
 ### 1.1 Project Structure Setup
 
-- **Status:** ⬜
+- **Status:** ✅
 - **Tasks:**
   - Create `src/gphotos_321sync/media_scanner/` directory
-  - Create `tests/media_scanner/` directory
+  - Create `tests/` directory
   - Add `__init__.py` files
 - **Tests:** Import verification
 - **Acceptance:** Python can import `gphotos_321sync.media_scanner`
 
 ### 1.2 Dependencies Installation
 
-- **Status:** ⬜
+- **Status:** ✅
 - **Tasks:**
   - Add to `requirements.txt`:
     - `gphotos-321sync-common` (for config, logging, errors)
     - `pillow>=10.0.0`
-    - `python-magic>=0.4.27`
+    - `filetype>=1.2.0`
     - `platformdirs>=3.0.0`
   - Install and verify imports
-- **Tests:** `test_common_import()`, `test_pillow_import()`, `test_magic_import()`, `test_platformdirs_import()`
+- **Tests:** `test_common_import()`, `test_pillow_import()`, `test_filetype_import()`, `test_platformdirs_import()`
 - **Acceptance:** All dependencies import successfully
 
 ### 1.3 Path Utilities
 
-- **Status:** ⬜
+- **Status:** ✅
 - **File:** `src/gphotos_321sync/media_scanner/path_utils.py`
 - **Functions:**
   - `normalize_path(path: Path) -> str` (NFC normalization, forward slashes)
@@ -81,7 +81,7 @@ This document provides a step-by-step implementation plan for the media scanning
 
 ### 1.4 Fingerprint Utilities
 
-- **Status:** ⬜
+- **Status:** ✅
 - **File:** `src/gphotos_321sync/media_scanner/fingerprint.py`
 - **Functions:**
   - `compute_content_fingerprint(file_path: Path, file_size: int) -> str` (SHA-256 head+tail)
@@ -92,7 +92,7 @@ This document provides a step-by-step implementation plan for the media scanning
 
 ### 1.5 Configuration Module
 
-- **Status:** ⬜
+- **Status:** ✅
 - **File:** `src/gphotos_321sync/media_scanner/config.py`
 - **Classes:** (Pydantic BaseModel)
   - `LoggingConfig`: `level` (INFO), `format` (json)
@@ -115,7 +115,7 @@ This document provides a step-by-step implementation plan for the media scanning
 
 ### 1.6 Error Classification
 
-- **Status:** ⬜
+- **Status:** ✅
 - **File:** `src/gphotos_321sync/media_scanner/errors.py`
 - **Classes:** (all inherit from `gphotos_321sync.common.errors.GPSyncError`)
   - `ScannerError` (base scanner error, inherits from GPSyncError)
@@ -146,7 +146,7 @@ This document provides a step-by-step implementation plan for the media scanning
 
 ### 1.7 Logging Setup
 
-- **Status:** ⬜
+- **Status:** ✅ (Uses common package)
 - **File:** No separate file needed - use `gphotos_321sync.common.logging`
 - **Tasks:**
   - Use `setup_logging()` from common package for initialization (call once in CLI/main)
@@ -177,14 +177,17 @@ This document provides a step-by-step implementation plan for the media scanning
 
 ### 1.8 Tool Availability Checker
 
-- **Status:** ⬜
+- **Status:** ✅
 - **File:** `src/gphotos_321sync/media_scanner/tool_checker.py`
 - **Functions:**
-  - `check_tool_availability() -> dict` (ffprobe, exiftool, libmagic)
-  - `require_tool(tool_name: str)` (raises ToolNotFoundError if missing)
-- **Tests:** Tool detection, missing tool handling
-- **Decision:** Fail-fast with clear instructions (v1 approach)
-- **Acceptance:** Detects tool availability at startup, prevents runtime failures
+  - `check_tool_availability() -> dict` (ffprobe, exiftool) - detects availability
+  - `check_required_tools(use_ffprobe, use_exiftool)` (logs status, raises error if enabled but missing)
+- **Tests:** Tool detection, missing tool handling, config integration
+- **Decision:** Tool usage controlled by config (`use_ffprobe`, `use_exiftool`). Log status at INFO level, never block.
+- **Acceptance:** Detects tool availability at startup, logs clear status messages
+- **Integration Points:**
+  - **Scanner initialization (Phase 5):** Call `check_required_tools(config.scanner.use_ffprobe, config.scanner.use_exiftool)`
+  - Logs at INFO level: tool availability + what metadata will/won't be extracted
 - **Note:** Must run before any metadata extraction
 
 ---
@@ -295,12 +298,13 @@ This document provides a step-by-step implementation plan for the media scanning
 
 ### 3.3 MIME Type Detector
 
-- **Status:** ⬜
-- **File:** `src/gphotos_321sync/media_scanner/metadata/mime_detector.py`
-- **Function:** `detect_mime_type(file_path: Path) -> str` (python-magic)
-- **Tests:** JPEG, MP4, unknown files
+- **Status:** ✅
+- **File:** `src/gphotos_321sync/media_scanner/mime_detector.py`
+- **Function:** `detect_mime_type(file_path: Path) -> str` (filetype library - pure Python)
+- **Tests:** JPEG, PNG, MP4, unknown files
 - **Performance:** ~1ms per file
 - **Acceptance:** Detects MIME types correctly
+- **Note:** Uses `filetype` library (reads magic bytes) instead of libmagic for cross-platform compatibility
 
 ### 3.4 Video Metadata Extractor
 

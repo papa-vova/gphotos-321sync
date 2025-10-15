@@ -215,7 +215,7 @@ else:
 ║  │   - EXIF extraction (timestamps, GPS, camera, orientation)   │   ║
 ║  │   - Resolution extraction (width × height)                   │   ║
 ║  │   - Video metadata (duration, frame rate via ffprobe)        │   ║
-║  │   - MIME/content type detection (initial bytes, python-magic)│   ║
+║  │   - MIME/content type detection (magic bytes, filetype lib)  │   ║
 ║  │   - CRC32 calculation (full stream)                          │   ║
 ║  │ • Content fingerprint (first 64KB + last 64KB, SHA-256)      │   ║
 ║  │ • On error: return error details for database recording      │   ║
@@ -421,14 +421,19 @@ PRAGMA temp_store=MEMORY;       -- Temp tables in RAM
 
 ### Tools
 
-- **EXIF extraction:** Pillow (PIL) for JPEG/PNG/HEIC, exiftool for RAW formats
+- **EXIF extraction:**
+  - Pillow (PIL) for JPEG/PNG/HEIC/GIF/WebP/BMP (primary, covers 95%+ of exports)
+  - exiftool for RAW formats (DNG, CR2, NEF, ARW) - optional
   - Extract: timestamps, GPS coordinates, camera info, orientation, and all other available EXIF fields
 - **Image metadata:** Resolution (width × height) for all images
 - **Video metadata:** ffprobe for duration, resolution (width × height), and frame rate
   - **Note:** ffprobe process spawn + I/O adds ~50-100ms per video (not 2ms CPU-only)
   - Videos reduce effective throughput; adjust M (process pool size) if video-heavy library
-- **MIME/content type detection:** `python-magic` library (reads file headers)
-- **TODO:** Tool availability check at startup (ffprobe, exiftool, python-magic). Decision: auto-install, bundle binaries, or fail-fast with clear error (TBD at implementation time)
+- **MIME/content type detection:** `filetype` library (pure Python, reads magic bytes from file headers)
+- **Tool availability check:** 
+  - ffprobe (optional): If missing, warn user about missing video metadata (duration, resolution, frame rate)
+  - exiftool (optional): If missing, warn user that RAW formats (DNG, CR2, NEF, ARW) will have missing EXIF data
+  - User can proceed without either tool or cancel to install them
 
 ### Metadata Precedence
 

@@ -25,7 +25,8 @@ classifiers = [
 dependencies = [
     "gphotos-321sync-common>=0.1.0",
     "pillow>=10.0.0",
-    "python-magic>=0.4.27",
+    "filetype>=1.2.0",
+    "platformdirs>=3.0.0",
 ]
 
 [project.optional-dependencies]
