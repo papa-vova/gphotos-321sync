@@ -31,11 +31,11 @@ This document provides a step-by-step implementation plan for the media scanning
 | Phase 1: Foundation | ✅ | 8/8 |
 | Phase 2: Database Layer | ✅ | 6/6 |
 | Phase 3: Metadata Extraction | ✅ | 5/5 |
-| Phase 4: Discovery & Processing | ⬜ | 0/4 |
-| Phase 5: Parallel Scanner | ⬜ | 0/6 |
+| Phase 4: Discovery & Processing | ✅ | 4/4 |
+| Phase 5: Parallel Scanner | 🔄 | 0/6 |
 | Phase 6: Post-Scan & Validation | ⬜ | 0/2 |
 | Phase 7: Edge Cases | ⬜ | 0/2 |
-| **Total** | **58%** | **19/33** |
+| **Total** | **70%** | **23/33** |
 
 **Legend:** ⬜ Not Started | 🔄 In Progress | ✅ Completed | ⚠️ Blocked | ❌ Failed
 
@@ -345,7 +345,7 @@ This document provides a step-by-step implementation plan for the media scanning
 
 ### 4.1 File Discovery
 
-- **Status:** ⬜
+- **Status:** ✅
 - **File:** `src/gphotos_321sync/media_scanner/discovery.py`
 - **Function:** `discover_files(root_path: Path) -> Iterator[FileInfo]`
 - **Tasks:**
@@ -353,29 +353,29 @@ This document provides a step-by-step implementation plan for the media scanning
   - Identify media files and JSON sidecars
   - Pair files with sidecars
   - Yield `FileInfo` objects (includes parent folder for album_id)
-- **Tests:** Directory walking, file pairing, filtering
-- **Acceptance:** Discovers all media files and sidecars
+- **Tests:** 13 tests passing - Directory walking, file pairing, filtering, edge cases
+- **Acceptance:** ✅ Discovers all media files and sidecars
 
 ### 4.2 Album Discovery & Processing
 
-- **Status:** ⬜
+- **Status:** ✅
 - **File:** `src/gphotos_321sync/media_scanner/album_discovery.py`
-- **Function:** `discover_albums(root_path: Path) -> Iterator[AlbumInfo]`
+- **Function:** `discover_albums(root_path: Path, album_dal: AlbumDAL, scan_run_id: str) -> Iterator[AlbumInfo]`
 - **Tasks:**
   - Find folders with `metadata.json` (user albums)
   - Parse album metadata (handle errors gracefully)
   - Create year-based albums for `Photos from YYYY/` folders
   - Generate UUID5 album IDs from folder paths
   - Insert albums into database via `AlbumDAL`
-- **Tests:** User albums, year-based albums, metadata parsing errors, album_id generation
-- **Acceptance:** All albums discovered, parsed, and stored in database
-- **Note:** Must run BEFORE file processing (media items need album_id)
+- **Tests:** 17 tests passing - User albums, year-based albums, metadata parsing errors, album_id generation
+- **Acceptance:** ✅ All albums discovered, parsed, and stored in database
+- **Note:** Runs BEFORE file processing (media items need album_id)
 
 ### 4.3 File Processor (CPU Work)
 
-- **Status:** ⬜
+- **Status:** ✅
 - **File:** `src/gphotos_321sync/media_scanner/file_processor.py`
-- **Function:** `process_file_cpu_work(file_path: Path) -> dict`
+- **Function:** `process_file_cpu_work(file_path: Path, file_size: int, use_exiftool: bool, use_ffprobe: bool) -> dict`
 - **Tasks:**
   - EXIF extraction
   - Resolution extraction
@@ -384,24 +384,25 @@ This document provides a step-by-step implementation plan for the media scanning
   - MIME detection
   - Content fingerprint
   - Error handling (wrap in try/except, return error details)
-- **Tests:** Complete processing, partial metadata, error handling
-- **Acceptance:** CPU-bound work isolated, can run in process pool
-- **Note:** This runs in separate process in parallel architecture
+- **Tests:** 22 tests passing - Complete processing, partial metadata, error handling, edge cases
+- **Acceptance:** ✅ CPU-bound work isolated, can run in process pool
+- **Note:** Runs in separate process in parallel architecture
 
 ### 4.4 Metadata Coordinator (I/O Work)
 
-- **Status:** ⬜
+- **Status:** ✅
 - **File:** `src/gphotos_321sync/media_scanner/metadata_coordinator.py`
-- **Function:** `coordinate_metadata(file_info: FileInfo, cpu_result: dict, album_id: str) -> MediaItemRecord`
+- **Function:** `coordinate_metadata(file_info: FileInfo, cpu_result: dict, album_id: str, scan_run_id: str) -> MediaItemRecord`
 - **Tasks:**
   - Parse JSON sidecar (I/O)
   - Combine with CPU results
   - Apply metadata aggregation (precedence rules)
   - Create `MediaItemRecord` with album_id
   - Error handling (log and record errors)
-- **Tests:** Metadata combination, precedence, album_id assignment
-- **Acceptance:** Metadata coordinated correctly, album_id always present
-- **Note:** This runs in worker thread in parallel architecture
+  - Uses `normalize_path()` from common package for cross-platform consistency
+- **Tests:** 12 tests passing - Metadata combination, precedence, album_id assignment, error handling
+- **Acceptance:** ✅ Metadata coordinated correctly, album_id always present, paths normalized
+- **Note:** Runs in worker thread in parallel architecture
 
 ---
 
