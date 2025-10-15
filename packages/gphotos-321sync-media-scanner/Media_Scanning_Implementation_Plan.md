@@ -314,7 +314,7 @@ This document provides a step-by-step implementation plan for the media scanning
 - **Tests:** JPEG, PNG, MP4, unknown files
 - **Performance:** ~1ms per file
 - **Acceptance:** Detects MIME types correctly
-- **Note:** Uses `filetype` library (reads magic bytes) instead of libmagic for cross-platform compatibility. RAW formats (except CR2) return `application/octet-stream` and are handled by ExifTool.
+- **Note:** Uses `filetype` library (reads magic bytes) instead of libmagic for cross-platform compatibility. Most RAW formats return `application/octet-stream` (generic/unknown type) and are handled by ExifTool when enabled.
 
 ### 3.4 Video Metadata Extractor
 
