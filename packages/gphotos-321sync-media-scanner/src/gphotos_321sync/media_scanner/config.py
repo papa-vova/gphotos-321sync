@@ -19,6 +19,14 @@ class LoggingConfig(BaseModel):
 class ScannerConfig(BaseModel):
     """Scanner performance configuration."""
     
+    scan_path: str = Field(
+        default="",
+        description="Path to the folder to scan (extracted Takeout files)"
+    )
+    database_path: str | None = Field(
+        default=None,
+        description="Path to SQLite database file (default: scan_path/media.db)"
+    )
     worker_threads: int = Field(
         default_factory=lambda: os.cpu_count() * 2 if os.cpu_count() else 4,
         description="Number of I/O worker threads (default: 2 × CPU cores)"

@@ -1,0 +1,226 @@
+"""Metadata coordinator for I/O-bound work.
+
+This module handles I/O-intensive operations that run in worker threads:
+- JSON sidecar parsing
+- Metadata aggregation (combining CPU results with JSON data)
+- Creating database records
+"""
+
+import logging
+from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
+from typing import Optional
+import uuid
+
+from gphotos_321sync.common import normalize_path
+from .discovery import FileInfo
+from .metadata.json_parser import parse_json_sidecar
+from .metadata.aggregator import aggregate_metadata
+from .errors import ParseError
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class MediaItemRecord:
+    """Complete media item record ready for database insertion.
+    
+    This combines all metadata from various sources into a single record.
+    """
+    media_item_id: str
+    relative_path: str
+    album_id: str
+    title: Optional[str]
+    mime_type: Optional[str]
+    file_size: int
+    crc32: Optional[str]
+    content_fingerprint: Optional[str]
+    
+    # Dimensions
+    width: Optional[int]
+    height: Optional[int]
+    
+    # Video-specific
+    duration_seconds: Optional[float]
+    frame_rate: Optional[float]
+    
+    # Timestamps
+    capture_timestamp: Optional[datetime]
+    
+    # EXIF metadata
+    exif_datetime_original: Optional[datetime]
+    exif_datetime_digitized: Optional[datetime]
+    exif_gps_latitude: Optional[float]
+    exif_gps_longitude: Optional[float]
+    exif_gps_altitude: Optional[float]
+    exif_camera_make: Optional[str]
+    exif_camera_model: Optional[str]
+    exif_lens_make: Optional[str]
+    exif_lens_model: Optional[str]
+    exif_focal_length: Optional[float]
+    exif_f_number: Optional[float]
+    exif_iso: Optional[int]
+    exif_exposure_time: Optional[str]
+    exif_orientation: Optional[int]
+    
+    # Google Photos metadata
+    google_description: Optional[str]
+    google_geo_latitude: Optional[float]
+    google_geo_longitude: Optional[float]
+    google_geo_altitude: Optional[float]
+    
+    # Status
+    status: str = 'present'
+    scan_run_id: Optional[str] = None
+    
+    def to_dict(self) -> dict:
+        """Convert to dictionary for database insertion."""
+        return {
+            'media_item_id': self.media_item_id,
+            'relative_path': self.relative_path,
+            'album_id': self.album_id,
+            'title': self.title,
+            'mime_type': self.mime_type,
+            'file_size': self.file_size,
+            'crc32': self.crc32,
+            'content_fingerprint': self.content_fingerprint,
+            'width': self.width,
+            'height': self.height,
+            'duration_seconds': self.duration_seconds,
+            'frame_rate': self.frame_rate,
+            'capture_timestamp': self.capture_timestamp,
+            'exif_datetime_original': self.exif_datetime_original,
+            'exif_datetime_digitized': self.exif_datetime_digitized,
+            'exif_gps_latitude': self.exif_gps_latitude,
+            'exif_gps_longitude': self.exif_gps_longitude,
+            'exif_gps_altitude': self.exif_gps_altitude,
+            'exif_camera_make': self.exif_camera_make,
+            'exif_camera_model': self.exif_camera_model,
+            'exif_lens_make': self.exif_lens_make,
+            'exif_lens_model': self.exif_lens_model,
+            'exif_focal_length': self.exif_focal_length,
+            'exif_f_number': self.exif_f_number,
+            'exif_iso': self.exif_iso,
+            'exif_exposure_time': self.exif_exposure_time,
+            'exif_orientation': self.exif_orientation,
+            'google_description': self.google_description,
+            'google_geo_latitude': self.google_geo_latitude,
+            'google_geo_longitude': self.google_geo_longitude,
+            'google_geo_altitude': self.google_geo_altitude,
+            'status': self.status,
+            'scan_run_id': self.scan_run_id,
+        }
+
+
+def coordinate_metadata(
+    file_info: FileInfo,
+    cpu_result: dict,
+    album_id: str,
+    scan_run_id: str
+) -> MediaItemRecord:
+    """Coordinate metadata from multiple sources.
+    
+    This function runs in a worker thread and performs I/O operations:
+    - Parses JSON sidecar (if present)
+    - Combines CPU results with JSON metadata
+    - Applies metadata aggregation (precedence rules)
+    - Creates MediaItemRecord for database insertion
+    
+    Args:
+        file_info: File discovery information
+        cpu_result: Results from CPU-bound processing
+        album_id: Album ID for this file
+        scan_run_id: Current scan run ID
+        
+    Returns:
+        MediaItemRecord ready for database insertion
+        
+    Raises:
+        Exception: Any errors during processing (caller should handle)
+    """
+    # 1. Parse JSON sidecar if present (I/O operation)
+    json_metadata = {}
+    if file_info.json_sidecar_path:
+        try:
+            json_metadata = parse_json_sidecar(file_info.json_sidecar_path)
+            logger.debug(f"Parsed JSON sidecar for {file_info.relative_path}")
+        except (ParseError, Exception) as e:
+            logger.warning(f"Failed to parse JSON sidecar for {file_info.relative_path}: {e}")
+            # Continue without JSON metadata
+    
+    # 2. Extract data from CPU result
+    exif_data = cpu_result.get('exif_data', {})
+    video_data = cpu_result.get('video_data', {})
+    
+    # 3. Aggregate metadata (apply precedence rules: JSON > EXIF > filename > NULL)
+    aggregated = aggregate_metadata(
+        file_path=file_info.file_path,
+        json_metadata=json_metadata,
+        exif_data=exif_data,
+        video_data=video_data
+    )
+    
+    # 4. Generate media_item_id (UUID4 - random, stable internal ID)
+    media_item_id = str(uuid.uuid4())
+    
+    # 5. Extract EXIF fields
+    exif_datetime_original = exif_data.get('datetime_original')
+    exif_datetime_digitized = exif_data.get('datetime_digitized')
+    exif_gps = exif_data.get('gps', {})
+    exif_camera_make = exif_data.get('camera_make')
+    exif_camera_model = exif_data.get('camera_model')
+    exif_lens_make = exif_data.get('lens_make')
+    exif_lens_model = exif_data.get('lens_model')
+    exif_focal_length = exif_data.get('focal_length')
+    exif_f_number = exif_data.get('f_number')
+    exif_iso = exif_data.get('iso')
+    exif_exposure_time = exif_data.get('exposure_time')
+    exif_orientation = exif_data.get('orientation')
+    
+    # 6. Extract Google Photos metadata from JSON
+    google_description = json_metadata.get('description')
+    google_geo = json_metadata.get('geoData', {})
+    
+    # 7. Extract video metadata
+    duration_seconds = video_data.get('duration') if video_data else None
+    frame_rate = video_data.get('frame_rate') if video_data else None
+    
+    # 8. Create MediaItemRecord
+    record = MediaItemRecord(
+        media_item_id=media_item_id,
+        relative_path=normalize_path(file_info.relative_path),
+        album_id=album_id,
+        title=aggregated.get('title'),
+        mime_type=cpu_result.get('mime_type'),
+        file_size=file_info.file_size,
+        crc32=cpu_result.get('crc32'),
+        content_fingerprint=cpu_result.get('content_fingerprint'),
+        width=cpu_result.get('width'),
+        height=cpu_result.get('height'),
+        duration_seconds=duration_seconds,
+        frame_rate=frame_rate,
+        capture_timestamp=aggregated.get('capture_timestamp'),
+        exif_datetime_original=exif_datetime_original,
+        exif_datetime_digitized=exif_datetime_digitized,
+        exif_gps_latitude=exif_gps.get('latitude'),
+        exif_gps_longitude=exif_gps.get('longitude'),
+        exif_gps_altitude=exif_gps.get('altitude'),
+        exif_camera_make=exif_camera_make,
+        exif_camera_model=exif_camera_model,
+        exif_lens_make=exif_lens_make,
+        exif_lens_model=exif_lens_model,
+        exif_focal_length=exif_focal_length,
+        exif_f_number=exif_f_number,
+        exif_iso=exif_iso,
+        exif_exposure_time=exif_exposure_time,
+        exif_orientation=exif_orientation,
+        google_description=google_description,
+        google_geo_latitude=google_geo.get('latitude'),
+        google_geo_longitude=google_geo.get('longitude'),
+        google_geo_altitude=google_geo.get('altitude'),
+        status='present',
+        scan_run_id=scan_run_id
+    )
+    
+    return record
