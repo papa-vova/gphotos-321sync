@@ -28,13 +28,13 @@ This document provides a step-by-step implementation plan for the media scanning
 
 | Phase | Status | Completion |
 |-------|--------|------------|
-| Phase 1: Foundation | ✅ Completed | 8/8 |
-| Phase 2: Database Layer | ⬜ Not Started | 0/6 |
-| Phase 3: Metadata Extraction | ✅ Partial | 1/5 |
-| Phase 4: Discovery & Processing | ⬜ Not Started | 0/4 |
-| Phase 5: Parallel Scanner | ⬜ Not Started | 0/6 |
-| Phase 6: Post-Scan & Validation | ⬜ Not Started | 0/2 |
-| Phase 7: Edge Cases | ⬜ Not Started | 0/2 |
+| Phase 1: Foundation | ✅ | 8/8 |
+| Phase 2: Database Layer | ⬜ | 0/6 |
+| Phase 3: Metadata Extraction | 🔄 | 1/5 |
+| Phase 4: Discovery & Processing | ⬜ | 0/4 |
+| Phase 5: Parallel Scanner | ⬜ | 0/6 |
+| Phase 6: Post-Scan & Validation | ⬜ | 0/2 |
+| Phase 7: Edge Cases | ⬜ | 0/2 |
 | **Total** | **27%** | **9/33** |
 
 **Legend:** ⬜ Not Started | 🔄 In Progress | ✅ Completed | ⚠️ Blocked | ❌ Failed
@@ -73,9 +73,9 @@ This document provides a step-by-step implementation plan for the media scanning
 - **Status:** ✅
 - **File:** `src/gphotos_321sync/media_scanner/path_utils.py`
 - **Functions:**
-  - `normalize_path(path: Path) -> str` (moved to common package - NFC normalization, forward slashes)
   - `should_scan_file(path: Path) -> bool` (excludes only system/hidden/temp files)
-- **Tests:** Unicode handling, path normalization, file filtering
+  - `is_hidden(path: Path) -> bool` (cross-platform hidden file detection)
+- **Tests:** File filtering, hidden file detection
 - **Acceptance:** All path tests pass
 - **CRITICAL:** Does NOT filter by extension! MIME detection determines if file is media.
   - Files without extensions: scanned ✅
@@ -88,11 +88,9 @@ This document provides a step-by-step implementation plan for the media scanning
 - **File:** `src/gphotos_321sync/media_scanner/fingerprint.py`
 - **Functions:**
   - `compute_content_fingerprint(file_path: Path, file_size: int) -> str` (SHA-256 head+tail)
-  - `compute_crc32(file_path: Path) -> int` (moved to common package - re-exported for compatibility)
 - **Tests:** Small/large file handling, change detection
-- **Performance:** Fingerprint ~2-5ms, CRC32 ~10ms (7.7 MB avg)
+- **Performance:** Fingerprint ~2-5ms
 - **Acceptance:** Detects file changes correctly
-- **Note:** CRC32 is now in `gphotos_321sync.common.checksums` and shared with extractor
 
 ### 1.5 Configuration Module
 
