@@ -23,7 +23,7 @@ class AlbumInfo:
     
     Attributes:
         album_id: UUID5 generated from folder path
-        folder_path: Path relative to scan root
+        album_folder_path: Path relative to scan root
         title: Album title
         description: Album description (optional)
         creation_timestamp: When album was created (optional)
@@ -32,7 +32,7 @@ class AlbumInfo:
         metadata_path: Path to metadata.json if exists
     """
     album_id: str
-    folder_path: Path
+    album_folder_path: Path
     title: str
     description: Optional[str] = None
     creation_timestamp: Optional[datetime] = None
@@ -150,13 +150,13 @@ def discover_albums(target_media_path: Path, album_dal: AlbumDAL, scan_run_id: s
         
         # Calculate relative path for album_id generation
         try:
-            relative_path = folder_path.relative_to(target_media_path)
+            album_folder_path = folder_path.relative_to(target_media_path)
         except ValueError:
             logger.warning(f"Folder is not relative to target media path: {folder_path}")
             continue
         
         # Generate deterministic album_id from folder path
-        album_id = album_dal.generate_album_id(str(relative_path))
+        album_id = album_dal.generate_album_id(str(album_folder_path))
         
         # Check for metadata.json (user album)
         metadata_path = folder_path / "metadata.json"
@@ -194,7 +194,7 @@ def discover_albums(target_media_path: Path, album_dal: AlbumDAL, scan_run_id: s
         # Insert/update album in database
         album_data = {
             'album_id': album_id,
-            'folder_path': str(relative_path),
+            'folder_path': str(album_folder_path),
             'title': title,
             'description': description,
             'creation_timestamp': creation_timestamp,
@@ -204,7 +204,7 @@ def discover_albums(target_media_path: Path, album_dal: AlbumDAL, scan_run_id: s
         }
         
         # Check if album already exists
-        existing = album_dal.get_album_by_path(str(relative_path))
+        existing = album_dal.get_album_by_path(str(album_folder_path))
         if existing:
             # Update existing album
             album_dal.update_album(
@@ -226,7 +226,7 @@ def discover_albums(target_media_path: Path, album_dal: AlbumDAL, scan_run_id: s
         # Yield album info
         yield AlbumInfo(
             album_id=album_id,
-            folder_path=relative_path,
+            album_folder_path=album_folder_path,
             title=title,
             description=description,
             creation_timestamp=creation_timestamp,

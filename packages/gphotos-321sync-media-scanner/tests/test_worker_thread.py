@@ -51,7 +51,7 @@ def sample_file_info(tmp_path):
         relative_path="Photos/test.jpg",
         file_size=12,
         json_sidecar_path=None,
-        parent_folder=tmp_path / "Photos",
+        album_folder_path=Path("Photos"),
     )
 
 
@@ -265,7 +265,7 @@ class TestWorkerThreadMain:
                 relative_path=f"Photos/test{i}.jpg",
                 file_size=len(f"content {i}"),
                 json_sidecar_path=None,
-                parent_folder=tmp_path / "Photos",
+                album_folder_path=Path("Photos"),
             )
             files.append(file_info)
             work_queue.put((file_info, f"album-{i}"))
@@ -353,7 +353,7 @@ class TestWorkerThreadBatchMain:
                 relative_path=f"Photos/test{i}.jpg",
                 file_size=len(f"content {i}"),
                 json_sidecar_path=None,
-                parent_folder=tmp_path / "Photos",
+                album_folder_path=Path("Photos"),
             )
             work_queue.put((file_info, f"album-{i}"))
         
@@ -403,7 +403,7 @@ class TestWorkerThreadBatchMain:
                 relative_path=f"Photos/test{i}.jpg",
                 file_size=len(f"content {i}"),
                 json_sidecar_path=None,
-                parent_folder=tmp_path / "Photos",
+                album_folder_path=Path("Photos"),
             )
             work_queue.put((file_info, f"album-{i}"))
         
@@ -468,7 +468,7 @@ class TestWorkerThreadBatchMain:
                 relative_path=f"Photos/test{i}.jpg",
                 file_size=len(f"content {i}"),
                 json_sidecar_path=None,
-                parent_folder=tmp_path / "Photos",
+                album_folder_path=Path("Photos"),
             )
             work_queue.put((file_info, f"album-{i}"))
         

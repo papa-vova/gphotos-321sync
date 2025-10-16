@@ -21,7 +21,7 @@ def test_file_info(tmp_path):
     return FileInfo(
         file_path=file_path,
         relative_path=Path("Album/test.jpg"),
-        parent_folder=Path("Album"),
+        album_folder_path=Path("Album"),
         json_sidecar_path=None,
         file_size=100
     )
@@ -124,7 +124,7 @@ def test_coordinate_metadata_with_json_sidecar(tmp_path, test_cpu_result):
     file_info = FileInfo(
         file_path=file_path,
         relative_path=Path("Album/test.jpg"),
-        parent_folder=Path("Album"),
+        album_folder_path=Path("Album"),
         json_sidecar_path=json_path,
         file_size=100
     )
@@ -155,7 +155,7 @@ def test_coordinate_metadata_json_parse_error(tmp_path, test_cpu_result):
     file_info = FileInfo(
         file_path=file_path,
         relative_path=Path("Album/test.jpg"),
-        parent_folder=Path("Album"),
+        album_folder_path=Path("Album"),
         json_sidecar_path=json_path,
         file_size=100
     )

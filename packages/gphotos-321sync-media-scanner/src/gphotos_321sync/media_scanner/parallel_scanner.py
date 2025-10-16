@@ -124,7 +124,7 @@ class ParallelScanner:
             album_map = {}  # folder_path -> album_id
             
             for album_info in discover_albums(target_media_path, album_dal, scan_run_id):
-                album_map[str(album_info.folder_path)] = album_info.album_id
+                album_map[str(album_info.album_folder_path)] = album_info.album_id
                 album_count += 1
             
             logger.info(f"Discovered {album_count} albums")
@@ -264,20 +264,20 @@ class ParallelScanner:
         work_queue = self.queue_manager.work_queue
         
         for file_info in files_to_process:
-            # Determine album_id from parent folder (already relative)
-            parent_folder_str = str(file_info.parent_folder)
-            album_id = album_map.get(parent_folder_str)
+            # Determine album_id from album folder path (relative)
+            album_folder_str = str(file_info.album_folder_path)
+            album_id = album_map.get(album_folder_str)
             
             if album_id is None:
                 # Fallback: use parent folder path as album_id
                 # This shouldn't happen if album discovery is correct
                 logger.warning(
-                    f"No album found for folder: {parent_folder_str}, "
+                    f"No album found for folder: {album_folder_str}, "
                     f"file: {file_info.relative_path}"
                 )
                 # Generate album_id from folder path
                 from .dal.albums import AlbumDAL
-                album_id = AlbumDAL.generate_album_id(parent_folder_str)
+                album_id = AlbumDAL.generate_album_id(album_folder_str)
             
             # Put work item in queue
             work_queue.put((file_info, album_id))

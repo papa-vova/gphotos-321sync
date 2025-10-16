@@ -19,7 +19,7 @@ A **work item** is a tuple of `(FileInfo, album_id)`:
 class FileInfo:
     file_path: Path           # Absolute path to the media file
     relative_path: Path       # Path relative to scan root
-    parent_folder: Path       # Parent folder path (for album_id lookup)
+    album_folder_path: Path   # Album folder RELATIVE path (for album_id lookup)
     json_sidecar_path: Optional[Path]  # Path to JSON sidecar if exists
     file_size: int            # Size of the file in bytes
 ```
@@ -32,24 +32,24 @@ If scanning target media path `/mnt/photos/` and finding `/mnt/photos/2023/Vacat
 FileInfo(
     file_path=Path("/mnt/photos/2023/Vacation/IMG_1234.jpg"),
     relative_path=Path("2023/Vacation/IMG_1234.jpg"),
-    parent_folder=Path("/mnt/photos/2023/Vacation"),
+    album_folder_path=Path("2023/Vacation"),  # RELATIVE path
     json_sidecar_path=Path("/mnt/photos/2023/Vacation/IMG_1234.jpg.json"),  # or None
     file_size=2048576  # bytes
 )
-album_id="uuid-for-vacation-album"  # Looked up from album_map["/mnt/photos/2023/Vacation"]
+album_id="uuid-for-vacation-album"  # Looked up from album_map["2023/Vacation"]
 ```
 
 **Field Purposes:**
 
 - **`file_path`**: Used to read the actual media file for processing
 - **`relative_path`**: Stored in database as the file's identifier (portable across systems, relative to target_media_path)
-- **`parent_folder`**: Used to lookup which album this file belongs to (see Album Relationship below)
+- **`album_folder_path`**: Used to lookup which album this file belongs to (see Album Relationship below)
 - **`json_sidecar_path`**: Google Takeout metadata file (contains timestamps, GPS, description)
 - **`file_size`**: Used for change detection (if size changed, file changed)
 
 ### Album Relationship
 
-**`parent_folder` is NOT the album title** - it's the folder path used to lookup the album.
+**`album_folder_path` is NOT the album title** - it's the folder path used to lookup the album.
 
 **How it works:**
 
@@ -57,16 +57,16 @@ album_id="uuid-for-vacation-album"  # Looked up from album_map["/mnt/photos/2023
 
    ```python
    album_map = {
-       "/mnt/photos/2023/Vacation": "uuid-for-vacation-album",
-       "/mnt/photos/2023/Birthday": "uuid-for-birthday-album",
+       "2023/Vacation": "uuid-for-vacation-album",
+       "2023/Birthday": "uuid-for-birthday-album",
    }
    ```
 
-2. **Phase 3** uses `parent_folder` to lookup the `album_id`:
+2. **Phase 3** uses `album_folder_path` to lookup the `album_id`:
 
    ```python
-   file_info.parent_folder = Path("/mnt/photos/2023/Vacation")
-   album_id = album_map[str(file_info.parent_folder)]  # "uuid-for-vacation-album"
+   file_info.album_folder_path = Path("2023/Vacation")  # RELATIVE path
+   album_id = album_map[str(file_info.album_folder_path)]  # "uuid-for-vacation-album"
    ```
 
 **Album metadata** (stored separately in `albums` table):
@@ -74,7 +74,7 @@ album_id="uuid-for-vacation-album"  # Looked up from album_map["/mnt/photos/2023
 ```python
 AlbumInfo(
     album_id="uuid-for-vacation-album",
-    folder_path=Path("2023/Vacation"),  # Relative path
+    album_folder_path=Path("2023/Vacation"),  # Relative path
     title="Summer Vacation 2023",       # From metadata.json OR folder name
     description="Trip to Hawaii",       # From metadata.json (optional)
     creation_timestamp=datetime(...),   # From metadata.json (optional)
@@ -87,9 +87,9 @@ AlbumInfo(
 
 - **If `metadata.json` exists**: `title` comes from JSON (e.g., "Summer Vacation 2023")
 - **If folder name is "Photos from 2023"**: `title = "Photos from 2023"` (year-based album)
-- **Otherwise**: `title = folder_path.name` (e.g., "Vacation")
+- **Otherwise**: `title = album_folder_path.name` (e.g., "Vacation")
 
-**Key point:** `parent_folder` is just a lookup key. The actual album title and metadata are stored in the `albums` table.
+**Key point:** `album_folder_path` is just a lookup key. The actual album title and metadata are stored in the `albums` table.
 
 ---
 

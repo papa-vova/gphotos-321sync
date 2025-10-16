@@ -20,13 +20,13 @@ class FileInfo:
     Attributes:
         file_path: Absolute path to the media file
         relative_path: Path relative to scan root
-        parent_folder: Parent folder path (for album_id generation)
+        album_folder_path: Album folder path (relative to scan root)
         json_sidecar_path: Path to JSON sidecar if exists
         file_size: Size of the file in bytes
     """
     file_path: Path
     relative_path: Path
-    parent_folder: Path
+    album_folder_path: Path
     json_sidecar_path: Optional[Path]
     file_size: int
 
@@ -116,8 +116,8 @@ def discover_files(target_media_path: Path) -> Iterator[FileInfo]:
             logger.warning(f"File is not relative to target media path: {file_path}")
             continue
         
-        # Get parent folder (for album_id)
-        parent_folder = file_path.parent.relative_to(target_media_path)
+        # Get album folder path (relative) for album_id
+        album_folder_path = file_path.parent.relative_to(target_media_path)
         
         # Check for JSON sidecar
         json_sidecar_path = json_sidecars.get(file_path)
@@ -129,7 +129,7 @@ def discover_files(target_media_path: Path) -> Iterator[FileInfo]:
         yield FileInfo(
             file_path=file_path,
             relative_path=relative_path,
-            parent_folder=parent_folder,
+            album_folder_path=album_folder_path,
             json_sidecar_path=json_sidecar_path,
             file_size=file_size
         )

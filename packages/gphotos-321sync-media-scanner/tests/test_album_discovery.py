@@ -182,7 +182,7 @@ def test_discover_albums_regular_folder(test_albums, album_dal):
     albums = list(discover_albums(test_albums, album_dal, "scan-123"))
     
     # Find the regular folder
-    regular = next(a for a in albums if a.folder_path == Path("Random Folder"))
+    regular = next(a for a in albums if a.album_folder_path == Path("Random Folder"))
     
     assert regular.is_user_album is False
     assert regular.title == "Random Folder"  # Uses folder name
@@ -196,7 +196,7 @@ def test_discover_albums_nested(test_albums, album_dal):
     # Find the nested album
     nested = next(a for a in albums if a.title == "January Photos")
     
-    assert nested.folder_path == Path("2024") / "January"
+    assert nested.album_folder_path == Path("2024") / "January"
     assert nested.is_user_album is True
 
 
@@ -206,7 +206,7 @@ def test_discover_albums_invalid_metadata(test_albums, album_dal):
     
     # Should still discover the album, but with error status
     # Check that it was discovered (uses folder name as fallback)
-    invalid = next((a for a in albums if a.folder_path == Path("Invalid Album")), None)
+    invalid = next((a for a in albums if a.album_folder_path == Path("Invalid Album")), None)
     assert invalid is not None
     assert invalid.title == "Invalid Album"  # Falls back to folder name
 
@@ -217,7 +217,7 @@ def test_discover_albums_database_insertion(test_albums, album_dal):
     
     # Check that albums were inserted
     for album in albums:
-        db_album = album_dal.get_album_by_path(str(album.folder_path))
+        db_album = album_dal.get_album_by_path(str(album.album_folder_path))
         assert db_album is not None
         assert db_album['album_id'] == album.album_id
         assert db_album['title'] == album.title
@@ -230,8 +230,8 @@ def test_discover_albums_album_id_generation(test_albums, album_dal):
     albums2 = list(discover_albums(test_albums, album_dal, "scan-456"))
     
     # Same folders should have same album_ids
-    albums1_dict = {str(a.folder_path): a.album_id for a in albums1}
-    albums2_dict = {str(a.folder_path): a.album_id for a in albums2}
+    albums1_dict = {str(a.album_folder_path): a.album_id for a in albums1}
+    albums2_dict = {str(a.album_folder_path): a.album_id for a in albums2}
     
     for folder_path in albums1_dict:
         assert albums1_dict[folder_path] == albums2_dict[folder_path]
@@ -269,5 +269,5 @@ def test_discover_albums_update_existing(test_albums, album_dal):
     
     # Check that albums were updated (same album_id, new scan_run_id)
     for album in albums2:
-        db_album = album_dal.get_album_by_path(str(album.folder_path))
+        db_album = album_dal.get_album_by_path(str(album.album_folder_path))
         assert db_album['scan_run_id'] == "scan-456"

@@ -92,19 +92,19 @@ def test_discover_files_relative_paths(test_tree):
         assert reconstructed == file_info.file_path
 
 
-def test_discover_files_parent_folder(test_tree):
-    """Test that parent folder is correctly identified."""
+def test_discover_files_album_folder(test_tree):
+    """Test that album folder path is correctly identified."""
     files = {f.file_path.name: f for f in discover_files(test_tree)}
     
     # Files in Album 1
-    assert files["photo1.jpg"].parent_folder == Path("Album 1")
-    assert files["photo2.png"].parent_folder == Path("Album 1")
+    assert files["photo1.jpg"].album_folder_path == Path("Album 1")
+    assert files["photo2.png"].album_folder_path == Path("Album 1")
     
     # Files in Album 2
-    assert files["photo3.jpg"].parent_folder == Path("Album 2")
+    assert files["photo3.jpg"].album_folder_path == Path("Album 2")
     
     # Files in nested folder
-    assert files["photo4.heic"].parent_folder == Path("Year 2023") / "Vacation"
+    assert files["photo4.heic"].album_folder_path == Path("Year 2023") / "Vacation"
 
 
 def test_discover_files_excludes_json(test_tree):
