@@ -140,30 +140,32 @@ Main Thread → Work Queue → Worker Threads → Process Pool → Results Queue
                             ↓
 ┌─────────────────────────────────────────────────────────────┐
 │ PHASE 3: Parallel Processing                                │
-│                                                              │
+│                                                             │
 │ Step 1: Main thread puts (FileInfo, album_id) on work_queue │
 │         work_queue.put((file_info, album_id))               │
-│                                                              │
+│                                                             │
 │ Step 2: Worker thread gets item from work_queue             │
 │         item = work_queue.get()  # BLOCKS until available   │
-│                                                              │
+│                                                             │
 │ Step 3: Worker thread submits CPU work to process pool      │
 │         future = pool.apply_async(process_file_cpu_work)    │
 │         cpu_result = future.get()  # BLOCKS until done      │
-│                                                              │
+│                                                             │
 │ Step 4: Worker thread parses JSON sidecar (I/O)             │
-│         metadata = coordinate_metadata(file_info, cpu_result)│
-│                                                              │
+│         metadata = coordinate_metadata(file_info,           │
+│         cpu_result)                                         │
+│                                                             │
 │ Step 5: Worker thread puts result on results_queue          │
 │         results_queue.put({"type": "media_item", ...})      │
 │         work_queue.task_done()  # Mark work item complete   │
-│                                                              │
+│                                                             │
 │ Step 6: Writer thread gets batch from results_queue         │
-│         result = results_queue.get()  # BLOCKS until available│
-│                                                              │
+│         result = results_queue.get()  # BLOCKS until        │
+│         available                                           │
+│                                                             │
 │ Step 7: Writer thread batches results (100 items)           │
 │         batch.append(result)                                │
-│                                                              │
+│                                                             │
 │ Step 8: Writer thread writes batch to DB                    │
 │         conn.execute("BEGIN")                               │
 │         for item in batch: insert_media_item(item)          │
