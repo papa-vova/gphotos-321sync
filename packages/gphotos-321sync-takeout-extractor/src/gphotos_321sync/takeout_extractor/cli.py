@@ -35,7 +35,7 @@ def progress_callback(logger: logging.Logger, current: int, total: int, name: st
 def extract_command(
     config: 'TakeoutExtractorConfig',
     source_dir_override: Optional[Path] = None,
-    target_dir_override: Optional[Path] = None,
+    target_media_path_override: Optional[Path] = None,
     verify_override: Optional[bool] = None
 ) -> int:
     """Extract Takeout archives.
@@ -43,7 +43,7 @@ def extract_command(
     Args:
         config: Configuration object
         source_dir_override: Optional override for source directory
-        target_dir_override: Optional override for target directory
+        target_media_path_override: Optional override for target media directory
         verify_override: Optional override for verification
     
     Returns:
@@ -56,7 +56,7 @@ def extract_command(
     
     # Apply overrides
     source_dir = source_dir_override if source_dir_override else Path(config.extraction.source_dir)
-    target_dir = target_dir_override if target_dir_override else Path(config.extraction.target_dir)
+    target_media_path = target_media_path_override if target_media_path_override else Path(config.extraction.target_media_path)
     verify = verify_override if verify_override is not None else config.extraction.verify_checksums
     max_retry_attempts = config.extraction.max_retry_attempts
     initial_retry_delay = config.extraction.initial_retry_delay
@@ -65,16 +65,16 @@ def extract_command(
     
     try:
         logger.info(f"Source directory: {source_dir}")
-        logger.info(f"Target directory: {target_dir}")
+        logger.info(f"Target media directory: {target_media_path}")
         
         # Validate source exists
         if not source_dir.exists():
             logger.error(f"Source directory does not exist: {source_dir}")
             return 1
         
-        # Validate target exists
-        if not target_dir.exists():
-            logger.error(f"Target directory does not exist: {target_dir}")
+        # Validate target media path exists
+        if not target_media_path.exists():
+            logger.error(f"Target media directory does not exist: {target_media_path}")
             return 1
         
         # Create state file in temp directory
@@ -85,7 +85,7 @@ def extract_command(
         # Create extractor and run
         extractor = TakeoutExtractor(
             source_dir=source_dir,
-            target_dir=target_dir,
+            target_media_path=target_media_path,
             verify_integrity=verify,
             preserve_structure=False,
             max_retry_attempts=max_retry_attempts,
@@ -137,10 +137,10 @@ def main() -> int:
         help="Directory containing Takeout archives (overrides config)"
     )
     parser.add_argument(
-        "--target-dir",
+        "--target-media-path",
         type=Path,
         required=False,
-        help="Directory to extract archives to (overrides config)"
+        help="Target media directory to extract archives to (overrides config)"
     )
     parser.add_argument(
         "--no-verify",
@@ -170,7 +170,7 @@ def main() -> int:
     return extract_command(
         config=config,
         source_dir_override=args.source_dir,
-        target_dir_override=args.target_dir,
+        target_media_path_override=args.target_media_path,
         verify_override=not args.no_verify if args.no_verify else None
     )
 

@@ -48,11 +48,11 @@ def temp_source_dir(tmp_path):
 
 
 @pytest.fixture
-def temp_target_dir(tmp_path):
-    """Create a temporary target directory."""
-    target_dir = tmp_path / "target"
-    target_dir.mkdir()
-    return target_dir
+def temp_target_media_path(tmp_path):
+    """Create a temporary target media directory."""
+    target_media_path = tmp_path / "target"
+    target_media_path.mkdir()
+    return target_media_path
 
 
 class TestArchiveDiscovery:
@@ -119,34 +119,34 @@ class TestArchiveDiscovery:
 class TestArchiveExtractor:
     """Test archive extraction functionality."""
     
-    def test_extract_zip(self, temp_source_dir, temp_target_dir):
+    def test_extract_zip(self, temp_source_dir, temp_target_media_path):
         """Test extracting a ZIP archive."""
         discovery = ArchiveDiscovery(temp_source_dir)
         archives = discovery.discover()
         
         zip_archive = next(a for a in archives if a.format == ArchiveFormat.ZIP)
         
-        extractor = ArchiveExtractor(temp_target_dir)
+        extractor = ArchiveExtractor(temp_target_media_path)
         extract_path = extractor.extract(zip_archive)
         
         assert extract_path.exists()
         assert (extract_path / "test_file.txt").exists()
         assert (extract_path / "subdir" / "nested.txt").exists()
     
-    def test_extract_tar_gz(self, temp_source_dir, temp_target_dir):
+    def test_extract_tar_gz(self, temp_source_dir, temp_target_media_path):
         """Test extracting a TAR.GZ archive."""
         discovery = ArchiveDiscovery(temp_source_dir)
         archives = discovery.discover()
         
         tar_archive = next(a for a in archives if a.format == ArchiveFormat.TAR_GZ)
         
-        extractor = ArchiveExtractor(temp_target_dir)
+        extractor = ArchiveExtractor(temp_target_media_path)
         extract_path = extractor.extract(tar_archive)
         
         assert extract_path.exists()
         assert (extract_path / "test_file.txt").exists()
     
-    def test_extract_with_progress(self, temp_source_dir, temp_target_dir):
+    def test_extract_with_progress(self, temp_source_dir, temp_target_media_path):
         """Test extraction with progress callback."""
         discovery = ArchiveDiscovery(temp_source_dir)
         archives = discovery.discover()
@@ -158,24 +158,24 @@ class TestArchiveExtractor:
         def progress_callback(current, total):
             progress_calls.append((current, total))
         
-        extractor = ArchiveExtractor(temp_target_dir)
+        extractor = ArchiveExtractor(temp_target_media_path)
         extractor.extract(zip_archive, progress_callback=progress_callback)
         
         assert len(progress_calls) > 0
         assert progress_calls[-1][0] == progress_calls[-1][1]  # Last call should be complete
     
-    def test_extract_all(self, temp_source_dir, temp_target_dir):
+    def test_extract_all(self, temp_source_dir, temp_target_media_path):
         """Test extracting multiple archives."""
         discovery = ArchiveDiscovery(temp_source_dir)
         archives = discovery.discover()
         
-        extractor = ArchiveExtractor(temp_target_dir)
+        extractor = ArchiveExtractor(temp_target_media_path)
         results = extractor.extract_all(archives)
         
         assert len(results) == 2
         assert all(path is not None for path in results.values())
     
-    def test_preserve_structure(self, temp_source_dir, temp_target_dir):
+    def test_preserve_structure(self, temp_source_dir, temp_target_media_path):
         """Test preserve_structure option."""
         discovery = ArchiveDiscovery(temp_source_dir)
         archives = discovery.discover()
@@ -183,12 +183,12 @@ class TestArchiveExtractor:
         zip_archive = next(a for a in archives if a.format == ArchiveFormat.ZIP)
         
         # With preserve_structure=True (default)
-        extractor_preserve = ArchiveExtractor(temp_target_dir, preserve_structure=True)
+        extractor_preserve = ArchiveExtractor(temp_target_media_path, preserve_structure=True)
         extract_path = extractor_preserve.extract(zip_archive)
         assert extract_path.name == zip_archive.path.stem
         
         # With preserve_structure=False
-        target_dir_2 = temp_target_dir.parent / "target2"
+        target_dir_2 = temp_target_media_path.parent / "target2"
         target_dir_2.mkdir()  # Must create target directory
         extractor_no_preserve = ArchiveExtractor(target_dir_2, preserve_structure=False)
         extract_path_2 = extractor_no_preserve.extract(zip_archive)
@@ -198,11 +198,11 @@ class TestArchiveExtractor:
 class TestTakeoutExtractor:
     """Test high-level TakeoutExtractor."""
     
-    def test_run(self, temp_source_dir, temp_target_dir):
+    def test_run(self, temp_source_dir, temp_target_media_path):
         """Test complete extraction workflow."""
         extractor = TakeoutExtractor(
             source_dir=temp_source_dir,
-            target_dir=temp_target_dir
+            target_media_path=temp_target_media_path
         )
         
         results = extractor.run()
@@ -210,7 +210,7 @@ class TestTakeoutExtractor:
         assert len(results) == 2
         assert all(path is not None for path in results.values())
     
-    def test_run_with_progress(self, temp_source_dir, temp_target_dir):
+    def test_run_with_progress(self, temp_source_dir, temp_target_media_path):
         """Test extraction with progress callback."""
         progress_calls = []
         
@@ -219,7 +219,7 @@ class TestTakeoutExtractor:
         
         extractor = TakeoutExtractor(
             source_dir=temp_source_dir,
-            target_dir=temp_target_dir
+            target_media_path=temp_target_media_path
         )
         
         extractor.run(progress_callback=progress_callback)
@@ -232,12 +232,12 @@ class TestTakeoutExtractor:
         source_dir = tmp_path / "empty_source"
         source_dir.mkdir()
         
-        target_dir = tmp_path / "target"
-        target_dir.mkdir()  # Must create target directory
+        target_media_path = tmp_path / "target"
+        target_media_path.mkdir()  # Must create target media directory
         
         extractor = TakeoutExtractor(
             source_dir=source_dir,
-            target_dir=target_dir
+            target_media_path=target_media_path
         )
         
         results = extractor.run()
@@ -267,13 +267,13 @@ class TestExtractionState:
         assert loaded_state is not None
         assert loaded_state.session_id == "test_session"
     
-    def test_resume_extraction(self, temp_source_dir, temp_target_dir, tmp_path):
+    def test_resume_extraction(self, temp_source_dir, temp_target_media_path, tmp_path):
         """Test resuming an interrupted extraction."""
         state_file = tmp_path / "state.json"
         
         # First extraction - will be interrupted
         extractor1 = ArchiveExtractor(
-            temp_target_dir,
+            temp_target_media_path,
             enable_resume=True,
             state_file=state_file
         )
@@ -290,7 +290,7 @@ class TestExtractionState:
         
         # Second extraction - should resume
         extractor2 = ArchiveExtractor(
-            temp_target_dir,
+            temp_target_media_path,
             enable_resume=True,
             state_file=state_file
         )
@@ -303,12 +303,12 @@ class TestExtractionState:
 class TestRetryLogic:
     """Test retry with exponential backoff."""
     
-    def test_retry_on_transient_failure(self, temp_source_dir, temp_target_dir, tmp_path):
+    def test_retry_on_transient_failure(self, temp_source_dir, temp_target_media_path, tmp_path):
         """Test that extraction retries on transient failures."""
         state_file = tmp_path / "state.json"
         
         extractor = ArchiveExtractor(
-            temp_target_dir,
+            temp_target_media_path,
             enable_resume=True,
             state_file=state_file,
             max_retry_attempts=3,
@@ -329,12 +329,12 @@ class TestRetryLogic:
         assert result == "success"
         assert call_count[0] == 3  # Failed twice, succeeded on third try
     
-    def test_retry_gives_up_after_max_attempts(self, temp_target_dir, tmp_path):
+    def test_retry_gives_up_after_max_attempts(self, temp_target_media_path, tmp_path):
         """Test that retry gives up after max attempts."""
         state_file = tmp_path / "state.json"
         
         extractor = ArchiveExtractor(
-            temp_target_dir,
+            temp_target_media_path,
             enable_resume=True,
             state_file=state_file,
             max_retry_attempts=2,

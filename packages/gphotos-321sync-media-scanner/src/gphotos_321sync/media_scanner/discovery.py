@@ -31,14 +31,14 @@ class FileInfo:
     file_size: int
 
 
-def discover_files(root_path: Path) -> Iterator[FileInfo]:
+def discover_files(target_media_path: Path) -> Iterator[FileInfo]:
     """Discover all media files in the directory tree.
     
-    Walks the directory tree starting from root_path, identifies media files
+    Walks the directory tree starting from target_media_path, identifies media files
     and their JSON sidecars, and yields FileInfo objects for each media file.
     
     Args:
-        root_path: Root directory to scan
+        target_media_path: Target media directory to scan
         
     Yields:
         FileInfo objects for each discovered media file
@@ -49,15 +49,15 @@ def discover_files(root_path: Path) -> Iterator[FileInfo]:
         - Pairs media files with .json sidecars when found
         - JSON sidecars are identified by naming pattern: <filename>.json
     """
-    if not root_path.exists():
-        logger.error(f"Root path does not exist: {root_path}")
+    if not target_media_path.exists():
+        logger.error(f"Target media path does not exist: {target_media_path}")
         return
     
-    if not root_path.is_dir():
-        logger.error(f"Root path is not a directory: {root_path}")
+    if not target_media_path.is_dir():
+        logger.error(f"Target media path is not a directory: {target_media_path}")
         return
     
-    logger.info(f"Starting file discovery from: {root_path}")
+    logger.info(f"Starting file discovery from: {target_media_path}")
     
     # Build a map of JSON sidecars for efficient lookup
     # Key: base filename without .json extension
@@ -65,7 +65,7 @@ def discover_files(root_path: Path) -> Iterator[FileInfo]:
     json_sidecars: dict[Path, Path] = {}
     
     # First pass: collect all JSON sidecars
-    for json_path in root_path.rglob("*.json"):
+    for json_path in target_media_path.rglob("*.json"):
         if not should_scan_file(json_path):
             continue
         
@@ -89,7 +89,7 @@ def discover_files(root_path: Path) -> Iterator[FileInfo]:
     files_discovered = 0
     files_with_sidecars = 0
     
-    for file_path in root_path.rglob("*"):
+    for file_path in target_media_path.rglob("*"):
         # Skip directories
         if file_path.is_dir():
             continue
@@ -111,13 +111,13 @@ def discover_files(root_path: Path) -> Iterator[FileInfo]:
         
         # Calculate relative path
         try:
-            relative_path = file_path.relative_to(root_path)
+            relative_path = file_path.relative_to(target_media_path)
         except ValueError:
-            logger.warning(f"File is not relative to root: {file_path}")
+            logger.warning(f"File is not relative to target media path: {file_path}")
             continue
         
         # Get parent folder (for album_id)
-        parent_folder = file_path.parent.relative_to(root_path)
+        parent_folder = file_path.parent.relative_to(target_media_path)
         
         # Check for JSON sidecar
         json_sidecar_path = json_sidecars.get(file_path)

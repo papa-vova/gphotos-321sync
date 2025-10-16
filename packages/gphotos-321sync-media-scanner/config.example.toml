@@ -5,10 +5,10 @@
 #   Mac:     ~/Library/Application Support/gphotos-321sync-media-scanner/config.toml
 
 [scanner]
-# Path to scan (extracted Takeout files)
-scan_path = "C:\\Users\\papav\\takeout_tests"
+# Target media path (extracted Takeout files)
+target_media_path = "C:\\Users\\papav\\takeout_tests"
 
-# Optional: Custom database path (defaults to scan_path/media.db)
+# Optional: Custom database path (defaults to target_media_path/media.db)
 # database_path = "C:\\Users\\papav\\media.db"
 
 # Tool availability (both optional, default: false)
@@ -22,7 +22,7 @@ use_exiftool = true         # Extract EXIF from RAW formats (CR2, NEF, ARW, DNG)
 # queue_maxsize = 1000      # Queue backpressure limit
 
 # Optional: Logging configuration
-# [logging]
-# level = "INFO"            # DEBUG, INFO, WARNING, ERROR
-# format = "json"           # simple, detailed, json
-# file = "C:\\Users\\papav\\logs\\media-scanner.log"
+[logging]
+level = "INFO"              # DEBUG, INFO, WARNING, ERROR
+format = "json"             # simple, detailed, json
+# file = "C:\\Users\\papav\\logs\\media-scanner.log"  # Optional: log to file

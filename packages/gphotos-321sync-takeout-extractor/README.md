@@ -18,7 +18,7 @@ from pathlib import Path
 
 extractor = TakeoutExtractor(
     source_dir=Path("/path/to/archives"),
-    target_dir=Path("/path/to/output")
+    target_media_path=Path("/path/to/output")
 )
 
 results = extractor.run(recursive=True)
@@ -28,7 +28,7 @@ print(f"Extracted {len(results)} archives")
 ### Command Line
 
 ```bash
-gphotos-extract --source-dir /path/to/archives --target-dir /path/to/output
+gphotos-extract --source-dir /path/to/archives --target-media-path /path/to/output
 ```
 
 ## Features

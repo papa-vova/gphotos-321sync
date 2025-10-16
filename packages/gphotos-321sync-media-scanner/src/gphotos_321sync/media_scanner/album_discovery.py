@@ -102,7 +102,7 @@ def extract_year_from_folder(folder_name: str) -> Optional[int]:
     return None
 
 
-def discover_albums(root_path: Path, album_dal: AlbumDAL, scan_run_id: str) -> Iterator[AlbumInfo]:
+def discover_albums(target_media_path: Path, album_dal: AlbumDAL, scan_run_id: str) -> Iterator[AlbumInfo]:
     """Discover and process albums from directory structure.
     
     Walks the directory tree to find:
@@ -116,7 +116,7 @@ def discover_albums(root_path: Path, album_dal: AlbumDAL, scan_run_id: str) -> I
     - Yields AlbumInfo for tracking
     
     Args:
-        root_path: Root directory to scan
+        target_media_path: Target media directory to scan
         album_dal: Album data access layer for database operations
         scan_run_id: Current scan run ID
         
@@ -128,15 +128,15 @@ def discover_albums(root_path: Path, album_dal: AlbumDAL, scan_run_id: str) -> I
         - Metadata parsing errors are logged and recorded in processing_errors
         - Albums are inserted into database immediately (needed before file processing)
     """
-    if not root_path.exists():
-        logger.error(f"Root path does not exist: {root_path}")
+    if not target_media_path.exists():
+        logger.error(f"Target media path does not exist: {target_media_path}")
         return
     
-    if not root_path.is_dir():
-        logger.error(f"Root path is not a directory: {root_path}")
+    if not target_media_path.is_dir():
+        logger.error(f"Target media path is not a directory: {target_media_path}")
         return
     
-    logger.info(f"Starting album discovery from: {root_path}")
+    logger.info(f"Starting album discovery from: {target_media_path}")
     
     albums_discovered = 0
     user_albums = 0
@@ -144,15 +144,15 @@ def discover_albums(root_path: Path, album_dal: AlbumDAL, scan_run_id: str) -> I
     errors = 0
     
     # Walk directory tree to find all folders
-    for folder_path in root_path.rglob("*"):
+    for folder_path in target_media_path.rglob("*"):
         if not folder_path.is_dir():
             continue
         
         # Calculate relative path for album_id generation
         try:
-            relative_path = folder_path.relative_to(root_path)
+            relative_path = folder_path.relative_to(target_media_path)
         except ValueError:
-            logger.warning(f"Folder is not relative to root: {folder_path}")
+            logger.warning(f"Folder is not relative to target media path: {folder_path}")
             continue
         
         # Generate deterministic album_id from folder path

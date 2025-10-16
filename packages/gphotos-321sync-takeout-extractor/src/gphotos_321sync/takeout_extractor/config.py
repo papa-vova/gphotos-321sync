@@ -1,33 +1,22 @@
 """Configuration schema for takeout extractor."""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from pathlib import Path
-from typing import Literal
-
-
-class LoggingConfig(BaseModel):
-    """Logging configuration."""
-    
-    level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = Field(
-        default="INFO",
-        description="Log level"
-    )
-    format: Literal["simple", "detailed", "json"] = Field(
-        default="json",
-        description="Log format"
-    )
+from gphotos_321sync.common import LoggingConfig
 
 
 class ExtractionConfig(BaseModel):
     """Configuration for takeout extraction."""
     
+    model_config = ConfigDict(extra='forbid')
+    
     source_dir: str = Field(
         default=".",
         description="Directory containing Takeout archives"
     )
-    target_dir: str = Field(
+    target_media_path: str = Field(
         default="./extracted",
-        description="Directory to extract archives to"
+        description="Target media directory to extract archives to"
     )
     verify_checksums: bool = Field(
         default=True,
@@ -55,6 +44,8 @@ class ExtractionConfig(BaseModel):
 
 class TakeoutExtractorConfig(BaseModel):
     """Root configuration for takeout extractor."""
+    
+    model_config = ConfigDict(extra='forbid')
     
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     extraction: ExtractionConfig = Field(default_factory=ExtractionConfig)

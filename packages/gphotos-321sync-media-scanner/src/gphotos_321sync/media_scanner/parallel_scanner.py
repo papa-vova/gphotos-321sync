@@ -95,16 +95,16 @@ class ParallelScanner:
             f"batch_size={batch_size}, queue_maxsize={queue_maxsize}"
         )
     
-    def scan(self, root_path: Path) -> dict:
+    def scan(self, target_media_path: Path) -> dict:
         """Scan directory tree and catalog media files.
         
         Args:
-            root_path: Root directory to scan
+            target_media_path: Target media directory to scan
             
         Returns:
             Scan result summary dict
         """
-        logger.info(f"Starting parallel scan of: {root_path}")
+        logger.info(f"Starting parallel scan of: {target_media_path}")
         
         # Create scan run
         db_conn = DatabaseConnection(self.db_path)
@@ -123,7 +123,7 @@ class ParallelScanner:
             album_count = 0
             album_map = {}  # folder_path -> album_id
             
-            for album_info in discover_albums(root_path, album_dal, scan_run_id):
+            for album_info in discover_albums(target_media_path, album_dal, scan_run_id):
                 album_map[str(album_info.folder_path)] = album_info.album_id
                 album_count += 1
             
@@ -131,7 +131,7 @@ class ParallelScanner:
             
             # Phase 2: File discovery
             logger.info("Phase 2: Discovering files...")
-            files_to_process = list(discover_files(root_path))
+            files_to_process = list(discover_files(target_media_path))
             total_files = len(files_to_process)
             
             logger.info(f"Discovered {total_files} files to process")
@@ -157,7 +157,7 @@ class ParallelScanner:
             self._start_workers(scan_run_id)
             
             # Populate work queue
-            self._populate_work_queue(files_to_process, album_map, root_path)
+            self._populate_work_queue(files_to_process, album_map, target_media_path)
             
             # Wait for completion
             self._wait_for_completion()
@@ -258,14 +258,14 @@ class ParallelScanner:
         self,
         files_to_process: list,
         album_map: dict,
-        root_path: Path,
+        target_media_path: Path,
     ) -> None:
         """Populate work queue with files to process."""
         work_queue = self.queue_manager.work_queue
         
         for file_info in files_to_process:
-            # Determine album_id from parent folder
-            parent_folder_str = str(file_info.parent_folder.relative_to(root_path))
+            # Determine album_id from parent folder (already relative)
+            parent_folder_str = str(file_info.parent_folder)
             album_id = album_map.get(parent_folder_str)
             
             if album_id is None:

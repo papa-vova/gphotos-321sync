@@ -347,7 +347,7 @@ This document provides a step-by-step implementation plan for the media scanning
 
 - **Status:** ✅
 - **File:** `src/gphotos_321sync/media_scanner/discovery.py`
-- **Function:** `discover_files(root_path: Path) -> Iterator[FileInfo]`
+- **Function:** `discover_files(target_media_path: Path) -> Iterator[FileInfo]`
 - **Tasks:**
   - Walk directory tree
   - Identify media files and JSON sidecars
@@ -360,7 +360,7 @@ This document provides a step-by-step implementation plan for the media scanning
 
 - **Status:** ✅
 - **File:** `src/gphotos_321sync/media_scanner/album_discovery.py`
-- **Function:** `discover_albums(root_path: Path, album_dal: AlbumDAL, scan_run_id: str) -> Iterator[AlbumInfo]`
+- **Function:** `discover_albums(target_media_path: Path, album_dal: AlbumDAL, scan_run_id: str) -> Iterator[AlbumInfo]`
 - **Tasks:**
   - Find folders with `metadata.json` (user albums)
   - Parse album metadata (handle errors gracefully)
@@ -466,7 +466,7 @@ This document provides a step-by-step implementation plan for the media scanning
 - **Status:** ✅
 - **File:** `src/gphotos_321sync/media_scanner/parallel_scanner.py`
 - **Class:** `ParallelScanner` with:
-  - `scan(root_path: Path) -> ScanResult`
+  - `scan(target_media_path: Path) -> ScanResult`
   - Startup: create process pool (M=CPU cores), queues (maxsize=1000), threads (N=2×CPU cores)
   - Album discovery: process albums first, store in database
   - File discovery: populate work queue with FileInfo (includes album_id from parent folder)

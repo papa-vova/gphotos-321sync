@@ -321,11 +321,11 @@ class ArchiveDiscovery:
 
 
 class ArchiveExtractor:
-    """Extracts archives to a target directory."""
+    """Extracts archives to a target media directory."""
     
     def __init__(
         self,
-        target_dir: Path,
+        target_media_path: Path,
         verify_integrity: bool = True,
         preserve_structure: bool = True,
         max_retry_attempts: int = 10,
@@ -337,7 +337,7 @@ class ArchiveExtractor:
         """Initialize archive extractor.
         
         Args:
-            target_dir: Directory to extract archives to
+            target_media_path: Target media directory to extract archives to
             verify_integrity: Whether to verify archive integrity before extraction
             preserve_structure: Whether to preserve directory structure from archive
             max_retry_attempts: Maximum number of retry attempts per file (then hard fail)
@@ -346,7 +346,7 @@ class ArchiveExtractor:
             state_file: Path to state file for tracking progress
             verify_extracted_files: Whether to verify extracted files exist before skipping
         """
-        self.target_dir = Path(target_dir)
+        self.target_media_path = Path(target_media_path)
         self.verify_integrity = verify_integrity
         self.preserve_structure = preserve_structure
         self.max_retry_attempts = max_retry_attempts
@@ -355,16 +355,16 @@ class ArchiveExtractor:
         self.state_file = Path(state_file) if state_file else None
         self.verify_extracted_files = verify_extracted_files
         
-        # Validate target directory exists
-        if not self.target_dir.exists():
+        # Validate target media directory exists
+        if not self.target_media_path.exists():
             raise FileNotFoundError(
-                f"Target directory does not exist: {self.target_dir}\n"
+                f"Target media directory does not exist: {self.target_media_path}\n"
                 f"Please create the directory before running extraction."
             )
         
-        if not self.target_dir.is_dir():
+        if not self.target_media_path.is_dir():
             raise NotADirectoryError(
-                f"Target path is not a directory: {self.target_dir}"
+                f"Target media path is not a directory: {self.target_media_path}"
             )
         
         # Load or create extraction state
@@ -409,9 +409,9 @@ class ArchiveExtractor:
             
             # Determine extraction path
             if self.preserve_structure:
-                extract_to = self.target_dir / archive.path.stem
+                extract_to = self.target_media_path / archive.path.stem
             else:
-                extract_to = self.target_dir
+                extract_to = self.target_media_path
             
             # Verify all files actually exist with correct CRC32
             all_valid, bad_files = self._verify_archive_extraction(archive, extract_to)
@@ -450,12 +450,12 @@ class ArchiveExtractor:
         # Determine extraction subdirectory
         if self.preserve_structure:
             # Extract to subdirectory named after archive (without extension)
-            extract_to = self.target_dir / archive.path.stem
+            extract_to = self.target_media_path / archive.path.stem
             # Create subdirectory for this archive
             extract_to.mkdir(parents=True, exist_ok=True)
         else:
-            # Extract directly to target directory (already validated in __init__)
-            extract_to = self.target_dir
+            # Extract directly to target media directory (already validated in __init__)
+            extract_to = self.target_media_path
         
         try:
             if archive.format == ArchiveFormat.ZIP:
@@ -1094,7 +1094,7 @@ class TakeoutExtractor:
     def __init__(
         self,
         source_dir: Path,
-        target_dir: Path,
+        target_media_path: Path,
         verify_integrity: bool = True,
         preserve_structure: bool = True,
         max_retry_attempts: int = 10,
@@ -1107,7 +1107,7 @@ class TakeoutExtractor:
         
         Args:
             source_dir: Directory containing Takeout archives
-            target_dir: Directory to extract to
+            target_media_path: Target media directory to extract to
             verify_integrity: Whether to verify archive integrity
             preserve_structure: Whether to preserve directory structure
             max_retry_attempts: Maximum number of retry attempts per file
@@ -1117,17 +1117,17 @@ class TakeoutExtractor:
             verify_extracted_files: Whether to verify extracted files exist before skipping
             
         Raises:
-            FileNotFoundError: If source_dir or target_dir does not exist
+            FileNotFoundError: If source_dir or target_media_path does not exist
         """
         # Validate directories exist
         if not source_dir.exists():
             raise FileNotFoundError(f"Source directory does not exist: {source_dir}")
-        if not target_dir.exists():
-            raise FileNotFoundError(f"Target directory does not exist: {target_dir}")
+        if not target_media_path.exists():
+            raise FileNotFoundError(f"Target media directory does not exist: {target_media_path}")
         
         self.discovery = ArchiveDiscovery(source_dir)
         self.extractor = ArchiveExtractor(
-            target_dir,
+            target_media_path,
             verify_integrity=verify_integrity,
             preserve_structure=preserve_structure,
             max_retry_attempts=max_retry_attempts,

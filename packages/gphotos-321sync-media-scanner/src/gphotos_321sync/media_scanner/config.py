@@ -1,31 +1,22 @@
 """Configuration models for media scanner."""
 
 import os
-from typing import Literal
-from pydantic import BaseModel, Field
-
-
-class LoggingConfig(BaseModel):
-    """Logging configuration."""
-    
-    level: str = Field(default="INFO", description="Log level (DEBUG, INFO, WARNING, ERROR)")
-    format: Literal["simple", "detailed", "json"] = Field(
-        default="json",
-        description="Log format type"
-    )
-    file: str | None = Field(default=None, description="Optional log file path")
+from pydantic import BaseModel, Field, ConfigDict
+from gphotos_321sync.common import LoggingConfig
 
 
 class ScannerConfig(BaseModel):
     """Scanner performance configuration."""
     
-    scan_path: str = Field(
+    model_config = ConfigDict(extra='forbid')
+    
+    target_media_path: str = Field(
         default="",
-        description="Path to the folder to scan (extracted Takeout files)"
+        description="Path to the target media folder to scan (extracted Takeout files)"
     )
     database_path: str | None = Field(
         default=None,
-        description="Path to SQLite database file (default: scan_path/media.db)"
+        description="Path to SQLite database file (default: target_media_path/media.db)"
     )
     worker_threads: int = Field(
         default_factory=lambda: os.cpu_count() * 2 if os.cpu_count() else 4,
@@ -55,6 +46,8 @@ class ScannerConfig(BaseModel):
 
 class MediaScannerConfig(BaseModel):
     """Root configuration for media scanner."""
+    
+    model_config = ConfigDict(extra='forbid')
     
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     scanner: ScannerConfig = Field(default_factory=ScannerConfig)
