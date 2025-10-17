@@ -37,10 +37,9 @@ CREATE TABLE IF NOT EXISTS scan_runs (
     CHECK(end_timestamp IS NULL OR end_timestamp >= start_timestamp)
 );
 
--- Albums (every folder is an album)
 CREATE TABLE IF NOT EXISTS albums (
-    album_id TEXT PRIMARY KEY,  -- UUID5(namespace, folder_path)
-    folder_path TEXT NOT NULL UNIQUE,  -- Normalized NFC
+    album_id TEXT PRIMARY KEY,  -- UUID5(namespace, album_folder_path)
+    album_folder_path TEXT NOT NULL UNIQUE,  -- Normalized NFC
     title TEXT,
     description TEXT,
     creation_timestamp TIMESTAMP,
@@ -154,7 +153,7 @@ CREATE INDEX IF NOT EXISTS idx_media_items_album_time ON media_items(album_id, c
 CREATE INDEX IF NOT EXISTS idx_media_items_original ON media_items(original_media_item_id);
 CREATE INDEX IF NOT EXISTS idx_media_items_live_pair ON media_items(live_photo_pair_id);
 
-CREATE INDEX IF NOT EXISTS idx_albums_path ON albums(folder_path);
+CREATE INDEX IF NOT EXISTS idx_albums_path ON albums(album_folder_path);
 CREATE INDEX IF NOT EXISTS idx_albums_scan_run ON albums(scan_run_id);
 CREATE INDEX IF NOT EXISTS idx_albums_status ON albums(status);
 

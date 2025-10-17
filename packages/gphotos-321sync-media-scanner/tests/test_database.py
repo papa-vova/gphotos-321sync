@@ -98,7 +98,7 @@ def test_album_dal(migrated_db):
     
     # Insert album
     album_data = {
-        'folder_path': 'Photos from 2023',
+        'album_folder_path': 'Photos from 2023',
         'title': 'Photos from 2023',
         'scan_run_id': scan_run_id
     }
@@ -130,7 +130,7 @@ def test_media_item_dal(migrated_db):
     
     # Create album first
     album_id = album_dal.insert_album({
-        'folder_path': 'Photos from 2023',
+        'album_folder_path': 'Photos from 2023',
         'scan_run_id': scan_run_id
     })
     

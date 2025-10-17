@@ -47,7 +47,7 @@ def populated_db(tmp_path, schema_dir):
     album_id = album_dal.insert_album({
         'scan_run_id': scan_id,
         'title': 'Test Album',
-        'folder_path': 'Photos/Test Album'
+        'album_folder_path': 'Photos/Test Album'
     })
     
     # Create media items
@@ -108,7 +108,7 @@ class TestMigrationBasics:
         runner = MigrationRunner(empty_db, schema_dir)
         runner.apply_migrations()
         version = runner.get_current_version()
-        assert version == 1  # Should be at version 1 after initial migration
+        assert version == 1  # Should be at version 1 after initial schema
     
     def test_migration_idempotency(self, empty_db, schema_dir):
         """Test that running migrations multiple times is safe."""
@@ -239,7 +239,7 @@ class TestSchemaIntegrity:
             'album_id',
             'scan_run_id',
             'title',
-            'folder_path',
+            'album_folder_path',
             'description',
             'creation_timestamp',
             'access_level',

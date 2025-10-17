@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document describes the complete processing flow, failure modes, and guarantees of the parallel media scanner.
+This document describes the complete processing flow, failure modes, and guarantees of the parallel media scanner. For an architectural overview and design context, see `Media_Scanning_Architecture.md`.
 
 ---
 
@@ -101,7 +101,7 @@ AlbumInfo(
 
 1. Discover all folders in directory tree
 2. Create album records in database
-3. Build `album_map: {folder_path -> album_id}`
+3. Build `album_map: {album_folder_path -> album_id}`
 
 **Why sequential:** Albums must exist before files can reference them.
 

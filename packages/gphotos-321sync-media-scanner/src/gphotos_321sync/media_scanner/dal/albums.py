@@ -29,19 +29,19 @@ class AlbumDAL:
         """
         self.db = db
     
-    def generate_album_id(self, folder_path: str) -> str:
+    def generate_album_id(self, album_folder_path: str) -> str:
         """
         Generate deterministic album ID from folder path.
         
         Uses UUID5 with a namespace to ensure same path always generates same ID.
         
         Args:
-            folder_path: Normalized folder path
+            album_folder_path: Normalized folder path
             
         Returns:
             Album ID (UUID5 string)
         """
-        return str(uuid.uuid5(ALBUM_NAMESPACE, folder_path))
+        return str(uuid.uuid5(ALBUM_NAMESPACE, album_folder_path))
     
     def insert_album(self, album: Dict[str, Any]) -> str:
         """
@@ -49,17 +49,17 @@ class AlbumDAL:
         
         Args:
             album: Dictionary with album data
-                Required: folder_path, scan_run_id
+                Required: album_folder_path, scan_run_id
                 Optional: title, description, creation_timestamp, access_level, status
                 
         Returns:
             album_id (UUID5 string)
         """
-        folder_path = album['folder_path']
-        album_id = self.generate_album_id(folder_path)
+        album_folder_path = album['album_folder_path']
+        album_id = self.generate_album_id(album_folder_path)
         
         # Check if album already exists
-        existing = self.get_album_by_path(folder_path)
+        existing = self.get_album_by_path(album_folder_path)
         
         if existing:
             # Update existing album
@@ -73,20 +73,20 @@ class AlbumDAL:
                 last_seen_timestamp=datetime.now().isoformat(),
                 scan_run_id=album['scan_run_id']
             )
-            logger.debug(f"Updated existing album: {album_id} ({folder_path})")
+            logger.debug(f"Updated existing album: {album_id} ({album_folder_path})")
         else:
             # Insert new album
             cursor = self.db.execute(
                 """
                 INSERT INTO albums (
-                    album_id, folder_path, title, description,
+                    album_id, album_folder_path, title, description,
                     creation_timestamp, access_level, status, scan_run_id
                 )
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     album_id,
-                    folder_path,
+                    album_folder_path,
                     album.get('title'),
                     album.get('description'),
                     album.get('creation_timestamp'),
@@ -96,23 +96,23 @@ class AlbumDAL:
                 )
             )
             cursor.close()
-            logger.debug(f"Inserted new album: {album_id} ({folder_path})")
+            logger.debug(f"Inserted new album: {album_id} ({album_folder_path})")
         
         return album_id
     
-    def get_album_by_path(self, folder_path: str) -> Optional[Dict[str, Any]]:
+    def get_album_by_path(self, album_folder_path: str) -> Optional[Dict[str, Any]]:
         """
         Get album by folder path.
         
         Args:
-            folder_path: Folder path
+            album_folder_path: Folder path
             
         Returns:
             Dictionary with album data, or None if not found
         """
         cursor = self.db.execute(
-            "SELECT * FROM albums WHERE folder_path = ?",
-            (folder_path,)
+            "SELECT * FROM albums WHERE album_folder_path = ?",
+            (album_folder_path,)
         )
         row = cursor.fetchone()
         cursor.close()

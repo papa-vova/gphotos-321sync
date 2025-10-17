@@ -121,7 +121,7 @@ class ParallelScanner:
             # Phase 1: Album discovery (must run before file processing)
             logger.info("Phase 1: Discovering albums...")
             album_count = 0
-            album_map = {}  # folder_path -> album_id
+            album_map = {}  # album_folder_path -> album_id
             
             for album_info in discover_albums(target_media_path, album_dal, scan_run_id):
                 album_map[str(album_info.album_folder_path)] = album_info.album_id

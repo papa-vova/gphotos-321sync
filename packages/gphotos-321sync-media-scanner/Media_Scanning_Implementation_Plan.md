@@ -245,9 +245,9 @@ This document provides a step-by-step implementation plan for the media scanning
 - **File:** `src/gphotos_321sync/media_scanner/dal/albums.py`
 - **Class:** `AlbumDAL` with:
   - `insert_album(album: dict) -> str` (returns album_id)
-  - `get_album_by_path(folder_path: str) -> Optional[dict]`
+  - `get_album_by_path(album_folder_path: str) -> Optional[dict]`
   - `update_album(album_id: str, **fields)`
-  - `generate_album_id(folder_path: str) -> str` (UUID5 from path)
+  - `generate_album_id(album_folder_path: str) -> str` (UUID5 from path)
 - **Tests:** Album creation, UUID5 generation, path-based lookup
 - **Acceptance:** Albums managed correctly, deterministic IDs
 - **Note:** Every folder is an album (album_id is NOT NULL for media items)

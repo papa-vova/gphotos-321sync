@@ -194,7 +194,7 @@ def discover_albums(target_media_path: Path, album_dal: AlbumDAL, scan_run_id: s
         # Insert/update album in database
         album_data = {
             'album_id': album_id,
-            'folder_path': str(album_folder_path),
+            'album_folder_path': str(album_folder_path),
             'title': title,
             'description': description,
             'creation_timestamp': creation_timestamp,

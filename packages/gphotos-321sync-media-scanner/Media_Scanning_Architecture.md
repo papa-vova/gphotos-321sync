@@ -52,11 +52,14 @@ else:
 
 ### 2. Parallel Processing
 
-- CPU-bound work (EXIF extraction, fingerprinting, MIME detection) uses process pool for true parallelism
-- I/O-bound work (file reading, JSON parsing, DB writes) uses thread pool
-- Configuration: N=16 threads (2× CPU cores for I/O overlap), M=8 processes (1× CPU cores for parallelism)
-- CPU core detection: Use `multiprocessing.cpu_count()` or equivalent
-- Single-pass read per file in process pool
+- CPU-bound work (EXIF extraction, fingerprinting, MIME detection) uses a process pool for true parallelism
+- I/O-bound work (file reading, JSON parsing, DB writes) uses worker threads
+- Configuration is tunable via `ParallelScanner` constructor:
+  - `worker_processes`: defaults to `max(1, int(cpu_count * 0.75))`
+  - `worker_threads`: defaults to `max(2, cpu_count)`
+  - `batch_size`: defaults to 100 media items per transaction
+  - `queue_maxsize`: defaults to 1000 items for backpressure
+- All parameters can be overridden to scale up or down per hardware profile
 - **Note:** EXIF extraction includes timestamps, GPS, camera info, orientation (all available fields); resolution (width × height) extracted for all media; video metadata (duration, frame rate) extracted via ffprobe
 
 ### 3. Duplicate Tolerance
@@ -104,16 +107,25 @@ else:
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                      Discovery Phase                        │
+│             Phase 1: Album Discovery (Main Thread)          │
 │  - Walk directory tree                                      │
-│  - Process albums (parse metadata.json, record errors)      │
-│  - Identify media files and their sidecars                  │
-│  - Build work queue                                         │
+│  - Process folders with metadata.json                       │
+│  - Insert/update album rows (deterministic album_id)        │
+│  - Build `album_map: {album_folder_path -> album_id}`       │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                     Processing Phase                        │
+│             Phase 2: File Discovery (Main Thread)           │
+│  - Identify media files and optional JSON sidecars          │
+│  - Build list of `FileInfo` objects                         │
+│  - Pair each `FileInfo` with album_id via `album_map`       │
+│  - Enqueue `(FileInfo, album_id)` work items                │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│             Phase 3: Parallel Processing                    │
 │  - Extract metadata from JSON sidecars                      │
 │  - Stream the full file once:                               │
 │    • EXIF extraction (timestamps, GPS, camera, orientation) │
@@ -123,7 +135,7 @@ else:
 │    • CRC32 processes entire stream                          │
 │  - Calculate content fingerprint (first 64KB + last 64KB)   │
 │  - On error: record in processing_errors table + logs       │
-│  - Process in parallel (N=16 threads, M=8 processes)        │
+│  - Process in parallel (configurable threads/processes)     │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -274,8 +286,8 @@ CREATE INDEX idx_errors_path ON processing_errors(relative_path);
 
 #### 2. Albums
 
-- `album_id` - UUID5(namespace, folder_path) for deterministic IDs
-- `folder_path` (UNIQUE, normalized NFC) - Path to album folder
+- `album_id` - UUID5(namespace, album_folder_path) for deterministic IDs
+- `album_folder_path` (UNIQUE, normalized NFC) - Path to album folder
 - `title`, `description`, `creation_timestamp`, `access_level`
 - `status` - CHECK('present', 'error', 'missing')
 - Two types: User Albums (with metadata.json) and Year-based Albums (Photos from YYYY/)
@@ -430,7 +442,7 @@ PRAGMA temp_store=MEMORY;       -- Temp tables in RAM
   - **Note:** ffprobe process spawn + I/O adds ~50-100ms per video (not 2ms CPU-only)
   - Videos reduce effective throughput; adjust M (process pool size) if video-heavy library
 - **MIME/content type detection:** `filetype` library (pure Python, reads magic bytes from file headers)
-- **Tool availability check:** 
+- **Tool availability check:**
   - ffprobe (optional): If missing, warn user about missing video metadata (duration, resolution, frame rate)
   - exiftool (optional): If missing, warn user that RAW formats (DNG, CR2, NEF, ARW) will have missing EXIF data
   - User can proceed without either tool or cancel to install them
