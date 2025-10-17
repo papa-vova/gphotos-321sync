@@ -4,11 +4,9 @@
 
 This document summarizes the album, media item, and search resources provided by the [Google Photos Library REST API](https://developers.google.com/photos/library/reference/rest). It lists every documented field for the album and media item resources and explains how to list the media items contained in an album.
 
-- **Album resource**: [https://developers.google.com/photos/library/reference/rest/v1/albums](https://developers.google.com/photos/library/reference/rest/v1/albums)
-- **MediaItem resource**: [https://developers.google.com/photos/library/reference/rest/v1/mediaItems](https://developers.google.com/photos/library/reference/rest/v1/mediaItems)
-- **mediaItems.search method**: [https://developers.google.com/photos/library/reference/rest/v1/mediaItems/search](https://developers.google.com/photos/library/reference/rest/v1/mediaItems/search)
-
 ## Album resource (`v1.albums`)
+
+[https://developers.google.com/photos/library/reference/rest/v1/albums](https://developers.google.com/photos/library/reference/rest/v1/albums)
 
 ```jsonc
 {
@@ -34,6 +32,8 @@ This document summarizes the album, media item, and search resources provided by
 ```
 
 ## MediaItem resource (`v1.mediaItems`)
+
+[https://developers.google.com/photos/library/reference/rest/v1/mediaItems](https://developers.google.com/photos/library/reference/rest/v1/mediaItems)
 
 ```jsonc
 {
@@ -71,7 +71,7 @@ This document summarizes the album, media item, and search resources provided by
 
 ## Listing media items in an album (`mediaItems.search`)
 
-Use `mediaItems.search` to enumerate the members of a specific album. The method requires the [https://www.googleapis.com/auth/photoslibrary.readonly.appcreateddata](https://www.googleapis.com/auth/photoslibrary.readonly.appcreateddata) scope when listing items created by your app.
+[https://developers.google.com/photos/library/reference/rest/v1/mediaItems/search](https://developers.google.com/photos/library/reference/rest/v1/mediaItems/search)
 
 ### Request
 
