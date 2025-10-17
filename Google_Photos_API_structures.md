@@ -2,196 +2,130 @@
 
 ## Overview
 
-This document summarizes the primary resource models exposed by the [Google Photos Library REST API](https://developers.google.com/photos/library/reference/rest). It focuses on album- and media-related entities and links directly to the official reference for deeper detail.
+This document summarizes the album, media item, and search resources provided by the [Google Photos Library REST API](https://developers.google.com/photos/library/reference/rest). It lists every documented field for the album and media item resources and explains how to list the media items contained in an album.
 
-## Album (`v1.albums`)
+- **Album resource**: [https://developers.google.com/photos/library/reference/rest/v1/albums](https://developers.google.com/photos/library/reference/rest/v1/albums)
+- **MediaItem resource**: [https://developers.google.com/photos/library/reference/rest/v1/mediaItems](https://developers.google.com/photos/library/reference/rest/v1/mediaItems)
+- **mediaItems.search method**: [https://developers.google.com/photos/library/reference/rest/v1/mediaItems/search](https://developers.google.com/photos/library/reference/rest/v1/mediaItems/search)
 
-- **Docs**: [Album resource](https://developers.google.com/photos/library/reference/rest/v1/albums)
+## Album resource (`v1.albums`)
 
-### Album Fields
-
-| Field | Type | Notes |
-| --- | --- | --- |
-| `id` | `string` | Stable album identifier. |
-| `title` | `string` | Display name, up to 500 characters. |
-| `productUrl` | `string` | Web URL visible to signed-in owner or collaborators. |
-| `isWriteable` | `boolean` | Indicates whether the calling app can add media. Scope-dependent. |
-| `shareInfo` | `ShareInfo` | Present only for albums shared by the app with sharing scope. |
-| `mediaItemsCount` | `string (int64)` | Output-only total media items. |
-| `coverPhotoBaseUrl` | `string` | Base URL for cover photo bytes; append sizing parameters (for example, `=w2048-h1024`). |
-| `coverPhotoMediaItemId` | `string` | Identifier of the media item used as cover. |
-
-### Album JSON Representation
-
-```json
+```jsonc
 {
-  "id": "string",
-  "title": "string",
-  "productUrl": "string",
-  "isWriteable": true,
+  "id": "ALBUM_ID", // string: persistent album identifier
+  "title": "Summer Vacation 2024", // string (≤500 chars): album name shown to users
+  "productUrl": "https://photos.google.com/lr/album/ALBUM_ID", // string: signed-in Google Photos URL
+  "isWriteable": true, // boolean: caller can add media if true
+  "mediaItemsCount": "128", // string(int64): output-only count of media items
+  "coverPhotoBaseUrl": "https://lh3.googleusercontent.com/...", // string: append parameters like "=w2048-h1024"
+  "coverPhotoMediaItemId": "MEDIA_ITEM_ID", // string: ID of the cover media item
   "shareInfo": {
+    "shareableUrl": "https://photos.app.goo.gl/...", // string: link share URL (when link sharing enabled)
+    "shareToken": "AF1QipNj...", // string: token for join/leave/retrieve shared album details
+    "isJoined": true, // boolean: caller is joined (always true for owner)
+    "isOwned": true, // boolean: caller owns the album
+    "isJoinable": true, // boolean: album currently accepts joins
     "sharedAlbumOptions": {
-      "isCollaborative": true,
-      "isCommentable": true
-    },
-    "shareableUrl": "string",
-    "shareToken": "string",
-    "isJoined": true,
-    "isOwned": true,
-    "isJoinable": true
-  },
-  "mediaItemsCount": "string",
-  "coverPhotoBaseUrl": "string",
-  "coverPhotoMediaItemId": "string"
+      "isCollaborative": true, // boolean: collaborators may add media
+      "isCommentable": true // boolean: collaborators may comment
+    }
+  }
 }
 ```
 
-### Album Methods
+## MediaItem resource (`v1.mediaItems`)
 
-- `albums.create`: [Create album](https://developers.google.com/photos/library/reference/rest/v1/albums/create)
-- `albums.get`: [Get album by ID](https://developers.google.com/photos/library/reference/rest/v1/albums/get)
-- `albums.list`: [List albums](https://developers.google.com/photos/library/reference/rest/v1/albums/list)
-- `albums.patch`: [Update album metadata](https://developers.google.com/photos/library/reference/rest/v1/albums/patch)
-- `albums.batchAddMediaItems`: [Add media to album](https://developers.google.com/photos/library/reference/rest/v1/albums/batchAddMediaItems)
-- `albums.batchRemoveMediaItems`: [Remove media from album](https://developers.google.com/photos/library/reference/rest/v1/albums/batchRemoveMediaItems)
-- `albums.addEnrichment`: [Insert enrichment item](https://developers.google.com/photos/library/reference/rest/v1/albums/addEnrichment)
-
-## ShareInfo
-
-- **Docs**: [ShareInfo definition](https://developers.google.com/photos/library/reference/rest/v1/albums#ShareInfo)
-
-| Field | Type | Notes |
-| --- | --- | --- |
-| `sharedAlbumOptions` | `SharedAlbumOptions` | Controls collaborator abilities. |
-| `shareableUrl` | `string` | Optional public link (present when link sharing enabled). |
-| `shareToken` | `string` | Token for joining/leaving shared album. |
-| `isJoined` | `boolean` | Whether current user is joined. |
-| `isOwned` | `boolean` | Whether current user owns the album. |
-| `isJoinable` | `boolean` | Whether album accepts new collaborators. |
-
-## Shared Album Options
-
-- **Docs**: [SharedAlbumOptions definition](https://developers.google.com/photos/library/reference/rest/v1/albums#SharedAlbumOptions)
-
-| Field | Type | Notes |
-| --- | --- | --- |
-| `isCollaborative` | `boolean` | Allows collaborators to add media when true. |
-| `isCommentable` | `boolean` | Allows collaborators to add comments when true. |
-
-## Media Item (`v1.mediaItems`)
-
-- **Docs**: [MediaItem resource](https://developers.google.com/photos/library/reference/rest/v1/mediaItems)
-
-### Media Item Fields
-
-| Field | Type | Notes |
-| --- | --- | --- |
-| `id` | `string` | Stable media identifier. |
-| `description` | `string` | User-supplied description (< 1000 characters). |
-| `productUrl` | `string` | Web URL visible to signed-in owner or collaborators. |
-| `baseUrl` | `string` | Base download URL; specify size parameters before use. |
-| `mimeType` | `string` | Media MIME type (for example, `image/jpeg`). |
-| `mediaMetadata` | `MediaMetadata` | Size, creation time, and type-specific metadata. |
-| `contributorInfo` | `ContributorInfo` | Available only for shared albums created by your app with sharing scope. |
-| `filename` | `string` | Original filename shown in UI. |
-
-### Media Item JSON Representation
-
-```json
+```jsonc
 {
-  "id": "string",
-  "description": "string",
-  "productUrl": "string",
-  "baseUrl": "string",
-  "mimeType": "string",
+  "id": "MEDIA_ITEM_ID", // string: persistent media identifier
+  "description": "Sunset over Waikiki", // string (<1000 chars): user-provided description
+  "productUrl": "https://photos.google.com/lr/photo/MEDIA_ITEM_ID", // string: signed-in Google Photos URL
+  "baseUrl": "https://lh3.googleusercontent.com/...", // string: append sizing params before download
+  "mimeType": "image/jpeg", // string: MIME type of the media
+  "filename": "IMG_20240715_183025.jpg", // string: filename displayed in Google Photos
   "mediaMetadata": {
-    "creationTime": "timestamp",
-    "width": "string",
-    "height": "string",
-    "photo": {
-      "cameraMake": "string",
-      "cameraModel": "string",
-      "focalLength": 0,
-      "apertureFNumber": 0,
-      "isoEquivalent": 0,
-      "exposureTime": "duration"
+    "creationTime": "2024-07-15T18:30:25Z", // string (Timestamp): capture time
+    "width": "4032", // string (int64): original width in pixels
+    "height": "3024", // string (int64): original height in pixels
+    "photo": { // present only when media is a photo
+      "cameraMake": "Google", // string: camera brand
+      "cameraModel": "Pixel 8", // string: camera model
+      "focalLength": 6.81, // number: lens focal length
+      "apertureFNumber": 1.8, // number: aperture f-number
+      "isoEquivalent": 50, // integer: ISO value
+      "exposureTime": "0.0025s" // string (Duration): exposure duration
     },
-    "video": {
-      "cameraMake": "string",
-      "cameraModel": "string",
-      "fps": 0,
-      "status": "READY"
+    "video": { // present only when media is a video
+      "cameraMake": "Google", // string: camera brand
+      "cameraModel": "Pixel 8", // string: camera model
+      "fps": 29.97, // number: frames per second
+      "status": "READY" // enum: processing status (UNSPECIFIED | PROCESSING | READY | FAILED)
     }
   },
   "contributorInfo": {
-    "profilePictureBaseUrl": "string",
-    "displayName": "string"
-  },
-  "filename": "string"
+    "profilePictureBaseUrl": "https://lh3.googleusercontent.com/profile...", // string: contributor profile photo URL
+    "displayName": "Alice Example" // string: contributor display name (only returned when searching by a shared album ID)
+  }
 }
 ```
 
-### Media Item Methods
+## Listing media items in an album (`mediaItems.search`)
 
-- `mediaItems.batchCreate`: [Create items after upload](https://developers.google.com/photos/library/reference/rest/v1/mediaItems/batchCreate)
-- `mediaItems.batchGet`: [Batch retrieve items](https://developers.google.com/photos/library/reference/rest/v1/mediaItems/batchGet)
-- `mediaItems.get`: [Get item by ID](https://developers.google.com/photos/library/reference/rest/v1/mediaItems/get)
-- `mediaItems.list`: [List items created by app](https://developers.google.com/photos/library/reference/rest/v1/mediaItems/list)
-- `mediaItems.patch`: [Update item metadata](https://developers.google.com/photos/library/reference/rest/v1/mediaItems/patch)
-- `mediaItems.search`: [Search items by filters or album](https://developers.google.com/photos/library/reference/rest/v1/mediaItems/search)
+Use `mediaItems.search` to enumerate the members of a specific album. The method requires the [https://www.googleapis.com/auth/photoslibrary.readonly.appcreateddata](https://www.googleapis.com/auth/photoslibrary.readonly.appcreateddata) scope when listing items created by your app.
 
-## MediaMetadata
+### Request
 
-- **Docs**: [MediaMetadata definition](https://developers.google.com/photos/library/reference/rest/v1/mediaItems#MediaMetadata)
+```jsonc
+POST https://photoslibrary.googleapis.com/v1/mediaItems:search // HTTP POST endpoint
+{
+  "albumId": "ALBUM_ID", // string: list items from this album; omit when using filters
+  "pageSize": 50, // integer: max items per page (default 25, max 100)
+  "pageToken": "NEXT_TOKEN", // string: pagination cursor from previous response
+  "filters": { // MUST be omitted when albumId is set
+    "includeArchivedMedia": true, // boolean: include archived items when true
+    "excludeNonAppCreatedData": false, // boolean: exclude items not created by this app
+    "dateFilter": {
+      "ranges": [
+        {
+          "startDate": { "year": 2024, "month": 7, "day": 1 }, // Date object: inclusive start
+          "endDate": { "year": 2024, "month": 7, "day": 31 } // Date object: inclusive end
+        }
+      ]
+    },
+    "contentFilter": { // Not supported with orderBy
+      "includedContentCategories": ["LANDSCAPES", "SUNSETS"], // ContentCategory enum values to include
+      "excludedContentCategories": ["SCREENSHOTS"] // ContentCategory enum values to exclude
+    },
+    "mediaTypeFilter": { // Not supported with orderBy
+      "mediaTypes": ["PHOTO"] // array must contain only one type (PHOTO or VIDEO) or ALL_MEDIA
+    },
+    "featureFilter": { // Not supported with orderBy
+      "includedFeatures": ["FAVORITES"]
+    }
+  },
+  "orderBy": "MediaMetadata.creation_time desc", // string: sort order valid only with dateFilter
+}
+```
 
-| Field | Type | Notes |
-| --- | --- | --- |
-| `creationTime` | `string (Timestamp)` | RFC 3339 creation timestamp (capture time). |
-| `width` | `string (int64)` | Original width in pixels. |
-| `height` | `string (int64)` | Original height in pixels. |
-| `photo` | `Photo` | Present for photo media. |
-| `video` | `Video` | Present for video media. |
+### Response
 
-## Photo Metadata
-
-- **Docs**: [Photo definition](https://developers.google.com/photos/library/reference/rest/v1/mediaItems#Photo)
-
-| Field | Type | Notes |
-| --- | --- | --- |
-| `cameraMake` | `string` | Camera brand. |
-| `cameraModel` | `string` | Camera model. |
-| `focalLength` | `number` | Lens focal length. |
-| `apertureFNumber` | `number` | Aperture F-number. |
-| `isoEquivalent` | `integer` | ISO value. |
-| `exposureTime` | `string (Duration)` | Exposure time (for example, `"3.5s"`). |
-
-## Video Metadata
-
-- **Docs**: [Video definition](https://developers.google.com/photos/library/reference/rest/v1/mediaItems#Video)
-
-| Field | Type | Notes |
-| --- | --- | --- |
-| `cameraMake` | `string` | Camera brand. |
-| `cameraModel` | `string` | Camera model. |
-| `fps` | `number` | Frames per second. |
-| `status` | `enum (VideoProcessingStatus)` | Upload processing status. |
-
-### VideoProcessingStatus Enum
-
-- **Docs**: [VideoProcessingStatus enumeration](https://developers.google.com/photos/library/reference/rest/v1/mediaItems#VideoProcessingStatus)
-- Values: `UNSPECIFIED`, `PROCESSING`, `READY`, `FAILED`.
-
-## ContributorInfo
-
-- **Docs**: [ContributorInfo definition](https://developers.google.com/photos/library/reference/rest/v1/mediaItems#ContributorInfo)
-
-| Field | Type | Notes |
-| --- | --- | --- |
-| `profilePictureBaseUrl` | `string` | Base URL for contributor profile image. |
-| `displayName` | `string` | Contributor display name. |
-
-## Usage Notes
-
-- Append sizing or formatting parameters to any `baseUrl` or `coverPhotoBaseUrl` before downloading, per [media access guidance](https://developers.google.com/photos/library/guides/access-media-items).
-- Descriptions should contain user-authored text only; avoid auto-generated metadata when setting `MediaItem.description` via `mediaItems.patch`.
-- Access to shared album metadata (`shareInfo`, `contributorInfo`) requires the `https://www.googleapis.com/auth/photoslibrary.sharing` scope.
+```jsonc
+{
+  "mediaItems": [
+    {
+      "id": "MEDIA_ITEM_ID", // string: media identifier
+      "description": "Sunset over Waikiki", // string: user description
+      "productUrl": "https://photos.google.com/lr/photo/MEDIA_ITEM_ID", // string: signed-in URL
+      "baseUrl": "https://lh3.googleusercontent.com/...", // string: base media download URL
+      "mimeType": "image/jpeg", // string: MIME type
+      "mediaMetadata": {
+        "creationTime": "2024-07-15T18:30:25Z", // string (Timestamp): capture time
+        "width": "4032", // string (int64): width in pixels
+        "height": "3024" // string (int64): height in pixels
+      },
+      "filename": "IMG_20240715_183025.jpg"
+    }
+  ],
+  "nextPageToken": "NEXT_TOKEN" // string: pagination cursor; omit when no more results
+}
+```
