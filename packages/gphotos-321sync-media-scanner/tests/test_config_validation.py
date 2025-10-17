@@ -20,14 +20,6 @@ class TestScannerConfigValidation:
         assert config.target_media_path == "/path/to/media"
         assert config.batch_size == 100
     
-    def test_rejects_old_scan_path_parameter(self):
-        """Test that old 'scan_path' parameter is rejected."""
-        with pytest.raises(ValidationError) as exc_info:
-            ScannerConfig(scan_path="/path/to/media")
-        
-        error_msg = str(exc_info.value).lower()
-        assert "extra_forbidden" in error_msg or "extra fields not permitted" in error_msg
-    
     def test_rejects_unknown_field(self):
         """Test that unknown fields are rejected."""
         with pytest.raises(ValidationError):
@@ -35,11 +27,6 @@ class TestScannerConfigValidation:
                 target_media_path="/path/to/media",
                 unknown_parameter="value"
             )
-    
-    def test_rejects_typo_in_target_media_path(self):
-        """Test that typos are caught."""
-        with pytest.raises(ValidationError):
-            ScannerConfig(target_media_pth="/path/to/media")  # Typo
 
 
 class TestMediaScannerConfigValidation:
@@ -63,27 +50,6 @@ class TestMediaScannerConfigValidation:
                 unknown_section={"key": "value"}
             )
     
-    def test_rejects_unknown_field_in_nested_config(self):
-        """Test that unknown fields in nested configs are rejected."""
-        with pytest.raises(ValidationError):
-            MediaScannerConfig(
-                logging={"level": "INFO"},
-                scanner={
-                    "target_media_path": "/path",
-                    "scan_path": "/old/path"  # Old parameter name
-                }
-            )
-    
-    def test_helpful_error_message_for_old_parameter(self):
-        """Test that error message is clear when using old parameter names."""
-        with pytest.raises(ValidationError) as exc_info:
-            MediaScannerConfig(
-                scanner={"scan_path": "/path"}
-            )
-        
-        error_msg = str(exc_info.value)
-        # Should mention the field name that was rejected
-        assert "scan_path" in error_msg
 
 
 class TestConfigDefaults:

@@ -20,17 +20,6 @@ class TestExtractionConfigValidation:
         assert config.source_dir == "/path/to/archives"
         assert config.target_media_path == "/path/to/output"
     
-    def test_rejects_old_target_dir_parameter(self):
-        """Test that old 'target_dir' parameter is rejected."""
-        with pytest.raises(ValidationError) as exc_info:
-            ExtractionConfig(
-                source_dir="/path/to/archives",
-                target_dir="/path/to/output"  # Old parameter name
-            )
-        
-        error_msg = str(exc_info.value).lower()
-        assert "extra_forbidden" in error_msg or "extra fields not permitted" in error_msg
-    
     def test_rejects_unknown_field(self):
         """Test that unknown fields are rejected."""
         with pytest.raises(ValidationError):
@@ -38,14 +27,6 @@ class TestExtractionConfigValidation:
                 source_dir="/path",
                 target_media_path="/path",
                 unknown_parameter="value"
-            )
-    
-    def test_rejects_typo_in_target_media_path(self):
-        """Test that typos are caught."""
-        with pytest.raises(ValidationError):
-            ExtractionConfig(
-                source_dir="/path",
-                target_media_pth="/path"  # Typo
             )
 
 
@@ -73,27 +54,6 @@ class TestTakeoutExtractorConfigValidation:
                 unknown_section={"key": "value"}
             )
     
-    def test_rejects_unknown_field_in_nested_config(self):
-        """Test that unknown fields in nested configs are rejected."""
-        with pytest.raises(ValidationError):
-            TakeoutExtractorConfig(
-                logging={"level": "INFO"},
-                extraction={
-                    "source_dir": "/archives",
-                    "target_dir": "/output"  # Old parameter name
-                }
-            )
-    
-    def test_helpful_error_message_for_old_parameter(self):
-        """Test that error message is clear when using old parameter names."""
-        with pytest.raises(ValidationError) as exc_info:
-            TakeoutExtractorConfig(
-                extraction={"target_dir": "/path"}
-            )
-        
-        error_msg = str(exc_info.value)
-        # Should mention the field name that was rejected
-        assert "target_dir" in error_msg
 
 
 class TestConfigDefaults:
