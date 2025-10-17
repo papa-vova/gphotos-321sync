@@ -259,6 +259,7 @@ CREATE INDEX idx_errors_path ON processing_errors(relative_path);
 - `media_item_id` (UUID4) - Primary key, random UUID generated on first discovery (stable internal ID)
 - `relative_path` (UNIQUE, normalized NFC, indexed) - Full path within Takeout
 - `album_id` (NOT NULL) - UUID5 of the album (every file is in a folder, every folder is an album)
+- `google_media_item_id` (UNIQUE) - Google Photos API media item ID (NULL for Takeout-only, populated during API sync)
 - `title` - From JSON metadata
 - `mime_type` - MIME/content type (e.g., image/jpeg, video/mp4)
 - `file_size` - File size in bytes
@@ -288,6 +289,7 @@ CREATE INDEX idx_errors_path ON processing_errors(relative_path);
 
 - `album_id` - UUID5(namespace, album_folder_path) for deterministic IDs
 - `album_folder_path` (UNIQUE, normalized NFC) - Path to album folder
+- `google_album_id` (UNIQUE) - Google Photos API album ID (NULL for Takeout-only, populated during API sync)
 - `title`, `description`, `creation_timestamp`, `access_level`
 - `status` - CHECK('present', 'error', 'missing')
 - Two types: User Albums (with metadata.json) and Year-based Albums (Photos from YYYY/)

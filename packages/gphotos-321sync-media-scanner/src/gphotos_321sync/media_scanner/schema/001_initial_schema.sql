@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS scan_runs (
 CREATE TABLE IF NOT EXISTS albums (
     album_id TEXT PRIMARY KEY,  -- UUID5(namespace, album_folder_path)
     album_folder_path TEXT NOT NULL UNIQUE,  -- Normalized NFC
+    google_album_id TEXT UNIQUE,  -- Google Photos API album ID (from API sync, NULL for Takeout-only)
     title TEXT,
     description TEXT,
     creation_timestamp TIMESTAMP,
@@ -58,6 +59,7 @@ CREATE TABLE IF NOT EXISTS media_items (
     media_item_id TEXT PRIMARY KEY,  -- UUID4
     relative_path TEXT NOT NULL UNIQUE,  -- Normalized NFC
     album_id TEXT NOT NULL,  -- References albums(album_id), every file is in an album
+    google_media_item_id TEXT UNIQUE,  -- Google Photos API media item ID (from API sync, NULL for Takeout-only)
     title TEXT,
     mime_type TEXT,
     file_size INTEGER NOT NULL CHECK(file_size >= 0),
@@ -143,6 +145,7 @@ CREATE TABLE IF NOT EXISTS processing_errors (
 
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_media_items_path ON media_items(relative_path);
+CREATE INDEX IF NOT EXISTS idx_media_items_google_id ON media_items(google_media_item_id);
 CREATE INDEX IF NOT EXISTS idx_media_items_scan_run ON media_items(scan_run_id);
 CREATE INDEX IF NOT EXISTS idx_media_items_status ON media_items(status);
 CREATE INDEX IF NOT EXISTS idx_media_items_last_seen ON media_items(last_seen_timestamp);
@@ -154,6 +157,7 @@ CREATE INDEX IF NOT EXISTS idx_media_items_original ON media_items(original_medi
 CREATE INDEX IF NOT EXISTS idx_media_items_live_pair ON media_items(live_photo_pair_id);
 
 CREATE INDEX IF NOT EXISTS idx_albums_path ON albums(album_folder_path);
+CREATE INDEX IF NOT EXISTS idx_albums_google_id ON albums(google_album_id);
 CREATE INDEX IF NOT EXISTS idx_albums_scan_run ON albums(scan_run_id);
 CREATE INDEX IF NOT EXISTS idx_albums_status ON albums(status);
 
