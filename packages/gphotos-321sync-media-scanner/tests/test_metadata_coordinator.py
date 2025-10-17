@@ -272,11 +272,11 @@ def test_media_item_record_has_media_item_id(test_file_info, test_cpu_result):
     )
     
     assert record.media_item_id is not None
-    assert len(record.media_item_id) == 36  # UUID4 format
+    assert len(record.media_item_id) == 36  # UUID5 format (same length as UUID4)
 
 
-def test_media_item_record_unique_ids(test_file_info, test_cpu_result):
-    """Test that each record gets a unique media_item_id."""
+def test_media_item_record_deterministic_ids(test_file_info, test_cpu_result):
+    """Test that UUID5 generates deterministic IDs for same inputs."""
     record1 = coordinate_metadata(
         file_info=test_file_info,
         cpu_result=test_cpu_result,
@@ -291,8 +291,8 @@ def test_media_item_record_unique_ids(test_file_info, test_cpu_result):
         scan_run_id='scan-456'
     )
     
-    # Each call should generate a new UUID
-    assert record1.media_item_id != record2.media_item_id
+    # UUID5 should generate the same ID for identical inputs
+    assert record1.media_item_id == record2.media_item_id
 
 
 def test_coordinate_metadata_all_exif_fields(test_file_info):

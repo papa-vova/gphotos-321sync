@@ -256,11 +256,11 @@ CREATE INDEX idx_errors_path ON processing_errors(relative_path);
 
 #### 1. Media Items
 
-- `media_item_id` (UUID4) - Primary key, random UUID generated on first discovery (stable internal ID)
+- `media_item_id` (UUID5) - Primary key, deterministic UUID based on canonical tuple (relative_path, photoTakenTime, file_size, creationTime) - ensures same media item gets same ID on re-imports
 - `relative_path` (UNIQUE, normalized NFC, indexed) - Full path within Takeout
 - `album_id` (NOT NULL) - UUID5 of the album (every file is in a folder, every folder is an album)
 - `google_media_item_id` (UNIQUE) - Google Photos API media item ID (NULL for Takeout-only, populated during API sync)
-- `title` - From JSON metadata
+- `title` - From JSON metadata (precedence: JSON > filename)
 - `mime_type` - MIME/content type (e.g., image/jpeg, video/mp4)
 - `file_size` - File size in bytes
 - `crc32` - CRC32 of full file (for fast duplicate candidate detection)
@@ -282,8 +282,9 @@ CREATE INDEX idx_errors_path ON processing_errors(relative_path);
 
 **Lookup Strategy:**
 
-- `media_item_id`: UUID4 (random), generated once on first discovery, provides stable internal ID
+- `media_item_id`: UUID5 (deterministic), generated from canonical tuple (relative_path, photoTakenTime, file_size, creationTime) - same file always gets same ID
 - File lookup: Query by `relative_path` (UNIQUE, indexed) to check if file exists in database
+- Re-import behavior: Same media item from repeated Takeout exports produces identical UUID5, enabling idempotent imports
 
 #### 2. Albums
 

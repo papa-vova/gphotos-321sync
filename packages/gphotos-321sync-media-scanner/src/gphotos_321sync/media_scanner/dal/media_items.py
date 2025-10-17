@@ -32,13 +32,13 @@ class MediaItemDAL:
         
         Args:
             item: Dictionary with media item data
-                Required: relative_path, album_id, file_size, scan_run_id
+                Required: media_item_id, relative_path, album_id, file_size, scan_run_id
                 Optional: All other fields
                 
         Returns:
-            media_item_id (UUID4 string)
+            media_item_id (UUID5 string from item dict)
         """
-        media_item_id = str(uuid.uuid4())
+        media_item_id = item['media_item_id']
         
         cursor = self.db.execute(
             """

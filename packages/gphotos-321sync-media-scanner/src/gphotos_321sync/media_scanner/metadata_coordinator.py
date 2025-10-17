@@ -21,6 +21,12 @@ from .errors import ParseError
 
 logger = logging.getLogger(__name__)
 
+# UUID5 namespace for media items (deterministic ID generation)
+# This ensures the same media item always gets the same UUID across re-imports
+# Using RFC 4122 DNS namespace constant - the specific namespace doesn't matter,
+# just needs to be consistent across all UUID5 generations in this project
+MEDIA_ITEM_NAMESPACE = uuid.UUID('6ba7b810-9dad-11d1-80b4-00c04fd430c8')
+
 
 @dataclass
 class MediaItemRecord:
@@ -161,8 +167,14 @@ def coordinate_metadata(
         video_data=video_data
     )
     
-    # 4. Generate media_item_id (UUID4 - random, stable internal ID)
-    media_item_id = str(uuid.uuid4())
+    # 4. Generate media_item_id (UUID5 - deterministic based on canonical tuple)
+    # Canonical tuple: (relative_path, photoTakenTime, file_size, creationTime)
+    # This ensures the same media item gets the same UUID on re-imports
+    media_item_id = _generate_media_item_id(
+        relative_path=file_info.relative_path,
+        json_metadata=json_metadata,
+        file_size=file_info.file_size
+    )
     
     # 5. Extract EXIF fields
     exif_datetime_original = exif_data.get('datetime_original')
@@ -224,3 +236,47 @@ def coordinate_metadata(
     )
     
     return record
+
+
+def _generate_media_item_id(
+    relative_path: str,
+    json_metadata: dict,
+    file_size: int
+) -> str:
+    """Generate deterministic UUID5 for media item.
+    
+    Uses canonical tuple: (relative_path, photoTakenTime, file_size, creationTime)
+    This ensures the same media item gets the same UUID across re-imports.
+    
+    Args:
+        relative_path: Normalized relative path within Takeout
+        json_metadata: Parsed JSON sidecar metadata
+        file_size: File size in bytes
+        
+    Returns:
+        UUID5 string
+    """
+    # Normalize path (forward slashes, strip leading/trailing)
+    normalized_path = normalize_path(relative_path)
+    
+    # Extract timestamps from JSON metadata
+    photo_taken_time = ''
+    if 'photoTakenTime' in json_metadata:
+        photo_taken_time = json_metadata['photoTakenTime'].get('timestamp', '')
+    
+    creation_time = ''
+    if 'creationTime' in json_metadata:
+        creation_time = json_metadata['creationTime'].get('timestamp', '')
+    
+    # Build canonical string
+    # Format: relative_path|photoTakenTime|file_size|creationTime
+    components = [
+        normalized_path,
+        str(photo_taken_time),
+        str(file_size),
+        str(creation_time)
+    ]
+    canonical = '|'.join(components)
+    
+    # Generate UUID5
+    return str(uuid.uuid5(MEDIA_ITEM_NAMESPACE, canonical))
