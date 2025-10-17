@@ -1,6 +1,10 @@
 -- Media Scanner Database Schema
 -- Version: 001
 -- Description: Initial schema for media scanning and cataloging
+--
+-- TIMEZONE POLICY: All timestamps in this database use UTC.
+-- SQLite's CURRENT_TIMESTAMP returns UTC by default.
+-- Application code MUST use datetime.utcnow() when comparing or setting timestamps.
 
 -- Schema version tracking
 CREATE TABLE IF NOT EXISTS schema_version (

@@ -113,7 +113,8 @@ class ParallelScanner:
         album_dal = AlbumDAL(conn)
         
         scan_run_id = scan_run_dal.create_scan_run()
-        scan_start_time = datetime.now()
+        # Use UTC to match SQLite's CURRENT_TIMESTAMP
+        scan_start_time = datetime.utcnow()
         
         logger.info(f"Created scan run: {scan_run_id}")
         

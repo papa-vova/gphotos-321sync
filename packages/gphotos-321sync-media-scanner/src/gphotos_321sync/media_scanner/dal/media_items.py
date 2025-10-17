@@ -108,6 +108,7 @@ class MediaItemDAL:
             )
         )
         cursor.close()
+        self.db.commit()
         
         logger.debug(f"Inserted media item: {media_item_id} ({item['relative_path']})")
         return media_item_id

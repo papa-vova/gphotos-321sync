@@ -135,15 +135,18 @@ def test_media_item_dal(migrated_db):
     })
     
     # Insert media item
+    import uuid
+    media_item_id = str(uuid.uuid4())  # Generate test UUID
     item_data = {
+        'media_item_id': media_item_id,
         'relative_path': 'Photos from 2023/IMG_001.jpg',
         'album_id': album_id,
         'file_size': 1024000,
         'mime_type': 'image/jpeg',
         'scan_run_id': scan_run_id
     }
-    media_item_id = media_dal.insert_media_item(item_data)
-    assert media_item_id is not None
+    returned_id = media_dal.insert_media_item(item_data)
+    assert returned_id == media_item_id
     
     # Get media item by path
     item = media_dal.get_media_item_by_path('Photos from 2023/IMG_001.jpg')

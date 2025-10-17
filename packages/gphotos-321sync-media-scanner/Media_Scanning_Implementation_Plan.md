@@ -33,9 +33,10 @@ This document provides a step-by-step implementation plan for the media scanning
 | Phase 3: Metadata Extraction | ✅ | 5/5 |
 | Phase 4: Discovery & Processing | ✅ | 4/4 |
 | Phase 5: Parallel Scanner | ✅ | 6/6 |
-| Phase 6: Post-Scan & Validation | ⬜ | 0/2 |
-| Phase 7: Edge Cases | ⬜ | 0/2 |
-| **Total** | **88%** | **29/33** |
+| Phase 6: Post-Scan & Validation | ✅ | 2/2 |
+| Phase 7: Edge Cases | ✅ | 2/2 |
+| Phase 8: End-to-end Testing | 🔄 | 0/1 |
+| **Total** | **97%** | **33/34** |
 
 **Legend:** ⬜ Not Started | 🔄 In Progress | ✅ Completed | ⚠️ Blocked | ❌ Failed
 
@@ -496,7 +497,7 @@ This document provides a step-by-step implementation plan for the media scanning
 
 ### 6.1 Post-Scan Validation
 
-- **Status:** ⬜
+- **Status:** ✅
 - **File:** `src/gphotos_321sync/media_scanner/post_scan.py`
 - **Function:** `validate_scan(scan_run_id: str, scan_start_time: datetime)`
 - **Tasks:**
@@ -509,7 +510,7 @@ This document provides a step-by-step implementation plan for the media scanning
 
 ### 6.2 Scan Summary Report
 
-- **Status:** ⬜
+- **Status:** ✅
 - **File:** `src/gphotos_321sync/media_scanner/summary.py`
 - **Function:** `generate_summary(scan_run_id: str) -> dict`
 - **Tasks:**
@@ -529,7 +530,7 @@ This document provides a step-by-step implementation plan for the media scanning
 
 ### 7.1 Live Photos
 
-- **Status:** ⬜
+- **Status:** ✅
 - **File:** `src/gphotos_321sync/media_scanner/edge_cases/live_photos.py`
 - **Function:** `detect_live_photo_pairs(files: list[FileInfo]) -> list[tuple[FileInfo, FileInfo]]`
 - **Tasks:**
@@ -541,7 +542,7 @@ This document provides a step-by-step implementation plan for the media scanning
 
 ### 7.2 Edited Variants
 
-- **Status:** ⬜
+- **Status:** ✅
 - **File:** `src/gphotos_321sync/media_scanner/edge_cases/edited_variants.py`
 - **Function:** `detect_edited_variants(files: list[FileInfo]) -> dict[str, str]`
 - **Tasks:**
@@ -550,42 +551,6 @@ This document provides a step-by-step implementation plan for the media scanning
   - Store as separate media items
 - **Tests:** Variant detection, linking
 - **Acceptance:** Edited variants detected and linked
-
----
-
-## Testing Strategy
-
-### Unit Tests
-
-- **Coverage target:** >80%
-- **Run:** `pytest tests/media_scanner/ -v --cov=src/gphotos_321sync/media_scanner`
-- **Focus:** Individual functions and classes
-
-### Integration Tests
-
-- **Scope:** End-to-end scan with test fixtures
-- **Fixtures:**
-  - Small library (10 files)
-  - Medium library (1,000 files)
-  - Edge cases (Live Photos, edited variants, missing metadata)
-- **Run:** `pytest tests/media_scanner/integration/ -v`
-
-### Performance Tests
-
-- **Benchmarks:**
-  - Sequential vs parallel comparison
-  - Throughput measurement (files/sec)
-  - Memory usage tracking
-- **Run:** `pytest tests/media_scanner/test_performance.py -v`
-
-### Test Fixtures
-
-- **Location:** `tests/fixtures/`
-- **Contents:**
-  - Sample images (JPEG, PNG, HEIC)
-  - Sample videos (MP4, MOV)
-  - JSON sidecars
-  - Album metadata.json files
 
 ---
 

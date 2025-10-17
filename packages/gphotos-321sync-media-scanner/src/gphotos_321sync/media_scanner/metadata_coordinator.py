@@ -260,13 +260,22 @@ def _generate_media_item_id(
     normalized_path = normalize_path(relative_path)
     
     # Extract timestamps from JSON metadata
+    # Handle both dict format (real JSON) and string format (test fixtures)
     photo_taken_time = ''
     if 'photoTakenTime' in json_metadata:
-        photo_taken_time = json_metadata['photoTakenTime'].get('timestamp', '')
+        pt = json_metadata['photoTakenTime']
+        if isinstance(pt, dict):
+            photo_taken_time = pt.get('timestamp', '')
+        else:
+            photo_taken_time = str(pt)
     
     creation_time = ''
     if 'creationTime' in json_metadata:
-        creation_time = json_metadata['creationTime'].get('timestamp', '')
+        ct = json_metadata['creationTime']
+        if isinstance(ct, dict):
+            creation_time = ct.get('timestamp', '')
+        else:
+            creation_time = str(ct)
     
     # Build canonical string
     # Format: relative_path|photoTakenTime|file_size|creationTime

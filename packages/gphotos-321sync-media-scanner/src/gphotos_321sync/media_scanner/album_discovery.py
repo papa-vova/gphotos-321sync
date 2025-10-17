@@ -215,7 +215,8 @@ def discover_albums(target_media_path: Path, album_dal: AlbumDAL, scan_run_id: s
                 access_level=access_level,
                 status=status,
                 scan_run_id=scan_run_id,
-                last_seen_timestamp=datetime.now()
+                # Use UTC to match SQLite's CURRENT_TIMESTAMP
+                last_seen_timestamp=datetime.utcnow()
             )
         else:
             # Insert new album

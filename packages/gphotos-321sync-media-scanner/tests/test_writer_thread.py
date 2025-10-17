@@ -2,6 +2,7 @@
 
 import threading
 import time
+import uuid
 from pathlib import Path
 from queue import Queue
 import pytest
@@ -73,6 +74,7 @@ class TestWriterThread:
             results_queue.put({
                 "type": "media_item",
                 "record": {
+                    "media_item_id": str(uuid.uuid4()),
                     "relative_path": f"Photos/test{i}.jpg",
                     "album_id": "album-123",
                     "file_size": 1000 + i,
@@ -145,6 +147,7 @@ class TestWriterThread:
             results_queue.put({
                 "type": "media_item",
                 "record": {
+                    "media_item_id": str(uuid.uuid4()),
                     "relative_path": f"Photos/test{i}.jpg",
                     "album_id": "album-123",
                     "file_size": 1000 + i,
@@ -181,6 +184,7 @@ class TestWriterThread:
         results_queue.put({
             "type": "media_item",
             "record": {
+                "media_item_id": str(uuid.uuid4()),
                 "relative_path": "Photos/good1.jpg",
                 "album_id": "album-123",
                 "file_size": 1000,
@@ -202,6 +206,7 @@ class TestWriterThread:
         results_queue.put({
             "type": "media_item",
             "record": {
+                "media_item_id": str(uuid.uuid4()),
                 "relative_path": "Photos/good2.jpg",
                 "album_id": "album-123",
                 "file_size": 2000,
@@ -293,10 +298,12 @@ class TestWriteBatch:
         media_dal = MediaItemDAL(conn)
         error_dal = ProcessingErrorDAL(conn)
         
+        import uuid
         batch = [
             {
                 "type": "media_item",
                 "record": {
+                    "media_item_id": str(uuid.uuid4()),
                     "relative_path": "Photos/test1.jpg",
                     "album_id": "album-123",
                     "file_size": 1000,
@@ -308,6 +315,7 @@ class TestWriteBatch:
             {
                 "type": "media_item",
                 "record": {
+                    "media_item_id": str(uuid.uuid4()),
                     "relative_path": "Photos/test2.jpg",
                     "album_id": "album-123",
                     "file_size": 2000,
