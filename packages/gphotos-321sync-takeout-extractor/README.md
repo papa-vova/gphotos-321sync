@@ -33,7 +33,7 @@ gphotos-extract --source-dir /path/to/archives --target-media-path /path/to/outp
 
 ## Features
 
-- Supports ZIP, TAR, and 7z archives
+- Supports Google Takeout archives
 - Resumable extraction
 - CRC32 verification
 - Unicode path normalization

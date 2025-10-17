@@ -12,7 +12,7 @@ Monorepo for Google Photos backup and synchronization tools.
 
 **Key Features:**
 
-- Automated extraction of Google Takeout archives (ZIP, TAR, 7z)
+- Automated extraction of Google Takeout archives
 - Intelligent metadata extraction from EXIF and Google JSON files
 - Metadata normalization and embedding into media files
 - Virtual gallery organization by year, month, and albums
