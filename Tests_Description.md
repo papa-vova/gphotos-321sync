@@ -239,7 +239,7 @@ Integration tests for tool checker with config (4 tests).
 
 ### test_album_discovery.py
 
-Tests for album discovery and metadata parsing (17 tests).
+Tests for album discovery and metadata parsing (16 tests).
 
 **Rationale**: Ensures albums are correctly discovered from Google Photos Takeout structure (top-level folders only, as Google Photos doesn't support nested albums), metadata is parsed from JSON files, and album IDs remain consistent across scans for proper tracking.
 
@@ -421,7 +421,7 @@ Integration tests for RAW format EXIF extraction with ExifTool (5 tests).
 
 ### test_video_extractor_integration.py
 
-Integration tests for video metadata extraction (8 tests, requires ffprobe).
+Integration tests for video metadata extraction (7 tests, requires ffprobe).
 
 | # | Test | Input | Output | Conditions/Assumptions | Logic |
 |---|------|-------|--------|----------------------|-------|
@@ -459,7 +459,7 @@ Tests for Live Photos detection and linking (15 tests).
 
 ### test_metadata_coordinator.py
 
-Tests for metadata coordination and MediaItemRecord creation (12 tests).
+Tests for metadata coordination and MediaItemRecord creation (14 tests).
 
 **Rationale**: The coordinator combines data from multiple sources (FileInfo from discovery, metadata extraction results, JSON sidecars) into a single `MediaItemRecord` ready for database insertion. Tests validate that all data sources are correctly merged and edge cases (missing data, parse errors) are handled.
 
@@ -504,7 +504,7 @@ Tests for metadata aggregation from multiple sources (13 tests).
 
 ### test_post_scan.py
 
-Tests for post-scan validation and cleanup (10 tests).
+Tests for post-scan validation and cleanup (9 tests).
 
 | # | Test | Input | Output | Conditions/Assumptions | Logic |
 |---|------|-------|--------|----------------------|-------|
@@ -520,7 +520,7 @@ Tests for post-scan validation and cleanup (10 tests).
 
 ### test_progress.py
 
-Tests for progress tracker (17 tests).
+Tests for progress tracker (14 tests).
 
 | # | Test | Input | Output | Conditions/Assumptions | Logic |
 |---|------|-------|--------|----------------------|-------|
@@ -541,7 +541,7 @@ Tests for progress tracker (17 tests).
 
 ### test_queue_manager.py
 
-Tests for queue manager (12 tests).
+Tests for queue manager (10 tests).
 
 | # | Test | Input | Output | Conditions/Assumptions | Logic |
 |---|------|-------|--------|----------------------|-------|
@@ -558,7 +558,7 @@ Tests for queue manager (12 tests).
 
 ### test_summary.py
 
-Tests for scan summary generation (17 tests).
+Tests for scan summary generation (13 tests).
 
 | # | Test | Input | Output | Conditions/Assumptions | Logic |
 |---|------|-------|--------|----------------------|-------|
@@ -595,7 +595,7 @@ Tests for worker thread processing (10 tests).
 
 ### test_writer_thread.py
 
-Tests for writer thread database operations (9 tests).
+Tests for writer thread database operations (7 tests).
 
 | # | Test | Input | Output | Conditions/Assumptions | Logic |
 |---|------|-------|--------|----------------------|-------|
