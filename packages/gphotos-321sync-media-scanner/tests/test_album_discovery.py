@@ -224,29 +224,19 @@ def test_discover_albums_album_id_generation(test_albums, album_dal):
         assert albums1_dict[folder_path] == albums2_dict[folder_path]
 
 
-def test_discover_albums_empty_directory(tmp_path, album_dal, caplog):
-    """Test discovering albums in empty directory."""
-    import logging
-    caplog.set_level(logging.WARNING)
-    
-    albums = list(discover_albums(tmp_path, album_dal, "scan-123"))
-    assert len(albums) == 0
-    
-    # Check that warning was logged
-    assert any("No albums discovered" in record.message for record in caplog.records)
+def test_discover_albums_empty_directory(tmp_path, album_dal):
+    """Test discovering albums in empty directory raises error."""
+    # Empty directory has nothing to scan - should fail
+    with pytest.raises(RuntimeError, match="No albums discovered"):
+        list(discover_albums(tmp_path, album_dal, "scan-123"))
 
 
-def test_discover_albums_nonexistent_path(tmp_path, album_dal, caplog):
-    """Test discovering albums with non-existent path."""
-    import logging
-    caplog.set_level(logging.WARNING)
-    
+def test_discover_albums_nonexistent_path(tmp_path, album_dal):
+    """Test discovering albums with non-existent path raises error."""
     nonexistent = tmp_path / "does_not_exist"
-    albums = list(discover_albums(nonexistent, album_dal, "scan-123"))
-    assert len(albums) == 0
     
-    # Check that warning was logged
-    assert any("does not exist" in record.message for record in caplog.records)
+    with pytest.raises(FileNotFoundError, match="does not exist"):
+        list(discover_albums(nonexistent, album_dal, "scan-123"))
 
 
 def test_discover_albums_count(test_albums, album_dal):

@@ -109,31 +109,6 @@ Tests for archive verification and selective re-extraction (24 tests).
 
 ## gphotos-321sync-media-scanner
 
-### test_album_discovery.py
-
-Tests for album discovery and metadata parsing (17 tests).
-
-**Rationale**: Ensures albums are correctly discovered from Google Photos Takeout structure (top-level folders only, as Google Photos doesn't support nested albums), metadata is parsed from JSON files, and album IDs remain consistent across scans for proper tracking.
-
-| # | Test | Input | Output | Conditions/Assumptions | Logic |
-|---|------|-------|--------|----------------------|-------|
-| 1 | `test_parse_album_metadata_complete` | metadata.json with title, description, access, date | Dict with all parsed fields | Complete metadata.json | Parses all Google Photos album metadata fields correctly |
-| 2 | `test_parse_album_metadata_minimal` | metadata.json with only {"title": "My Album"} | Dict with title="My Album", others None | Minimal metadata | Handles sparse metadata gracefully without errors |
-| 3 | `test_parse_album_metadata_invalid_json` | Malformed JSON file (syntax error) | ParseError raised | Invalid JSON syntax | Validates error handling for corrupted metadata files |
-| 4 | `test_parse_album_metadata_missing_file` | Path to non-existent metadata.json | ParseError raised | File doesn't exist | Validates error handling for missing metadata files |
-| 5 | `test_extract_year_from_folder_valid` | Folder name "Photos from 2023" | Integer 2023 | Valid year pattern (1900-2200) | Extracts year from Google Photos year-based album folders |
-| 6 | `test_extract_year_from_folder_invalid` | "Photos", "Photos from 1899", "Photos from 2201" | None | No valid year pattern or out of range | Returns None for non-matching or invalid year patterns |
-| 7 | `test_discover_albums_user_album` | Directory containing metadata.json | AlbumInfo with is_user_album=True, parsed metadata | Album has metadata.json | Discovers user-created albums (have metadata.json) |
-| 8 | `test_discover_albums_year_based` | Folder "Photos from 2023" (no metadata.json) | AlbumInfo with is_user_album=False, year in title | Folder matches year pattern | Identifies Google Photos year-based albums |
-| 9 | `test_discover_albums_regular_folder` | Regular folder "Vacation" (no metadata, no year) | AlbumInfo using folder name as title | Generic folder | Treats any top-level folder as potential album |
-| 10 | `test_discover_albums_invalid_metadata` | Album with corrupted metadata.json | AlbumInfo using folder name as fallback, warning logged | Invalid JSON in metadata | Gracefully handles metadata parsing errors, logs warning, uses folder name |
-| 11 | `test_discover_albums_database_insertion` | Discovered albums + DB connection | Albums inserted into albums table | Valid DB connection | Verifies albums are persisted to database correctly |
-| 12 | `test_discover_albums_album_id_generation` | Same album path in different scans | Identical album_ids (UUID5 based on path) | Deterministic ID generation | Ensures album IDs remain consistent across scans for tracking |
-| 13 | `test_discover_albums_empty_directory` | Empty directory (no folders) | Empty list, warning logged | No folders to discover | Handles empty directories without errors, logs warning |
-| 14 | `test_discover_albums_nonexistent_path` | Path that doesn't exist | Empty list, warning logged | Invalid path | Handles missing paths gracefully without crashing, logs warning |
-| 15 | `test_discover_albums_count` | Test fixture with 4 top-level folders | Exactly 4 albums discovered | Only top-level folders | Verifies only top-level folders are discovered (no recursion) |
-| 16 | `test_discover_albums_update_existing` | Re-scan with new scan_run_id | Albums updated with new scan_run_id | Albums already in database | Updates existing albums rather than creating duplicates |
-
 ### test_config.py (media-scanner)
 
 Tests for scanner-specific configuration (3 tests).
@@ -154,12 +129,37 @@ Tests for database connection and DAL operations (8 tests).
 |---|------|-------|--------|----------------------|-------|
 | 1 | `test_database_connection` | Database path | Active connection, file created | Valid path | Tests SQLite connection creation |
 | 2 | `test_database_pragmas` | Database connection | WAL mode, busy_timeout=5000ms | Connection established | Verifies SQLite pragmas |
-| 3 | `test_migration_initial_schema` | Empty database | Schema version 1 | First-time migration | Tests initial schema migration |
-| 4 | `test_scan_run_dal` | Database connection | CRUD operations succeed | Valid database | Tests scan run DAL |
-| 5 | `test_album_dal` | DB + scan_run_id | Album CRUD operations | Valid DB and scan | Tests album DAL |
-| 6 | `test_media_item_dal` | DB + album_id + scan_run_id | Media item CRUD operations | Valid DB, album, scan | Tests media item DAL |
-| 7 | `test_processing_error_dal` | DB + scan_run_id | Error tracking operations | Valid DB and scan | Tests error DAL |
-| 8 | `test_transaction_rollback` | Transaction with error | No data persisted | Transaction fails | Validates rollback behavior |
+| 3 | `test_migration_initial_schema` | Empty database (no schema_version table), run MigrationRunner | get_current_version() returns 1 after migration | First-time migration | Tests that MigrationRunner applies initial SQL schema (001_initial_schema.sql) and sets version to 1. Note: MigrationRunner runs on every app start but only applies pending migrations (idempotent). |
+| 4 | `test_scan_run_dal` | Call ScanRunDAL methods | create_scan_run() → get_scan_run() → update_scan_run() → complete_scan_run() all succeed | Tests scan_runs table operations | Tests CRUD operations on scan_runs table: create new scan, retrieve by ID, update fields (files_processed), mark as completed with end_timestamp |
+| 5 | `test_album_dal` | Call AlbumDAL methods with scan_run_id | insert_album() → get_album_by_path() → get_album_by_id() → update_album() all succeed | Tests albums table operations | Tests CRUD operations on albums table: insert album with path/title, retrieve by path or ID, update fields (description). Requires scan_run_id foreign key. |
+| 6 | `test_media_item_dal` | Call MediaItemDAL methods with album_id + scan_run_id | insert_media_item() → get_media_item_by_path() → update_media_item() all succeed | Tests media_items table operations | Tests CRUD operations on media_items table: insert item with UUID/path/size/mime_type, retrieve by path or ID, update metadata (width/height). Requires album_id and scan_run_id foreign keys. |
+| 7 | `test_processing_error_dal` | Call ProcessingErrorDAL methods with scan_run_id | insert_error() → get_errors_by_scan() → get_error_count() → get_error_summary() all succeed | Tests processing_errors table operations | Tests error tracking: insert error with type/category/message, retrieve all errors for scan, get total count, get summary grouped by category (e.g., {'corrupted': 1}) |
+| 8 | `test_transaction_rollback` | Start transaction, insert valid row, insert into invalid_table (fails), catch exception | get_scan_run() returns None (first insert was rolled back) | Tests SQLite transaction rollback | Tests that when transaction fails (invalid SQL), all operations in that transaction are rolled back and no data persists |
+
+### test_album_discovery.py
+
+Tests for album discovery and metadata parsing (17 tests).
+
+**Rationale**: Ensures albums are correctly discovered from Google Photos Takeout structure (top-level folders only, as Google Photos doesn't support nested albums), metadata is parsed from JSON files, and album IDs remain consistent across scans for proper tracking.
+
+| # | Test | Input | Output | Conditions/Assumptions | Logic |
+|---|------|-------|--------|----------------------|-------|
+| 1 | `test_parse_album_metadata_complete` | metadata.json with title, description, access, date | Dict with all parsed fields | Complete metadata.json | Parses all Google Photos album metadata fields correctly |
+| 2 | `test_parse_album_metadata_minimal` | metadata.json with only {"title": "My Album"} | Dict with title="My Album", others None | Minimal metadata | Handles sparse metadata gracefully without errors |
+| 3 | `test_parse_album_metadata_invalid_json` | File with content "not valid json{" | parse_album_metadata() raises ParseError with "Invalid JSON" message | Malformed JSON | Tests that parse_album_metadata() raises ParseError when JSON is syntactically invalid |
+| 4 | `test_parse_album_metadata_missing_file` | Path to nonexistent.json file | parse_album_metadata() raises ParseError with "Failed to read" message | File doesn't exist | Tests that parse_album_metadata() raises ParseError when file path doesn't exist |
+| 5 | `test_extract_year_from_folder_valid` | Folder name "Photos from 2023" | Integer 2023 | Valid year pattern (1900-2200) | Extracts year from Google Photos year-based album folders |
+| 6 | `test_extract_year_from_folder_invalid` | "Photos", "Photos from 1899", "Photos from 2201" | None | No valid year pattern or out of range | Returns None for non-matching or invalid year patterns |
+| 7 | `test_discover_albums_user_album` | Directory containing metadata.json | AlbumInfo with is_user_album=True, parsed metadata | Album has metadata.json | Discovers user-created albums (have metadata.json) |
+| 8 | `test_discover_albums_year_based` | Folder "Photos from 2023" (no metadata.json) | AlbumInfo with is_user_album=False, year in title | Folder matches year pattern | Identifies Google Photos year-based albums |
+| 9 | `test_discover_albums_regular_folder` | Regular folder "Vacation" (no metadata, no year) | AlbumInfo using folder name as title | Generic folder | Treats any top-level folder as potential album |
+| 10 | `test_discover_albums_invalid_metadata` | Folder "Invalid Album" with malformed metadata.json | Album discovered with title="Invalid Album" (folder name), warning "Failed to parse album metadata" logged | Invalid metadata.json in folder | Tests that discover_albums() continues when metadata.json is invalid: uses folder name as title, logs warning, doesn't crash. Different from test #3 because this tests discover_albums() behavior (continues scanning), while test #3 tests parse_album_metadata() behavior (raises error). |
+| 11 | `test_discover_albums_database_insertion` | Discovered albums + DB connection | Albums inserted into albums table | Valid DB connection | Verifies albums are persisted to database correctly |
+| 12 | `test_discover_albums_album_id_generation` | Same album path in different scans | Identical album_ids (UUID5 based on path) | Deterministic ID generation | Ensures album IDs remain consistent across scans for tracking |
+| 13 | `test_discover_albums_empty_directory` | target_media_path directory with no subdirectories | discover_albums() raises RuntimeError with "No albums discovered" | Empty directory - nothing to scan | Tests that discover_albums() fails when target_media_path has no albums: raises RuntimeError (app has nothing to do, should exit) |
+| 14 | `test_discover_albums_nonexistent_path` | target_media_path pointing to non-existent directory | discover_albums() raises FileNotFoundError with "does not exist" | target_media_path doesn't exist | Tests that discover_albums() fails fast when target_media_path doesn't exist: raises FileNotFoundError immediately (app should not continue with invalid path) |
+| 15 | `test_discover_albums_count` | Test fixture with 4 top-level folders | Exactly 4 albums discovered | Only top-level folders | Verifies only top-level folders are discovered (no recursion) |
+| 16 | `test_discover_albums_update_existing` | Re-scan with new scan_run_id | Albums updated with new scan_run_id | Albums already in database | Updates existing albums rather than creating duplicates |
 
 ### test_discovery.py
 

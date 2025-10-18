@@ -130,12 +130,16 @@ def discover_albums(target_media_path: Path, album_dal: AlbumDAL, scan_run_id: s
         - Albums are inserted into database immediately (needed before file processing)
     """
     if not target_media_path.exists():
-        logger.warning(f"Target media path does not exist: {target_media_path}")
-        return
+        raise FileNotFoundError(
+            f"Target media path does not exist: {target_media_path}\n"
+            f"Please verify the path and try again."
+        )
     
     if not target_media_path.is_dir():
-        logger.warning(f"Target media path is not a directory: {target_media_path}")
-        return
+        raise NotADirectoryError(
+            f"Target media path is not a directory: {target_media_path}\n"
+            f"Please provide a valid directory path."
+        )
     
     logger.info(f"Starting album discovery from: {target_media_path}")
     
@@ -238,9 +242,13 @@ def discover_albums(target_media_path: Path, album_dal: AlbumDAL, scan_run_id: s
         )
     
     if albums_discovered == 0:
-        logger.warning(f"No albums discovered in: {target_media_path}")
-    else:
-        logger.info(
-            f"Album discovery complete: {albums_discovered} albums discovered "
-            f"({user_albums} user albums, {year_albums} year-based albums, {errors} errors)"
+        raise RuntimeError(
+            f"No albums discovered in: {target_media_path}\n"
+            f"The directory exists but contains no subdirectories.\n"
+            f"Please add albums (folders) to the target media path before running the scan."
         )
+    
+    logger.info(
+        f"Album discovery complete: {albums_discovered} albums discovered "
+        f"({user_albums} user albums, {year_albums} year-based albums, {errors} errors)"
+    )
