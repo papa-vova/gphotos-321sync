@@ -133,6 +133,21 @@ Tests for scanner-specific configuration (3 tests).
 | 2 | `test_scanner_config_custom_values` | Scanner-specific parameters | Config with custom values | Parameters provided | Tests scanner-specific parameter overrides |
 | 3 | `test_media_scanner_config_defaults` | No parameters | Root config with nested defaults | Using defaults | Tests root configuration structure with scanner defaults |
 
+### test_path_utils.py (media-scanner)
+
+Tests for media scanner path utilities (6 tests).
+
+**Rationale**: Tests media-scanner specific file filtering (hidden/system/temp files).
+
+| # | Test | Input | Output | Conditions/Assumptions | Logic |
+|---|------|-------|--------|----------------------|-------|
+| 1 | `test_unix_hidden_files` | Files: .hidden, .DS_Store, .gitignore | is_hidden=True for all | Unix hidden files | Identifies files starting with . as hidden |
+| 2 | `test_regular_files_not_hidden` | Files: photo.jpg, document.pdf | is_hidden=False for all | Normal files | Regular files not marked as hidden |
+| 3 | `test_regular_files_should_scan` | Files: photo.jpg, video.mp4 | should_scan=True for all | Normal files | All regular media files should be scanned |
+| 4 | `test_hidden_files_should_skip` | Files: .hidden, .DS_Store | should_scan=False for all | Hidden files | Skips Unix hidden files (system metadata) |
+| 5 | `test_system_files_should_skip` | Files: Thumbs.db, desktop.ini, .DS_Store | should_scan=False for all | Windows/Mac system files | Skips system-generated files |
+| 6 | `test_temp_files_should_skip` | Files: file.tmp, cache.cache, backup.bak | should_scan=False for all | Temporary file extensions | Skips temporary and backup files |
+
 ### test_database.py
 
 Tests for database connection and DAL operations (8 tests).
@@ -147,6 +162,72 @@ Tests for database connection and DAL operations (8 tests).
 | 6 | `test_media_item_dal` | Call MediaItemDAL methods with album_id + scan_run_id | insert_media_item() → get_media_item_by_path() → update_media_item() all succeed | Tests media_items table operations | Tests CRUD operations on media_items table: insert item with UUID/path/size/mime_type, retrieve by path or ID, update metadata (width/height). Requires album_id and scan_run_id foreign keys. |
 | 7 | `test_processing_error_dal` | Call ProcessingErrorDAL methods with scan_run_id | insert_error() → get_errors_by_scan() → get_error_count() → get_error_summary() all succeed | Tests processing_errors table operations | Tests error tracking: insert error with type/category/message, retrieve all errors for scan, get total count, get summary grouped by category (e.g., {'corrupted': 1}) |
 | 8 | `test_transaction_rollback` | Start transaction, insert valid row, insert into invalid_table (fails), catch exception | get_scan_run() returns None (first insert was rolled back) | Tests SQLite transaction rollback | Tests that when transaction fails (invalid SQL), all operations in that transaction are rolled back and no data persists |
+
+### test_migrations.py
+
+Tests for database migration system (17 tests).
+
+| # | Test | Input | Output | Conditions/Assumptions | Logic |
+|---|------|-------|--------|----------------------|-------|
+| 1 | `test_initial_migration_creates_schema_version_table` | Empty database | schema_version table created | First migration | Creates version tracking table |
+| 2 | `test_initial_migration_creates_all_tables` | Empty database | All required tables created | First migration | Creates complete schema |
+| 3 | `test_get_current_version_on_empty_db` | Empty database | Version 0 | No migrations applied | Returns 0 for empty DB |
+| 4 | `test_get_current_version_after_migration` | Database after migration | Version 1 | Migrations applied | Returns current version |
+| 5 | `test_migration_idempotency` | Run migrations twice | Same version, tables intact | Multiple runs | Migrations are idempotent |
+| 6 | `test_reapplying_migration_preserves_scan_runs` | Populated DB, re-migrate | Scan runs preserved | Data exists | Doesn't delete existing data |
+| 7 | `test_reapplying_migration_preserves_albums` | Populated DB, re-migrate | Albums preserved | Data exists | Doesn't delete existing data |
+| 8 | `test_reapplying_migration_preserves_media_items` | Populated DB, re-migrate | Media items preserved | Data exists | Doesn't delete existing data |
+| 9 | `test_all_required_columns_exist_in_media_items` | Migrated database | All required columns present | After migration | Validates media_items schema |
+| 10 | `test_all_required_columns_exist_in_albums` | Migrated database | All required columns present | After migration | Validates albums schema |
+| 11 | `test_all_required_columns_exist_in_scan_runs` | Migrated database | All required columns present | After migration | Validates scan_runs schema |
+| 12 | `test_indexes_created` | Migrated database | All required indexes present | After migration | Validates index creation |
+| 13 | `test_migration_files_are_numbered` | Schema directory | Files follow naming convention | Migration files exist | Validates file naming |
+| 14 | `test_migrations_applied_in_order` | Empty database | Migrations applied sequentially | Multiple migrations | Validates sequential application |
+| 15 | `test_can_query_data_after_migration` | Populated DB, re-migrate | DAL queries work | After migration | Validates data accessibility |
+| 16 | `test_can_insert_data_after_migration` | Populated DB, re-migrate | New data insertable | After migration | Validates write operations |
+| 17 | `test_missing_schema_version_table_handled` | DB without schema_version | Version 0 detected, migrations applied | Incomplete DB | Handles missing version table |
+
+### test_errors.py
+
+Tests for error classification system (12 tests).
+
+**Rationale**: When processing files, various errors can occur (permission denied, corrupted files, I/O errors, etc.). The `classify_error()` function categorizes exceptions into error categories (strings like "permission", "corrupted", "io", etc.) so they can be logged to the database's `scan_errors` table with consistent categorization. This enables error reporting/analysis (e.g., "show me all permission errors"). Tests validate that both custom exceptions (PermissionDeniedError, CorruptedFileError) and Python built-in exceptions (PermissionError, OSError, ValueError) are correctly mapped to categories.
+
+| # | Test | Input | Output | Conditions/Assumptions | Logic |
+|---|------|-------|--------|----------------------|-------|
+| 1 | `test_scanner_error_inherits_from_gpsync_error` | ScannerError instance | Is both ScannerError and GPSyncError | Error hierarchy | Tests inheritance chain: ScannerError → GPSyncError. Ensures all scanner errors inherit from common base error class for consistent error handling across packages. |
+| 2 | `test_all_errors_inherit_from_scanner_error` | All specific error types (PermissionDeniedError, CorruptedFileError, IOError, ParseError, UnsupportedFormatError, ToolNotFoundError) | All inherit from ScannerError | Error hierarchy | Tests that ALL 6 specific error types inherit from ScannerError. Validates error hierarchy is correctly implemented. |
+| 3 | `test_classify_permission_denied_error` | PermissionDeniedError("Access denied") | "permission" | Custom error type | Tests classify_error() maps custom PermissionDeniedError → "permission" category. Used when file access is denied during scan. |
+| 4 | `test_classify_corrupted_file_error` | CorruptedFileError("File corrupted") | "corrupted" | Custom error type | Tests classify_error() maps CorruptedFileError → "corrupted" category. Used when file is unreadable/damaged. |
+| 5 | `test_classify_io_error` | IOError("I/O failed") | "io" | Custom error type | Tests classify_error() maps custom IOError → "io" category. Used for general I/O failures. |
+| 6 | `test_classify_parse_error` | ParseError("Parse failed") | "parse" | Custom error type | Tests classify_error() maps ParseError → "parse" category. Used when JSON/EXIF parsing fails. |
+| 7 | `test_classify_unsupported_format_error` | UnsupportedFormatError("Format not supported") | "unsupported" | Custom error type | Tests classify_error() maps UnsupportedFormatError → "unsupported" category. Used for unknown/unsupported file formats. |
+| 8 | `test_classify_tool_not_found_error` | ToolNotFoundError("Tool missing") | "tool_missing" | Custom error type | Tests classify_error() maps ToolNotFoundError → "tool_missing" category. Used when external tool (e.g., exiftool) is not installed. |
+| 9 | `test_classify_builtin_permission_error` | Python's PermissionError("Access denied") | "permission" | Python built-in exception | Tests classify_error() handles Python's built-in PermissionError (raised by OS) → "permission" category. Ensures built-in exceptions are also categorized correctly. |
+| 10 | `test_classify_builtin_os_error` | Python's OSError("OS error") | "io" | Python built-in exception | Tests classify_error() handles Python's built-in OSError → "io" category. OSError is raised for various OS-level I/O failures. |
+| 11 | `test_classify_builtin_value_error` | Python's ValueError("Invalid value") | "parse" | Python built-in exception | Tests classify_error() handles Python's built-in ValueError → "parse" category. ValueError often occurs during data parsing/conversion. |
+| 12 | `test_classify_unknown_error` | RuntimeError("Unknown error") | "unknown" | Unrecognized exception type | Tests classify_error() fallback: unrecognized exception types → "unknown" category. Ensures function never crashes, always returns a category. |
+
+### test_tool_checker.py
+
+Tests for tool availability checker (3 tests).
+
+| # | Test | Input | Output | Conditions/Assumptions | Logic |
+|---|------|-------|--------|----------------------|-------|
+| 1 | `test_returns_dict` | No input | Dictionary returned | Tool checker called | Returns dict of tool availability |
+| 2 | `test_checks_expected_tools` | No input | Dict with 'ffprobe' and 'exiftool' keys | Tool checker called | Checks expected tools |
+| 3 | `test_returns_boolean_values` | No input | All values are booleans | Tool checker called | Returns boolean availability |
+
+### test_tool_checker_integration.py
+
+Integration tests for tool checker with config (4 tests).
+
+| # | Test | Input | Output | Conditions/Assumptions | Logic |
+|---|------|-------|--------|----------------------|-------|
+| 1 | `test_disabled_tools_no_error` | use_ffprobe=False, use_exiftool=False | No error raised | Tools disabled | Disabled tools don't cause errors |
+| 2 | `test_enabled_tool_available_no_error` | Enabled tool that's available | No error raised | Tool available | Available tools don't cause errors |
+| 3 | `test_enabled_tool_missing_raises_error` | Enabled tool that's missing | ToolNotFoundError raised | Tool missing | Missing enabled tools raise error |
+| 4 | `test_both_enabled_both_missing_raises_error` | Both tools enabled and missing | ToolNotFoundError raised | Both missing | Raises error for first missing tool |
 
 ### test_album_discovery.py
 
@@ -217,27 +298,6 @@ Tests for edited variant detection and linking (14 tests).
 | 12 | `test_end_to_end_detection_and_linking` | DB with files, full workflow | Variants detected and linked in DB | Complete workflow | Tests entire detection and linking pipeline |
 | 13 | `test_no_variants_found` | DB with IMG_1234.JPG, IMG_5678.JPG (no -edited files) | detect_and_link_edited_variants() returns stats: {variants_linked=0, originals_found=0, originals_missing=0} | No edited variants in scan | Tests the happy path: when no edited variants exist (most common case - users don't edit many photos), the workflow completes successfully with zero stats. Validates algorithm doesn't fail/warn when there's simply no work to do. |
 | 14 | `test_multiple_variants_in_different_albums` | Album 0: IMG_1234.JPG + IMG_1234-edited.JPG, Album 1: IMG_1234.JPG + IMG_1234-edited.JPG (same filename, different albums) | detect_and_link_edited_variants() links both pairs correctly (2 variants linked) | Same filename in different albums | Tests that variants are only linked within the same directory (album folder). Algorithm checks `path.parent` to ensure edited file and original are in same folder. Files with same name in different albums are NOT linked to each other - each album's pair is independent. Both pairs linked correctly to their respective originals. |
-
-### test_errors.py
-
-Tests for error classification system (12 tests).
-
-**Rationale**: When processing files, various errors can occur (permission denied, corrupted files, I/O errors, etc.). The `classify_error()` function categorizes exceptions into error categories (strings like "permission", "corrupted", "io", etc.) so they can be logged to the database's `scan_errors` table with consistent categorization. This enables error reporting/analysis (e.g., "show me all permission errors"). Tests validate that both custom exceptions (PermissionDeniedError, CorruptedFileError) and Python built-in exceptions (PermissionError, OSError, ValueError) are correctly mapped to categories.
-
-| # | Test | Input | Output | Conditions/Assumptions | Logic |
-|---|------|-------|--------|----------------------|-------|
-| 1 | `test_scanner_error_inherits_from_gpsync_error` | ScannerError instance | Is both ScannerError and GPSyncError | Error hierarchy | Tests inheritance chain: ScannerError → GPSyncError. Ensures all scanner errors inherit from common base error class for consistent error handling across packages. |
-| 2 | `test_all_errors_inherit_from_scanner_error` | All specific error types (PermissionDeniedError, CorruptedFileError, IOError, ParseError, UnsupportedFormatError, ToolNotFoundError) | All inherit from ScannerError | Error hierarchy | Tests that ALL 6 specific error types inherit from ScannerError. Validates error hierarchy is correctly implemented. |
-| 3 | `test_classify_permission_denied_error` | PermissionDeniedError("Access denied") | "permission" | Custom error type | Tests classify_error() maps custom PermissionDeniedError → "permission" category. Used when file access is denied during scan. |
-| 4 | `test_classify_corrupted_file_error` | CorruptedFileError("File corrupted") | "corrupted" | Custom error type | Tests classify_error() maps CorruptedFileError → "corrupted" category. Used when file is unreadable/damaged. |
-| 5 | `test_classify_io_error` | IOError("I/O failed") | "io" | Custom error type | Tests classify_error() maps custom IOError → "io" category. Used for general I/O failures. |
-| 6 | `test_classify_parse_error` | ParseError("Parse failed") | "parse" | Custom error type | Tests classify_error() maps ParseError → "parse" category. Used when JSON/EXIF parsing fails. |
-| 7 | `test_classify_unsupported_format_error` | UnsupportedFormatError("Format not supported") | "unsupported" | Custom error type | Tests classify_error() maps UnsupportedFormatError → "unsupported" category. Used for unknown/unsupported file formats. |
-| 8 | `test_classify_tool_not_found_error` | ToolNotFoundError("Tool missing") | "tool_missing" | Custom error type | Tests classify_error() maps ToolNotFoundError → "tool_missing" category. Used when external tool (e.g., exiftool) is not installed. |
-| 9 | `test_classify_builtin_permission_error` | Python's PermissionError("Access denied") | "permission" | Python built-in exception | Tests classify_error() handles Python's built-in PermissionError (raised by OS) → "permission" category. Ensures built-in exceptions are also categorized correctly. |
-| 10 | `test_classify_builtin_os_error` | Python's OSError("OS error") | "io" | Python built-in exception | Tests classify_error() handles Python's built-in OSError → "io" category. OSError is raised for various OS-level I/O failures. |
-| 11 | `test_classify_builtin_value_error` | Python's ValueError("Invalid value") | "parse" | Python built-in exception | Tests classify_error() handles Python's built-in ValueError → "parse" category. ValueError often occurs during data parsing/conversion. |
-| 12 | `test_classify_unknown_error` | RuntimeError("Unknown error") | "unknown" | Unrecognized exception type | Tests classify_error() fallback: unrecognized exception types → "unknown" category. Ensures function never crashes, always returns a category. |
 
 ### test_exif_extractor.py
 
@@ -412,30 +472,6 @@ Tests for metadata coordination and MediaItemRecord creation (14 tests).
 | 10 | `test_media_item_record_has_media_item_id` | MediaItemRecord | Record with 36-char UUID | ID generated | Generates media_item_id |
 | 11 | `test_media_item_record_deterministic_ids` | Same inputs twice | Identical media_item_ids | UUID5 generation | IDs are deterministic |
 
-### test_migrations.py
-
-Tests for database migration system (17 tests).
-
-| # | Test | Input | Output | Conditions/Assumptions | Logic |
-|---|------|-------|--------|----------------------|-------|
-| 1 | `test_initial_migration_creates_schema_version_table` | Empty database | schema_version table created | First migration | Creates version tracking table |
-| 2 | `test_initial_migration_creates_all_tables` | Empty database | All required tables created | First migration | Creates complete schema |
-| 3 | `test_get_current_version_on_empty_db` | Empty database | Version 0 | No migrations applied | Returns 0 for empty DB |
-| 4 | `test_get_current_version_after_migration` | Database after migration | Version 1 | Migrations applied | Returns current version |
-| 5 | `test_migration_idempotency` | Run migrations twice | Same version, tables intact | Multiple runs | Migrations are idempotent |
-| 6 | `test_reapplying_migration_preserves_scan_runs` | Populated DB, re-migrate | Scan runs preserved | Data exists | Doesn't delete existing data |
-| 7 | `test_reapplying_migration_preserves_albums` | Populated DB, re-migrate | Albums preserved | Data exists | Doesn't delete existing data |
-| 8 | `test_reapplying_migration_preserves_media_items` | Populated DB, re-migrate | Media items preserved | Data exists | Doesn't delete existing data |
-| 9 | `test_all_required_columns_exist_in_media_items` | Migrated database | All required columns present | After migration | Validates media_items schema |
-| 10 | `test_all_required_columns_exist_in_albums` | Migrated database | All required columns present | After migration | Validates albums schema |
-| 11 | `test_all_required_columns_exist_in_scan_runs` | Migrated database | All required columns present | After migration | Validates scan_runs schema |
-| 12 | `test_indexes_created` | Migrated database | All required indexes present | After migration | Validates index creation |
-| 13 | `test_migration_files_are_numbered` | Schema directory | Files follow naming convention | Migration files exist | Validates file naming |
-| 14 | `test_migrations_applied_in_order` | Empty database | Migrations applied sequentially | Multiple migrations | Validates sequential application |
-| 15 | `test_can_query_data_after_migration` | Populated DB, re-migrate | DAL queries work | After migration | Validates data accessibility |
-| 16 | `test_can_insert_data_after_migration` | Populated DB, re-migrate | New data insertable | After migration | Validates write operations |
-| 17 | `test_missing_schema_version_table_handled` | DB without schema_version | Version 0 detected, migrations applied | Incomplete DB | Handles missing version table |
-
 ### test_mime_detector.py
 
 Tests for MIME type detection (7 tests).
@@ -449,21 +485,6 @@ Tests for MIME type detection (7 tests).
 | 5 | `test_case_insensitive_extension` | File with .JPG (uppercase) | "image/jpeg" | Case variation | Extension matching is case-insensitive |
 | 6 | `test_is_image_mime_type` | Various MIME types | True for images, False otherwise | MIME type strings | Identifies image MIME types |
 | 7 | `test_is_video_mime_type` | Various MIME types | True for videos, False otherwise | MIME type strings | Identifies video MIME types |
-
-### test_path_utils.py (media-scanner)
-
-Tests for media scanner path utilities (6 tests).
-
-**Rationale**: Tests media-scanner specific file filtering (hidden/system/temp files).
-
-| # | Test | Input | Output | Conditions/Assumptions | Logic |
-|---|------|-------|--------|----------------------|-------|
-| 1 | `test_unix_hidden_files` | Files: .hidden, .DS_Store, .gitignore | is_hidden=True for all | Unix hidden files | Identifies files starting with . as hidden |
-| 2 | `test_regular_files_not_hidden` | Files: photo.jpg, document.pdf | is_hidden=False for all | Normal files | Regular files not marked as hidden |
-| 3 | `test_regular_files_should_scan` | Files: photo.jpg, video.mp4 | should_scan=True for all | Normal files | All regular media files should be scanned |
-| 4 | `test_hidden_files_should_skip` | Files: .hidden, .DS_Store | should_scan=False for all | Hidden files | Skips Unix hidden files (system metadata) |
-| 5 | `test_system_files_should_skip` | Files: Thumbs.db, desktop.ini, .DS_Store | should_scan=False for all | Windows/Mac system files | Skips system-generated files |
-| 6 | `test_temp_files_should_skip` | Files: file.tmp, cache.cache, backup.bak | should_scan=False for all | Temporary file extensions | Skips temporary and backup files |
 
 ### test_post_scan.py
 
@@ -538,27 +559,6 @@ Tests for scan summary generation (17 tests).
 | 11 | `test_formats_basic_summary` | Summary dict | Human-readable text | Valid summary | Formats as readable text |
 | 12 | `test_includes_scan_run_id` | Summary dict | Scan ID in formatted text | Valid summary | Includes scan ID |
 | 13 | `test_formats_errors_section` | Summary with errors | Error details in text | Errors present | Formats error section |
-
-### test_tool_checker.py
-
-Tests for tool availability checker (3 tests).
-
-| # | Test | Input | Output | Conditions/Assumptions | Logic |
-|---|------|-------|--------|----------------------|-------|
-| 1 | `test_returns_dict` | No input | Dictionary returned | Tool checker called | Returns dict of tool availability |
-| 2 | `test_checks_expected_tools` | No input | Dict with 'ffprobe' and 'exiftool' keys | Tool checker called | Checks expected tools |
-| 3 | `test_returns_boolean_values` | No input | All values are booleans | Tool checker called | Returns boolean availability |
-
-### test_tool_checker_integration.py
-
-Integration tests for tool checker with config (4 tests).
-
-| # | Test | Input | Output | Conditions/Assumptions | Logic |
-|---|------|-------|--------|----------------------|-------|
-| 1 | `test_disabled_tools_no_error` | use_ffprobe=False, use_exiftool=False | No error raised | Tools disabled | Disabled tools don't cause errors |
-| 2 | `test_enabled_tool_available_no_error` | Enabled tool that's available | No error raised | Tool available | Available tools don't cause errors |
-| 3 | `test_enabled_tool_missing_raises_error` | Enabled tool that's missing | ToolNotFoundError raised | Tool missing | Missing enabled tools raise error |
-| 4 | `test_both_enabled_both_missing_raises_error` | Both tools enabled and missing | ToolNotFoundError raised | Both missing | Raises error for first missing tool |
 
 ### test_video_extractor_integration.py
 
