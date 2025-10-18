@@ -551,6 +551,16 @@ This document provides a step-by-step implementation plan for the media scanning
   - Store as separate media items
 - **Tests:** Variant detection, linking
 - **Acceptance:** Edited variants detected and linked
+- **Note:** Edited files share the original's JSON sidecar (no separate metadata file)
+
+**TODO - Database Consistency Check:**
+
+- Implement DB-wide consistency validation (separate from scan validation)
+- Detect edited variants with missing originals (orphaned edited files)
+- Detect orphaned `original_media_item_id` references (points to deleted/missing original)
+- Detect Live Photo pairs with missing components
+- Report inconsistencies for manual review/cleanup
+- This should be a separate maintenance/repair tool, not part of normal scan flow
 
 ---
 

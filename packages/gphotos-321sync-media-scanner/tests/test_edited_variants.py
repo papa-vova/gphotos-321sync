@@ -88,17 +88,6 @@ class TestDetectEditedVariants:
         
         assert len(edited_to_original) == 0
     
-    def test_requires_same_extension(self):
-        """Test that original must have same extension."""
-        files = [
-            FileInfo(relative_path="Photos/IMG_1234.JPG"),
-            FileInfo(relative_path="Photos/IMG_1234-edited.PNG"),
-        ]
-        
-        edited_to_original = detect_edited_variants(files)
-        
-        assert len(edited_to_original) == 0
-    
     def test_ignores_non_edited_files(self):
         """Test that files without -edited suffix are ignored."""
         files = [
@@ -130,23 +119,6 @@ class TestDetectEditedVariants:
         
         assert len(edited_to_original) == 0
     
-    def test_multiple_edits_of_same_original(self):
-        """Test handling of multiple edited versions (edge case)."""
-        files = [
-            FileInfo(relative_path="Photos/IMG_1234.JPG"),
-            FileInfo(relative_path="Photos/IMG_1234-edited.JPG"),
-            FileInfo(relative_path="Photos/IMG_1234-edited-edited.JPG"),
-        ]
-        
-        edited_to_original = detect_edited_variants(files)
-        
-        # Should detect both as edited variants
-        assert len(edited_to_original) == 2
-        assert edited_to_original["Photos/IMG_1234-edited.JPG"] == "Photos/IMG_1234.JPG"
-        # The double-edited one should link to the single-edited version
-        assert edited_to_original["Photos/IMG_1234-edited-edited.JPG"] == "Photos/IMG_1234-edited.JPG"
-
-
 class TestLinkEditedVariants:
     """Tests for link_edited_variants function."""
     

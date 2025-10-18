@@ -60,8 +60,8 @@ def discover_files(target_media_path: Path) -> Iterator[FileInfo]:
     logger.info(f"Starting file discovery from: {target_media_path}")
     
     # Build a map of JSON sidecars for efficient lookup
-    # Key: base filename without .json extension
-    # Value: Path to JSON file
+    # Key: media file path (e.g., parent/IMG_1234.jpg)
+    # Value: Path to JSON sidecar file
     json_sidecars: dict[Path, Path] = {}
     
     # First pass: collect all JSON sidecars
@@ -73,15 +73,31 @@ def discover_files(target_media_path: Path) -> Iterator[FileInfo]:
         if json_path.name == "metadata.json":
             continue  # Skip album metadata files
         
-        # Store sidecar with its parent directory + base name as key
-        # This handles cases like: IMG_1234.jpg.json -> IMG_1234.jpg
-        parent_dir = json_path.parent
-        base_name = json_path.stem  # Removes .json extension
+        # Google Takeout sidecar patterns:
+        # 1. IMG_1234.jpg.supplemental-metadata.json (standard)
+        # 2. IMG_1234.jpg.supplemental-me.json (truncated)
+        # 3. IMG_1234.jpg.supplemental-metadat.json (truncated)
+        # 4. IMG_1234.jpg.supplemental-metad.json (truncated)
+        # 5. IMG_1234.jpg.json (legacy)
         
-        # Handle Google Takeout pattern: filename.ext.json
-        # Example: IMG_1234.jpg.json -> key is parent/IMG_1234.jpg
-        key = parent_dir / base_name
-        json_sidecars[key] = json_path
+        parent_dir = json_path.parent
+        filename = json_path.name
+        
+        # Try to extract media filename from sidecar filename
+        media_filename = None
+        
+        # Pattern 1-4: .supplemental-*.json variants
+        if '.supplemental-' in filename:
+            # Split on .supplemental- and take everything before it
+            media_filename = filename.split('.supplemental-')[0]
+        # Pattern 5: .json (legacy)
+        elif filename.endswith('.json'):
+            # Remove .json extension
+            media_filename = filename[:-5]
+        
+        if media_filename:
+            key = parent_dir / media_filename
+            json_sidecars[key] = json_path
     
     logger.info(f"Found {len(json_sidecars)} JSON sidecar files")
     
@@ -120,7 +136,15 @@ def discover_files(target_media_path: Path) -> Iterator[FileInfo]:
         album_folder_path = file_path.parent.relative_to(target_media_path)
         
         # Check for JSON sidecar
-        json_sidecar_path = json_sidecars.get(file_path)
+        # For edited files (e.g., IMG_1234-edited.jpg), look for original's sidecar
+        # (e.g., IMG_1234.jpg.supplemental-metadata.json)
+        sidecar_lookup_path = file_path
+        if '-edited' in file_path.stem:
+            # Strip -edited suffix to find original's sidecar
+            original_stem = file_path.stem.rsplit('-edited', 1)[0]
+            sidecar_lookup_path = file_path.parent / f"{original_stem}{file_path.suffix}"
+        
+        json_sidecar_path = json_sidecars.get(sidecar_lookup_path)
         if json_sidecar_path:
             files_with_sidecars += 1
         
@@ -134,7 +158,10 @@ def discover_files(target_media_path: Path) -> Iterator[FileInfo]:
             file_size=file_size
         )
     
-    logger.info(
-        f"File discovery complete: {files_discovered} files discovered, "
-        f"{files_with_sidecars} with JSON sidecars"
-    )
+    if files_discovered == 0:
+        logger.warning(f"No media files discovered in: {target_media_path}")
+    else:
+        logger.info(
+            f"File discovery complete: {files_discovered} files discovered, "
+            f"{files_with_sidecars} with JSON sidecars"
+        )

@@ -28,10 +28,10 @@ def test_tree(tmp_path):
     (nested / "photo4.heic").write_text("fake heic")
     (nested / "video2.mov").write_text("fake mov")
     
-    # Create JSON sidecars
-    (album1 / "photo1.jpg.json").write_text('{"title": "Photo 1"}')
-    (album1 / "video1.mp4.json").write_text('{"title": "Video 1"}')
-    (nested / "photo4.heic.json").write_text('{"title": "Photo 4"}')
+    # Create JSON sidecars (Google Takeout pattern: .supplemental-metadata.json)
+    (album1 / "photo1.jpg.supplemental-metadata.json").write_text('{"title": "Photo 1"}')
+    (album1 / "video1.mp4.supplemental-metadata.json").write_text('{"title": "Video 1"}')
+    (nested / "photo4.heic.supplemental-metadata.json").write_text('{"title": "Photo 4"}')
     
     # Create album metadata (should be ignored)
     (album1 / "metadata.json").write_text('{"title": "Album 1"}')
@@ -64,14 +64,15 @@ def test_discover_files_sidecar_pairing(test_tree):
     """Test that JSON sidecars are correctly paired with media files."""
     files = {f.file_path.name: f for f in discover_files(test_tree)}
     
-    # Files with sidecars
+    # Files with sidecars (Google Takeout pattern)
     assert files["photo1.jpg"].json_sidecar_path is not None
-    assert files["photo1.jpg"].json_sidecar_path.name == "photo1.jpg.json"
+    assert files["photo1.jpg"].json_sidecar_path.name == "photo1.jpg.supplemental-metadata.json"
     
     assert files["video1.mp4"].json_sidecar_path is not None
-    assert files["video1.mp4"].json_sidecar_path.name == "video1.mp4.json"
+    assert files["video1.mp4"].json_sidecar_path.name == "video1.mp4.supplemental-metadata.json"
     
     assert files["photo4.heic"].json_sidecar_path is not None
+    assert files["photo4.heic"].json_sidecar_path.name == "photo4.heic.supplemental-metadata.json"
     
     # Files without sidecars
     assert files["photo2.png"].json_sidecar_path is None
@@ -124,10 +125,16 @@ def test_discover_files_excludes_hidden(test_tree):
     assert ".hidden.jpg" not in files
 
 
-def test_discover_files_empty_directory(tmp_path):
-    """Test discovery in empty directory."""
+def test_discover_files_empty_directory(tmp_path, caplog):
+    """Test discovery in empty directory logs warning."""
+    import logging
+    caplog.set_level(logging.WARNING)
+    
     files = list(discover_files(tmp_path))
     assert len(files) == 0
+    
+    # Check that warning was logged
+    assert any("No media files discovered" in record.message for record in caplog.records)
 
 
 def test_discover_files_nonexistent_path(tmp_path):
@@ -193,7 +200,7 @@ def test_discover_files_large_tree(tmp_path):
         for j in range(5):
             (album / f"photo{j}.jpg").write_text(f"photo {i}-{j}")
             if j % 2 == 0:
-                (album / f"photo{j}.jpg.json").write_text(f'{{"title": "Photo {i}-{j}"}}')
+                (album / f"photo{j}.jpg.supplemental-metadata.json").write_text(f'{{"title": "Photo {i}-{j}"}}')
     
     files = list(discover_files(tmp_path))
     
