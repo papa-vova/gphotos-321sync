@@ -9,25 +9,6 @@ from gphotos_321sync.media_scanner.config import (
 )
 
 
-class TestLoggingConfig:
-    """Tests for LoggingConfig."""
-    
-    def test_default_values(self):
-        """Test default logging configuration."""
-        config = LoggingConfig()
-        assert config.level == "INFO"
-        assert config.format == "json"
-    
-    def test_custom_values(self):
-        """Test custom logging configuration."""
-        config = LoggingConfig(
-            level="DEBUG",
-            format="simple"
-        )
-        assert config.level == "DEBUG"
-        assert config.format == "simple"
-
-
 class TestScannerConfig:
     """Tests for ScannerConfig."""
     

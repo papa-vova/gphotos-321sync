@@ -63,14 +63,12 @@ Tests for album discovery and metadata parsing (17 tests).
 
 ### test_config.py (media-scanner)
 
-Tests for configuration models (7 tests).
+Tests for scanner-specific configuration models (5 tests).
 
-**Rationale**: Ensures configuration objects are properly constructed with correct defaults and accept valid custom values.
+**Rationale**: Ensures scanner-specific configuration objects are properly constructed with correct defaults and accept valid custom values. LoggingConfig is tested in gphotos-321sync-common.
 
 | Test | Input | Output | Conditions/Assumptions | Logic |
 |------|-------|--------|----------------------|-------|
-| `test_default_values` (LoggingConfig) | No parameters | level="INFO", format="json" | Using defaults | Validates default logging configuration values are sensible |
-| `test_custom_values` (LoggingConfig) | level="DEBUG", format="simple" | Config with specified values | Parameters provided | Validates custom logging configuration overrides defaults |
 | `test_default_values_are_reasonable` (ScannerConfig) | No parameters | num_workers=CPU_count, use_ffprobe=False, use_exiftool=False | Using defaults | Ensures scanner defaults are appropriate for typical systems |
 | `test_custom_values_override_defaults` (ScannerConfig) | num_workers=4, batch_size=50, use_ffprobe=True | Config with specified values | All parameters provided | Validates custom scanner configuration overrides defaults |
 | `test_default_values` (MediaScannerConfig) | No parameters | Root config with nested defaults | Using defaults | Validates nested configuration structure with all defaults |
@@ -536,9 +534,9 @@ Tests for writer thread database operations (9 tests).
 
 ### test_config_validation.py (takeout-extractor)
 
-Tests for takeout extractor configuration validation (6 tests).
+Tests for extractor-specific configuration validation (6 tests).
 
-**Rationale**: Ensures Pydantic validation rejects unknown fields to prevent configuration errors in the takeout extractor.
+**Rationale**: Ensures Pydantic validation rejects unknown fields to prevent configuration errors in the takeout extractor. Tests only extractor-specific configs (ExtractionConfig, TakeoutExtractorConfig). LoggingConfig is tested in gphotos-321sync-common.
 
 | Test | Input | Output | Conditions/Assumptions | Logic |
 |------|-------|--------|----------------------|-------|
