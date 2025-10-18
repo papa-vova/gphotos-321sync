@@ -51,6 +51,8 @@ Tests for extractor-specific configuration (2 tests).
 
 Tests for archive extraction functionality (16 tests).
 
+**Note**: Tests 13-16 test the app's state persistence and retry infrastructure, not core extraction logic.
+
 | # | Test | Input | Output | Conditions/Assumptions | Logic |
 |---|------|-------|--------|----------------------|-------|
 | 1 | `test_discover_archives` | Directory with ZIP and TAR.GZ | 2 archives discovered | Archives present | Discovers archives by extension |
@@ -67,41 +69,41 @@ Tests for archive extraction functionality (16 tests).
 | 12 | `test_run_no_archives` | Empty source directory (no archives) | RuntimeError raised with "No archives found" | No archives found | App fails with error when source folder is empty (no archives to extract) |
 | 13 | `test_state_save_and_load` | Extraction state | State saved and loaded | State file used | Persists extraction state |
 | 14 | `test_resume_extraction` | Interrupted extraction | Extraction resumes | State file exists | Resumes from saved state |
-| 15 | `test_retry_on_transient_failure` | Flaky operation (fails 2x, succeeds 3rd) | Operation succeeds after retries | Transient failures | Retries with exponential backoff (initial_retry_delay=32s doubles each attempt: 32s, 64s, 128s...) |
-| 16 | `test_retry_gives_up_after_max_attempts` | Always-failing operation | RuntimeError after max_retry_attempts | Persistent failure | Gives up after max retries (WARNING: with default initial_retry_delay=32s and max_retry_attempts=10, total wait = 9+ hours!), logs error and exits |
+| 15 | `test_retry_on_transient_failure` | Mock function that fails 2x then succeeds, max_retry_attempts=3, initial_retry_delay=0.1s | _retry_with_backoff() returns "success" after 3 attempts | Tests retry wrapper with transient failures | Test calls mock function 3 times: fails with OSError twice, succeeds on 3rd attempt. Verifies retry logic works. |
+| 16 | `test_retry_gives_up_after_max_attempts` | Mock function that always raises OSError, max_retry_attempts=2, initial_retry_delay=0.1s | _retry_with_backoff() raises RuntimeError after 2 failed attempts | Tests retry wrapper gives up | Test calls mock function 2 times, both fail with OSError. Verifies retry logic gives up and raises RuntimeError with "failed after 2 attempts" message. |
 
 ### test_extractor_verification.py
 
-Tests for archive verification and selective re-extraction (26 tests).
+Tests for archive verification and selective re-extraction (24 tests).
+
+**Purpose**: The app has a custom verification system that checks extracted files against ZIP metadata (CRC32 checksums). On resume, if files are missing/corrupted, it selectively re-extracts ONLY the bad files instead of re-extracting the entire archive.
 
 | # | Test | Input | Output | Conditions/Assumptions | Logic |
 |---|------|-------|--------|----------------------|-------|
-| 1 | `test_all_files_missing` | Archive, no extracted files | all_valid=False, all files in bad_files | Files not extracted | Detects all missing files |
-| 2 | `test_some_files_missing` | Archive, some files deleted | all_valid=False, missing files in bad_files | Some files deleted | Detects specific missing files |
-| 3 | `test_one_file_missing` | Archive, one file deleted | all_valid=False, 1 file in bad_files | One file deleted | Detects single missing file |
-| 4 | `test_file_size_mismatch_smaller` | Archive, file truncated | all_valid=False, file in bad_files | File truncated | Detects size mismatch |
-| 5 | `test_file_size_mismatch_larger` | Archive, file appended | all_valid=False, file in bad_files | File enlarged | Detects size mismatch |
-| 6 | `test_file_crc32_mismatch` | Archive, file content changed | all_valid=False, file in bad_files | Content corrupted | Detects CRC32 mismatch |
-| 7 | `test_missing_and_corrupted_files` | Archive, mixed issues | all_valid=False, issues detected | Mixed corruption | Detects multiple issue types |
-| 8 | `test_first_file_corrupted` | Archive, first file corrupted | all_valid=False, file in bad_files | First file bad | Detects corruption in first file |
-| 9 | `test_last_file_corrupted` | Archive, last file corrupted | all_valid=False, file in bad_files | Last file bad | Detects corruption in last file |
-| 10 | `test_multiple_scattered_corrupted_files` | Archive, multiple files corrupted | all_valid=False, all bad files listed | Multiple corruptions | Collects all corrupted files |
-| 11 | `test_reextract_single_corrupted_file` | Archive, 1 corrupted file | File re-extracted, all_valid=True | Selective re-extraction | Re-extracts only corrupted file |
-| 12 | `test_reextract_multiple_files` | Archive, multiple corrupted files | Files re-extracted, all_valid=True | Selective re-extraction | Re-extracts multiple files |
-| 13 | `test_resume_with_completed_archive_verified` | Completed extraction, resume | Archive verified and skipped | State shows completed | Verifies and skips completed archives |
-| 14 | `test_resume_with_corrupted_file_reextracts` | Completed extraction, file corrupted | Corrupted file re-extracted | Corruption detected on resume | Detects and fixes corruption on resume |
-| 15 | `test_corrupted_zip_file_fails` | Corrupted ZIP file | BadZipFile or RuntimeError raised | Invalid ZIP | Handles corrupted archives |
-| 16 | `test_empty_zip_file` | Empty ZIP archive | Extraction succeeds, no files | Empty archive | Handles empty archives |
-| 17 | `test_filename_sanitization_verification` | Archive with special filenames | Files extracted and verified | Filename sanitization | Handles sanitized filenames |
-| 18 | `test_normalize_unicode_path_nfc` | NFD Unicode path | NFC normalized path | Unicode normalization | Normalizes to NFC form |
-| 19 | `test_cyrillic_filenames` | Archive with Cyrillic names | Files extracted and verified | Cyrillic characters | Handles Cyrillic filenames |
-| 20 | `test_chinese_filenames` | Archive with Chinese names | Files extracted and verified | Chinese characters | Handles Chinese filenames |
-| 21 | `test_arabic_filenames` | Archive with Arabic names | Files extracted and verified | Arabic characters | Handles Arabic filenames |
-| 22 | `test_japanese_filenames` | Archive with Japanese names | Files extracted and verified | Japanese characters | Handles Japanese filenames |
-| 23 | `test_korean_filenames` | Archive with Korean names | Files extracted and verified | Korean characters | Handles Korean filenames |
-| 24 | `test_mixed_unicode_languages` | Archive with mixed languages | All files extracted and verified | Multiple languages | Handles mixed Unicode |
-| 25 | `test_unicode_normalization_forms` | Archive with NFC/NFD variants | Files extracted and verified | Different normalization forms | Handles normalization variants |
-| 26 | `test_emoji_in_filenames` | Archive with emoji names | Files extracted and verified | Emoji characters | Handles emoji in filenames |
+| 1 | `test_all_files_missing` | Extracted archive, all files deleted | _verify_archive_extraction() returns (False, [all 5 files]) | Verification detects missing files | Tests verification system detects when no files exist on disk |
+| 2 | `test_some_files_missing` | Extracted archive, 2 files deleted | _verify_archive_extraction() returns (False, [2 files]) | Verification detects partial missing | Tests verification system detects subset of missing files |
+| 3 | `test_one_file_missing` | Extracted archive, 1 file deleted | _verify_archive_extraction() returns (False, [1 file]) | Verification detects single missing | Tests verification system detects single missing file |
+| 4 | `test_file_size_mismatch_smaller` | Extracted archive, file truncated | _verify_archive_extraction() returns (False, [truncated file]) | Verification detects size mismatch | Tests verification compares file size against ZIP metadata |
+| 5 | `test_file_size_mismatch_larger` | Extracted archive, file enlarged | _verify_archive_extraction() returns (False, [enlarged file]) | Verification detects size mismatch | Tests verification compares file size against ZIP metadata |
+| 6 | `test_file_crc32_mismatch` | Extracted archive, file content changed | _verify_archive_extraction() returns (False, [corrupted file]) | Verification detects content corruption | Tests verification compares CRC32 checksum against ZIP metadata |
+| 7 | `test_missing_and_corrupted_files` | Extracted archive, mixed issues | _verify_archive_extraction() returns (False, [all bad files]) | Verification detects multiple issue types | Tests verification detects both missing and corrupted files |
+| 8 | `test_first_file_corrupted` | Extracted archive, first file corrupted | _verify_archive_extraction() returns (False, [first file]) | Verification scans all files | Tests verification doesn't stop at first file |
+| 9 | `test_last_file_corrupted` | Extracted archive, last file corrupted | _verify_archive_extraction() returns (False, [last file]) | Verification scans all files | Tests verification checks entire file list |
+| 10 | `test_multiple_scattered_corrupted_files` | Extracted archive, multiple files corrupted | _verify_archive_extraction() returns (False, [all bad files]) | Verification collects all issues | Tests verification reports all corrupted files, not just first |
+| 11 | `test_reextract_single_corrupted_file` | Corrupted file, call _extract_specific_files_from_zip() | File re-extracted with correct content | Selective re-extraction | Tests app can re-extract single file from ZIP without extracting entire archive |
+| 12 | `test_reextract_multiple_files` | Multiple corrupted files, call _extract_specific_files_from_zip() | Files re-extracted with correct content | Selective re-extraction | Tests app can re-extract multiple specific files from ZIP |
+| 13 | `test_resume_with_completed_archive_verified` | State file shows "completed", all files valid | extract() verifies files and skips re-extraction | Resume workflow | Tests resume: loads state → sees completed → verifies files → skips extraction |
+| 14 | `test_resume_with_corrupted_file_reextracts` | State file shows "completed", 1 file corrupted | extract() detects corruption → selectively re-extracts bad file | Resume + repair workflow | Tests resume: loads state → verifies → detects corruption → re-extracts ONLY corrupted file (not entire archive) |
+| 15 | `test_filename_sanitization_verification` | Archive with normal filename | Files extracted and verified | Filename sanitization | Tests verification works with sanitized filenames (Windows reserved names) |
+| 16 | `test_normalize_unicode_path_nfc` | NFD Unicode path (e + combining accent) | normalize_unicode_path() returns NFC form (é as single char) | Unicode normalization | Tests path normalization converts NFD → NFC for consistent comparison |
+| 17 | `test_cyrillic_filenames` | ZIP with Cyrillic filenames (Russian/Ukrainian/Bulgarian) | Files extracted and verification succeeds | Cyrillic Unicode | Tests extraction + verification with Cyrillic characters (Израильские, Проводы Сергія, България) |
+| 18 | `test_chinese_filenames` | ZIP with Chinese filenames | Files extracted and verification succeeds | Chinese Unicode | Tests extraction + verification with Chinese characters |
+| 19 | `test_arabic_filenames` | ZIP with Arabic filenames | Files extracted and verification succeeds | Arabic Unicode | Tests extraction + verification with Arabic characters (RTL text) |
+| 20 | `test_japanese_filenames` | ZIP with Japanese filenames | Files extracted and verification succeeds | Japanese Unicode | Tests extraction + verification with Japanese characters (Hiragana/Katakana/Kanji) |
+| 21 | `test_korean_filenames` | ZIP with Korean filenames | Files extracted and verification succeeds | Korean Unicode | Tests extraction + verification with Korean characters (Hangul) |
+| 22 | `test_mixed_unicode_languages` | ZIP with multiple languages in same archive | All files extracted and verification succeeds | Mixed Unicode | Tests extraction + verification with mixed language filenames |
+| 23 | `test_unicode_normalization_forms` | ZIP with café (NFC) and naïve filenames | Files extracted and verification succeeds | NFC/NFD variants | Tests verification handles different Unicode normalization forms (é vs e+combining) |
+| 24 | `test_emoji_in_filenames` | ZIP with emoji in filenames (📷, 🏖️, 👨‍👩‍👧‍👦) | Files extracted and verification succeeds | Emoji Unicode | Tests extraction + verification with emoji characters in paths |
 
 ---
 
@@ -586,8 +588,8 @@ Tests for writer thread database operations (9 tests).
 
 ## Summary
 
-**Total: 339 tests** (9 + 286 + 44)
+**Total: 337 tests** (9 + 286 + 42)
 
 - **gphotos-321sync-common**: 9 tests
 - **gphotos-321sync-media-scanner**: 286 tests
-- **gphotos-321sync-takeout-extractor**: 44 tests (2 config + 16 extractor + 26 verification)
+- **gphotos-321sync-takeout-extractor**: 42 tests (2 config + 16 extractor + 24 verification)

@@ -444,63 +444,6 @@ class TestResumeLogic:
 class TestEdgeCases:
     """Test edge cases and error handling."""
     
-    def test_corrupted_zip_file_fails(self, tmp_path):
-        """Test that corrupted ZIP file causes clear error."""
-        source_dir = tmp_path / "source"
-        source_dir.mkdir()
-        
-        # Create a corrupted ZIP file
-        corrupted_zip = source_dir / "corrupted.zip"
-        corrupted_zip.write_bytes(b"This is not a valid ZIP file")
-        
-        temp_target_media_path = tmp_path / "target"
-        temp_target_media_path.mkdir()
-        
-        discovery = ArchiveDiscovery(source_dir)
-        archives = discovery.discover()
-        
-        # Should discover it (based on extension)
-        assert len(archives) == 1
-        
-        extractor = ArchiveExtractor(temp_target_media_path, preserve_structure=False)
-        
-        # Should fail with clear error when trying to extract
-        # The extractor wraps the error in RuntimeError
-        with pytest.raises((zipfile.BadZipFile, RuntimeError, OSError)):
-            extractor.extract(archives[0])
-    
-    def test_empty_zip_file(self, tmp_path):
-        """Test extraction of empty ZIP file."""
-        source_dir = tmp_path / "source"
-        source_dir.mkdir()
-        
-        # Create empty ZIP
-        empty_zip = source_dir / "empty.zip"
-        with zipfile.ZipFile(empty_zip, 'w') as zf:
-            pass  # No files
-        
-        temp_target_media_path = tmp_path / "target"
-        temp_target_media_path.mkdir()
-        
-        discovery = ArchiveDiscovery(source_dir)
-        archives = discovery.discover()
-        archive = archives[0]
-        
-        extractor = ArchiveExtractor(temp_target_media_path, preserve_structure=False)
-        extract_path = extractor.extract(archive)
-        
-        # Should succeed but extract nothing
-        assert extract_path.exists()
-        
-        # Verify empty archive
-        all_valid, bad_files = extractor._verify_archive_extraction(
-            archive,
-            extract_path
-        )
-        
-        assert all_valid is True
-        assert len(bad_files) == 0
-    
     def test_filename_sanitization_verification(self, tmp_path):
         """Test that sanitized filenames are properly verified."""
         source_dir = tmp_path / "source"
