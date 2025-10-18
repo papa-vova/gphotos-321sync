@@ -179,13 +179,13 @@ Tests for file discovery functionality (14 tests).
 | 8 | `test_discover_files_nonexistent_path` | Path: "/does/not/exist" | Empty list | Path doesn't exist | Handles missing paths gracefully |
 | 9 | `test_discover_files_file_not_directory` | Path to file instead of directory | Empty list | Path is a file | Handles file paths gracefully |
 | 10 | `test_discover_files_no_extension` | Files: "photo", "image" | Files discovered | Files lack extensions | Discovers extensionless files (MIME detection later) |
-| 11 | `test_discover_files_wrong_extension` | File: "image.txt" (actually JPEG) | File discovered | Extension doesn't match content | Discovers all files, relies on MIME detection |
+| 11 | `test_discover_files_wrong_extension` | File: "image.txt" (actually JPEG) | File discovered | Extension doesn't match content | Tests that discover_files() doesn't filter by extension - it discovers ALL files regardless of extension. MIME type detection happens LATER in the pipeline (during metadata extraction). This ensures misnamed files (e.g., JPEG with .txt extension) are still discovered and processed. |
 | 12 | `test_discover_files_file_size` | Files with various sizes | FileInfo with correct file_size in bytes | Files exist | Captures file size from filesystem metadata |
 | 13 | `test_discover_files_large_tree` | 10 albums × 5 files = 50 files | All 50 files discovered with sidecars paired | Large file set | Tests scalability of discovery algorithm |
 
 ### test_edited_variants.py
 
-Tests for edited variant detection and linking (15 tests).
+Tests for edited variant detection and linking (14 tests).
 
 **Rationale**: Ensures edited photos (created by Google Photos editor with "-edited" suffix) are correctly linked to their originals, allowing users to track photo editing history and maintain relationships between versions.
 
@@ -210,52 +210,58 @@ Tests for edited variant detection and linking (15 tests).
 
 Tests for error classification system (12 tests).
 
+**Rationale**: When processing files, various errors can occur (permission denied, corrupted files, I/O errors, etc.). The `classify_error()` function categorizes exceptions into error categories (strings like "permission", "corrupted", "io", etc.) so they can be logged to the database's `scan_errors` table with consistent categorization. This enables error reporting/analysis (e.g., "show me all permission errors"). Tests validate that both custom exceptions (PermissionDeniedError, CorruptedFileError) and Python built-in exceptions (PermissionError, OSError, ValueError) are correctly mapped to categories.
+
 | # | Test | Input | Output | Conditions/Assumptions | Logic |
 |---|------|-------|--------|----------------------|-------|
-| 1 | `test_scanner_error_inherits_from_gpsync_error` | ScannerError instance | Is both ScannerError and GPSyncError | Error hierarchy | Validates inheritance chain |
-| 2 | `test_all_errors_inherit_from_scanner_error` | All specific error types | All inherit from ScannerError | Error hierarchy | Validates all errors follow hierarchy |
-| 3 | `test_classify_permission_denied_error` | PermissionDeniedError | "permission" | Specific error type | Maps error to category string |
-| 4 | `test_classify_corrupted_file_error` | CorruptedFileError | "corrupted" | Specific error type | Maps error to category string |
-| 5 | `test_classify_io_error` | IOError | "io" | Specific error type | Maps error to category string |
-| 6 | `test_classify_parse_error` | ParseError | "parse" | Specific error type | Maps error to category string |
-| 7 | `test_classify_unsupported_format_error` | UnsupportedFormatError | "unsupported" | Specific error type | Maps error to category string |
-| 8 | `test_classify_tool_not_found_error` | ToolNotFoundError | "tool_missing" | Specific error type | Maps error to category string |
-| 9 | `test_classify_builtin_permission_error` | Built-in PermissionError | "permission" | Python built-in | Handles built-in exceptions |
-| 10 | `test_classify_builtin_os_error` | Built-in OSError | "io" | Python built-in | Handles built-in exceptions |
-| 11 | `test_classify_builtin_value_error` | Built-in ValueError | "parse" | Python built-in | Handles built-in exceptions |
-| 12 | `test_classify_unknown_error` | RuntimeError (unknown) | "unknown" | Unrecognized type | Provides fallback classification |
+| 1 | `test_scanner_error_inherits_from_gpsync_error` | ScannerError instance | Is both ScannerError and GPSyncError | Error hierarchy | Tests inheritance chain: ScannerError → GPSyncError. Ensures all scanner errors inherit from common base error class for consistent error handling across packages. |
+| 2 | `test_all_errors_inherit_from_scanner_error` | All specific error types (PermissionDeniedError, CorruptedFileError, IOError, ParseError, UnsupportedFormatError, ToolNotFoundError) | All inherit from ScannerError | Error hierarchy | Tests that ALL 6 specific error types inherit from ScannerError. Validates error hierarchy is correctly implemented. |
+| 3 | `test_classify_permission_denied_error` | PermissionDeniedError("Access denied") | "permission" | Custom error type | Tests classify_error() maps custom PermissionDeniedError → "permission" category. Used when file access is denied during scan. |
+| 4 | `test_classify_corrupted_file_error` | CorruptedFileError("File corrupted") | "corrupted" | Custom error type | Tests classify_error() maps CorruptedFileError → "corrupted" category. Used when file is unreadable/damaged. |
+| 5 | `test_classify_io_error` | IOError("I/O failed") | "io" | Custom error type | Tests classify_error() maps custom IOError → "io" category. Used for general I/O failures. |
+| 6 | `test_classify_parse_error` | ParseError("Parse failed") | "parse" | Custom error type | Tests classify_error() maps ParseError → "parse" category. Used when JSON/EXIF parsing fails. |
+| 7 | `test_classify_unsupported_format_error` | UnsupportedFormatError("Format not supported") | "unsupported" | Custom error type | Tests classify_error() maps UnsupportedFormatError → "unsupported" category. Used for unknown/unsupported file formats. |
+| 8 | `test_classify_tool_not_found_error` | ToolNotFoundError("Tool missing") | "tool_missing" | Custom error type | Tests classify_error() maps ToolNotFoundError → "tool_missing" category. Used when external tool (e.g., exiftool) is not installed. |
+| 9 | `test_classify_builtin_permission_error` | Python's PermissionError("Access denied") | "permission" | Python built-in exception | Tests classify_error() handles Python's built-in PermissionError (raised by OS) → "permission" category. Ensures built-in exceptions are also categorized correctly. |
+| 10 | `test_classify_builtin_os_error` | Python's OSError("OS error") | "io" | Python built-in exception | Tests classify_error() handles Python's built-in OSError → "io" category. OSError is raised for various OS-level I/O failures. |
+| 11 | `test_classify_builtin_value_error` | Python's ValueError("Invalid value") | "parse" | Python built-in exception | Tests classify_error() handles Python's built-in ValueError → "parse" category. ValueError often occurs during data parsing/conversion. |
+| 12 | `test_classify_unknown_error` | RuntimeError("Unknown error") | "unknown" | Unrecognized exception type | Tests classify_error() fallback: unrecognized exception types → "unknown" category. Ensures function never crashes, always returns a category. |
 
 ### test_exif_extractor.py
 
 Tests for EXIF metadata extraction (8 tests).
+
+**Note on format coverage**: GIF and WebP formats are untested but expected to work via the same fallback mechanism (PIL's `.size` property) validated by PNG test. If comprehensive format coverage is needed, consider adding dedicated tests for GIF (especially animated GIFs with frames) and WebP.
 
 | # | Test | Input | Output | Conditions/Assumptions | Logic |
 |---|------|-------|--------|----------------------|-------|
 | 1 | `test_extract_resolution` | Image file (800×600) | Tuple (800, 600) | Valid image | Extracts dimensions using PIL |
 | 2 | `test_extract_resolution_with_exif` | Image with EXIF (1920×1080) | Tuple (1920, 1080) | Image has EXIF | Extracts resolution from EXIF image |
 | 3 | `test_extract_resolution_missing_file` | Non-existent file path | None | File doesn't exist | Returns None on error |
-| 4 | `test_extract_exif_no_data` | Image without EXIF | Empty/minimal dictionary | No EXIF present | Returns empty dict |
+| 4 | `test_extract_exif_no_data` | JPEG without EXIF | Empty/minimal dictionary | No EXIF present | Tests fallback behavior when EXIF is absent (regardless of format). Uses JPEG created without EXIF data. Returns empty dict gracefully. |
 | 5 | `test_extract_exif_with_data` | Image with camera EXIF | Dict with camera_make, model, orientation | EXIF data present | Extracts and parses EXIF fields |
 | 6 | `test_extract_exif_missing_file` | Non-existent file path | Empty dictionary | File doesn't exist | Returns empty dict on error |
 | 7 | `test_extract_exif_invalid_file` | File with garbage data | Empty dictionary | Invalid image data | Handles corrupted files |
-| 8 | `test_resolution_extraction_png` | PNG file (640×480) | Tuple (640, 480) | PNG format | Extracts resolution from PNG |
+| 8 | `test_resolution_extraction_png` | PNG file (640×480) | Tuple (640, 480) | PNG format (no EXIF) | Tests resolution extraction for PNG format specifically. While `test_extract_exif_no_data` already tests JPEG without EXIF (fallback behavior), this test validates that PIL's `.size` property works correctly for PNG's different decoder/format. Ensures format-specific bugs don't break resolution extraction. Real-world: Google Photos exports contain PNGs (screenshots). Note: JPEG/HEIC have EXIF; PNG/GIF/WebP don't; videos use different standards. |
 
 ### test_exif_extractor_integration.py
 
 Integration tests for EXIF extraction (10 tests).
 
+**Rationale**: These tests use **PIL (Pillow)** library to create real images with actual EXIF data, then verify extraction works correctly. Unlike unit tests which may use mocks, integration tests validate the entire extraction pipeline with real image formats. All tests use PIL's simple API (no advanced libraries like exiftool).
+
 | # | Test | Input | Output | Conditions/Assumptions | Logic |
 |---|------|-------|--------|----------------------|-------|
-| 1 | `test_extract_camera_info` | Image with Canon EOS EXIF | Dict with camera_make, camera_model | Complete camera EXIF | Extracts camera information |
-| 2 | `test_extract_timestamps` | Image with datetime EXIF | ISO-formatted timestamp strings | EXIF timestamps present | Converts EXIF datetime to ISO |
-| 3 | `test_extract_exposure_settings` | Image with exposure EXIF | Dict with iso, f_number, focal_length, exposure_time | Exposure EXIF present | Extracts exposure settings |
-| 4 | `test_extract_orientation` | Image with orientation EXIF | Orientation value (1-8) | Orientation tag present | Extracts image orientation |
-| 5 | `test_extract_gps_coordinates` | Image with GPS EXIF | Decimal lat, lon, altitude | GPS EXIF present | Converts GPS rationals to decimal |
-| 6 | `test_gps_coordinate_conversion` | Image with N/W GPS | Positive lat, negative lon | GPS with N/W references | Applies correct signs |
-| 7 | `test_extract_resolution_from_real_image` | Real image (1920×1080) | Tuple (1920, 1080) | Valid image | Extracts resolution from real image |
-| 8 | `test_extract_from_png` | PNG file | Resolution extracted, EXIF empty | PNG format | Handles PNG files |
-| 9 | `test_extract_from_image_without_exif` | Image with no EXIF | Empty EXIF dict, resolution works | No EXIF present | Handles images without EXIF |
-| 10 | `test_rational_value_parsing` | Image with rational EXIF (28/10, 50/1) | Float values (2.8, 50.0) | Rational EXIF values | Converts rationals to floats |
+| 1 | `test_extract_camera_info` | Image with Canon EOS EXIF | Dict with camera_make, camera_model | Complete camera EXIF | Extracts camera information using PIL (Pillow library). |
+| 2 | `test_extract_timestamps` | Image with datetime EXIF | ISO-formatted timestamp strings | EXIF timestamps present | Converts EXIF datetime to ISO format using PIL. |
+| 3 | `test_extract_exposure_settings` | Image with exposure EXIF | Dict with iso, f_number, focal_length, exposure_time | Exposure EXIF present | Extracts exposure settings using PIL. |
+| 4 | `test_extract_exif_orientation` | Image with orientation=6 (rotated 90°) | Dict with orientation=6 | EXIF orientation present | Extracts EXIF orientation value (1-8) using PIL. Orientation indicates how camera was held: 1=normal (0°), 3=upside-down (180°), 6=rotated 90° CCW, 8=rotated 90° CW. Values 2,4,5,7 are mirrored versions. Needed to display photos correctly - if orientation is 6 or 8, width/height must be swapped. |
+| 5 | `test_extract_gps_coordinates` | Image with GPS EXIF | Dict with latitude, longitude | GPS data present | Extracts GPS location from EXIF using PIL. GPS stored as degrees/minutes/seconds rationals, converted to decimal degrees. |
+| 6 | `test_gps_coordinate_conversion` | Image with N/W GPS | Positive lat, negative lon | GPS with N/W references | Tests GPS sign conversion: N=positive lat, S=negative lat, E=positive lon, W=negative lon. |
+| 7 | `test_extract_resolution_from_real_image` | Real image (1920×1080) | Tuple (1920, 1080) | Valid image | Extracts resolution from real image using PIL. |
+| 8 | `test_extract_from_png` | PNG file | Resolution extracted, EXIF empty | PNG format | Handles PNG files (no EXIF) using PIL. |
+| 9 | `test_extract_from_image_without_exif` | Image with no EXIF | Empty EXIF dict, resolution works | No EXIF present | Handles images without EXIF gracefully using PIL. |
+| 10 | `test_rational_value_parsing` | Image with rational EXIF (28/10, 50/1) | Float values (2.8, 50.0) | Rational EXIF values | Converts EXIF rational values (fractions) to floats using PIL. |
 
 ### test_file_processor.py
 
