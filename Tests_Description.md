@@ -324,6 +324,20 @@ Tests for JSON sidecar parser (10 tests).
 | 9 | `test_parse_empty_people_array` | JSON with empty people | Empty list | No people | Handles empty people array |
 | 10 | `test_parse_partial_geo_data` | JSON with lat/lon only | geoData with lat/lon, no altitude | Partial geo data | Handles partial geo data |
 
+### test_mime_detector.py
+
+Tests for MIME type detection (7 tests).
+
+| # | Test | Input | Output | Conditions/Assumptions | Logic |
+|---|------|-------|--------|----------------------|-------|
+| 1 | `test_jpeg_detection` | File with JPEG header | "image/jpeg" | Valid JPEG | Detects JPEG by magic bytes |
+| 2 | `test_png_detection` | File with PNG signature | "image/png" | Valid PNG | Detects PNG by magic bytes |
+| 3 | `test_mp4_detection` | File with MP4 ftyp box | "video/mp4" | Valid MP4 | Detects MP4 by ftyp box |
+| 4 | `test_unknown_extension` | File with .xyz extension | "application/octet-stream" | Unknown type | Returns default MIME type |
+| 5 | `test_case_insensitive_extension` | File with .JPG (uppercase) | "image/jpeg" | Case variation | Extension matching is case-insensitive |
+| 6 | `test_is_image_mime_type` | Various MIME types | True for images, False otherwise | MIME type strings | Identifies image MIME types |
+| 7 | `test_is_video_mime_type` | Various MIME types | True for videos, False otherwise | MIME type strings | Identifies video MIME types |
+
 ### test_edited_variants.py
 
 Tests for edited variant detection and linking (14 tests).
@@ -436,6 +450,24 @@ Tests for Live Photos detection and linking (17 tests).
 | 15 | `test_end_to_end_detection_and_linking` | DB with files, full workflow | Pairs detected and linked in DB | Complete workflow | Tests entire detection and linking pipeline |
 | 16 | `test_no_pairs_found` | Only regular photos (no Live Photos) | Stats: pairs_linked=0 | No Live Photos | Handles case with no Live Photos gracefully |
 
+### test_metadata_coordinator.py
+
+Tests for metadata coordination and MediaItemRecord creation (14 tests).
+
+| # | Test | Input | Output | Conditions/Assumptions | Logic |
+|---|------|-------|--------|----------------------|-------|
+| 1 | `test_coordinate_metadata_basic` | FileInfo, CPU result, album_id, scan_run_id | MediaItemRecord with basic fields | Valid inputs | Creates basic media item record |
+| 2 | `test_coordinate_metadata_cpu_data` | FileInfo, CPU result | Record with MIME, CRC32, fingerprint, dimensions | CPU data present | Includes CPU processing results |
+| 3 | `test_coordinate_metadata_exif_data` | FileInfo, CPU result with EXIF | Record with EXIF fields | EXIF present | Extracts EXIF data into record |
+| 4 | `test_coordinate_metadata_with_json_sidecar` | FileInfo with JSON sidecar | Record with JSON metadata | JSON sidecar present | Parses and includes JSON metadata |
+| 5 | `test_coordinate_metadata_json_parse_error` | FileInfo with invalid JSON | Record without JSON metadata | Invalid JSON | Handles JSON parse errors gracefully |
+| 6 | `test_coordinate_metadata_video_data` | FileInfo, CPU result with video data | Record with duration, frame_rate | Video data present | Includes video metadata |
+| 7 | `test_coordinate_metadata_no_video_data` | FileInfo, CPU result without video | Record with duration=None, frame_rate=None | Image file | Handles non-video files |
+| 8 | `test_coordinate_metadata_minimal_cpu_result` | FileInfo, minimal CPU result | Record with minimal data | Sparse CPU result | Handles minimal CPU data |
+| 9 | `test_media_item_record_to_dict` | MediaItemRecord | Dictionary representation | Valid record | Converts record to dict |
+| 10 | `test_media_item_record_has_media_item_id` | MediaItemRecord | Record with 36-char UUID | ID generated | Generates media_item_id |
+| 11 | `test_media_item_record_deterministic_ids` | Same inputs twice | Identical media_item_ids | UUID5 generation | IDs are deterministic |
+
 ### test_metadata_aggregator.py
 
 Tests for metadata aggregation from multiple sources (13 tests).
@@ -455,38 +487,6 @@ Tests for metadata aggregation from multiple sources (13 tests).
 | 9 | `test_parse_timestamp_from_filename_simple_pattern` | Filename: "20210615_143022.jpg" | "2021-06-15T14:30:22" | YYYYMMDD_HHMMSS pattern | Parses simple timestamp pattern without prefix |
 | 10 | `test_parse_timestamp_from_filename_date_only` | Filename: "2021-06-15.jpg" | "2021-06-15T00:00:00" | YYYY-MM-DD pattern | Parses date-only pattern, sets time to midnight |
 | 11 | `test_parse_timestamp_from_filename_no_match` | Filename: "random_photo.jpg" | None | No recognizable pattern | Returns None for unparseable filenames without crashing |
-
-### test_metadata_coordinator.py
-
-Tests for metadata coordination and MediaItemRecord creation (14 tests).
-
-| # | Test | Input | Output | Conditions/Assumptions | Logic |
-|---|------|-------|--------|----------------------|-------|
-| 1 | `test_coordinate_metadata_basic` | FileInfo, CPU result, album_id, scan_run_id | MediaItemRecord with basic fields | Valid inputs | Creates basic media item record |
-| 2 | `test_coordinate_metadata_cpu_data` | FileInfo, CPU result | Record with MIME, CRC32, fingerprint, dimensions | CPU data present | Includes CPU processing results |
-| 3 | `test_coordinate_metadata_exif_data` | FileInfo, CPU result with EXIF | Record with EXIF fields | EXIF present | Extracts EXIF data into record |
-| 4 | `test_coordinate_metadata_with_json_sidecar` | FileInfo with JSON sidecar | Record with JSON metadata | JSON sidecar present | Parses and includes JSON metadata |
-| 5 | `test_coordinate_metadata_json_parse_error` | FileInfo with invalid JSON | Record without JSON metadata | Invalid JSON | Handles JSON parse errors gracefully |
-| 6 | `test_coordinate_metadata_video_data` | FileInfo, CPU result with video data | Record with duration, frame_rate | Video data present | Includes video metadata |
-| 7 | `test_coordinate_metadata_no_video_data` | FileInfo, CPU result without video | Record with duration=None, frame_rate=None | Image file | Handles non-video files |
-| 8 | `test_coordinate_metadata_minimal_cpu_result` | FileInfo, minimal CPU result | Record with minimal data | Sparse CPU result | Handles minimal CPU data |
-| 9 | `test_media_item_record_to_dict` | MediaItemRecord | Dictionary representation | Valid record | Converts record to dict |
-| 10 | `test_media_item_record_has_media_item_id` | MediaItemRecord | Record with 36-char UUID | ID generated | Generates media_item_id |
-| 11 | `test_media_item_record_deterministic_ids` | Same inputs twice | Identical media_item_ids | UUID5 generation | IDs are deterministic |
-
-### test_mime_detector.py
-
-Tests for MIME type detection (7 tests).
-
-| # | Test | Input | Output | Conditions/Assumptions | Logic |
-|---|------|-------|--------|----------------------|-------|
-| 1 | `test_jpeg_detection` | File with JPEG header | "image/jpeg" | Valid JPEG | Detects JPEG by magic bytes |
-| 2 | `test_png_detection` | File with PNG signature | "image/png" | Valid PNG | Detects PNG by magic bytes |
-| 3 | `test_mp4_detection` | File with MP4 ftyp box | "video/mp4" | Valid MP4 | Detects MP4 by ftyp box |
-| 4 | `test_unknown_extension` | File with .xyz extension | "application/octet-stream" | Unknown type | Returns default MIME type |
-| 5 | `test_case_insensitive_extension` | File with .JPG (uppercase) | "image/jpeg" | Case variation | Extension matching is case-insensitive |
-| 6 | `test_is_image_mime_type` | Various MIME types | True for images, False otherwise | MIME type strings | Identifies image MIME types |
-| 7 | `test_is_video_mime_type` | Various MIME types | True for videos, False otherwise | MIME type strings | Identifies video MIME types |
 
 ### test_post_scan.py
 
