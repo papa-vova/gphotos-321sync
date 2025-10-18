@@ -8,8 +8,8 @@ from gphotos_321sync.common import compute_crc32
 __all__ = ['compute_content_fingerprint', 'compute_crc32']
 
 # Fingerprint configuration
-FINGERPRINT_HEAD_SIZE = 8192  # 8 KB from start
-FINGERPRINT_TAIL_SIZE = 8192  # 8 KB from end
+FINGERPRINT_HEAD_SIZE = 65536  # 64 KB from start
+FINGERPRINT_TAIL_SIZE = 65536  # 64 KB from end
 
 
 def compute_content_fingerprint(file_path: Path, file_size: int) -> str:
@@ -17,9 +17,9 @@ def compute_content_fingerprint(file_path: Path, file_size: int) -> str:
     Compute a SHA-256 fingerprint of file head and tail.
     
     This is a fast approximation for change detection that reads only
-    the first and last 8KB of the file, rather than the entire content.
+    the first and last 64KB of the file, rather than the entire content.
     
-    For files smaller than 16KB, reads the entire file.
+    For files smaller than 128KB, reads the entire file.
     
     Args:
         file_path: Path to the file

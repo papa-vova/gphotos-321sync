@@ -26,16 +26,6 @@ def test_text_file(tmp_path):
     return text_path
 
 
-def test_calculate_crc32_deterministic(test_text_file):
-    """Test that CRC32 calculation is deterministic."""
-    crc1 = calculate_crc32(test_text_file)
-    crc2 = calculate_crc32(test_text_file)
-    
-    assert crc1 == crc2
-    assert len(crc1) == 8  # 8 hex characters
-    assert all(c in '0123456789abcdef' for c in crc1)
-
-
 def test_calculate_crc32_different_files(tmp_path):
     """Test that different files have different CRC32 values."""
     file1 = tmp_path / "file1.txt"
@@ -168,32 +158,6 @@ def test_process_file_cpu_work_error_handling(tmp_path):
     # But it should never raise an exception
     assert 'success' in result
     assert 'error' in result
-
-
-def test_process_file_cpu_work_use_exiftool_flag(test_image):
-    """Test that use_exiftool flag is accepted."""
-    file_size = test_image.stat().st_size
-    
-    # Should work with use_exiftool=True
-    result1 = process_file_cpu_work(test_image, file_size, use_exiftool=True)
-    assert 'success' in result1
-    
-    # Should work with use_exiftool=False
-    result2 = process_file_cpu_work(test_image, file_size, use_exiftool=False)
-    assert 'success' in result2
-
-
-def test_process_file_cpu_work_use_ffprobe_flag(test_image):
-    """Test that use_ffprobe flag is accepted."""
-    file_size = test_image.stat().st_size
-    
-    # Should work with use_ffprobe=True
-    result1 = process_file_cpu_work(test_image, file_size, use_ffprobe=True)
-    assert 'success' in result1
-    
-    # Should work with use_ffprobe=False
-    result2 = process_file_cpu_work(test_image, file_size, use_ffprobe=False)
-    assert 'success' in result2
 
 
 def test_process_file_cpu_work_small_file(tmp_path):

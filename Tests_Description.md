@@ -244,6 +244,20 @@ Tests for EXIF metadata extraction (8 tests).
 | 7 | `test_extract_exif_invalid_file` | File with garbage data | Empty dictionary | Invalid image data | Handles corrupted files |
 | 8 | `test_resolution_extraction_png` | PNG file (640×480) | Tuple (640, 480) | PNG format (no EXIF) | Tests resolution extraction for PNG format specifically. While `test_extract_exif_no_data` already tests JPEG without EXIF (fallback behavior), this test validates that PIL's `.size` property works correctly for PNG's different decoder/format. Ensures format-specific bugs don't break resolution extraction. Real-world: Google Photos exports contain PNGs (screenshots). Note: JPEG/HEIC have EXIF; PNG/GIF/WebP don't; videos use different standards. |
 
+### test_exif_extractor_raw_integration.py
+
+Integration tests for RAW format EXIF extraction with ExifTool (5 tests).
+
+**Rationale**: Tests ExifTool integration for RAW camera formats (CR2, NEF, ARW, DNG) that Pillow cannot read. Tests are skipped if ExifTool is not installed.
+
+| # | Test | Input | Output | Conditions/Assumptions | Logic |
+|---|------|-------|--------|----------------------|-------|
+| 1 | `test_extract_exif_with_exiftool_cr2` | Mock CR2 file | Dict with metadata | ExifTool available | Tests extract_exif_with_exiftool() with RAW file |
+| 2 | `test_extract_exif_smart_with_raw_file` | Mock CR2 file, use_exiftool=True | Dict with metadata | ExifTool available | Tests extract_exif_smart() invokes ExifTool for RAW formats |
+| 3 | `test_extract_exif_smart_raw_without_exiftool_flag` | Mock CR2 file, use_exiftool=False | Empty dict | ExifTool available but disabled | Tests that ExifTool is NOT invoked when flag is False |
+| 4 | `test_extract_raises_error_when_exiftool_not_available` | CR2 file | FileNotFoundError | ExifTool NOT available | Tests graceful error when ExifTool missing |
+| 5 | `test_extract_smart_raw_without_exiftool_returns_empty` | CR2 file, use_exiftool=True | Empty dict | ExifTool NOT available | Tests fallback when ExifTool unavailable |
+
 ### test_exif_extractor_integration.py
 
 Integration tests for EXIF extraction (10 tests).
@@ -252,44 +266,41 @@ Integration tests for EXIF extraction (10 tests).
 
 | # | Test | Input | Output | Conditions/Assumptions | Logic |
 |---|------|-------|--------|----------------------|-------|
-| 1 | `test_extract_camera_info` | Image with Canon EOS EXIF | Dict with camera_make, camera_model | Complete camera EXIF | Extracts camera information using PIL (Pillow library). |
-| 2 | `test_extract_timestamps` | Image with datetime EXIF | ISO-formatted timestamp strings | EXIF timestamps present | Converts EXIF datetime to ISO format using PIL. |
-| 3 | `test_extract_exposure_settings` | Image with exposure EXIF | Dict with iso, f_number, focal_length, exposure_time | Exposure EXIF present | Extracts exposure settings using PIL. |
-| 4 | `test_extract_exif_orientation` | Image with orientation=6 (rotated 90°) | Dict with orientation=6 | EXIF orientation present | Extracts EXIF orientation value (1-8) using PIL. Orientation indicates how camera was held: 1=normal (0°), 3=upside-down (180°), 6=rotated 90° CCW, 8=rotated 90° CW. Values 2,4,5,7 are mirrored versions. Needed to display photos correctly - if orientation is 6 or 8, width/height must be swapped. |
-| 5 | `test_extract_gps_coordinates` | Image with GPS EXIF | Dict with latitude, longitude | GPS data present | Extracts GPS location from EXIF using PIL. GPS stored as degrees/minutes/seconds rationals, converted to decimal degrees. |
+| 1 | `test_extract_camera_info` | Image with Canon EOS EXIF | Dict with camera_make, camera_model | Complete camera EXIF | Extracts camera information. |
+| 2 | `test_extract_timestamps` | Image with datetime EXIF | ISO-formatted timestamp strings | EXIF timestamps present | Converts EXIF datetime to ISO format. |
+| 3 | `test_extract_exposure_settings` | Image with exposure EXIF | Dict with iso, f_number, focal_length, exposure_time | Exposure EXIF present | Extracts exposure settings. |
+| 4 | `test_extract_exif_orientation` | Image with orientation=6 (rotated 90°) | Dict with orientation=6 | EXIF orientation present | Extracts EXIF orientation value (1-8). Orientation indicates how camera was held: 1=normal (0°), 3=upside-down (180°), 6=rotated 90° CCW, 8=rotated 90° CW. Values 2,4,5,7 are mirrored versions. Needed to display photos correctly - if orientation is 6 or 8, width/height must be swapped. |
+| 5 | `test_extract_gps_coordinates` | Image with GPS EXIF | Dict with latitude, longitude | GPS data present | Extracts GPS location from EXIF. GPS stored as degrees/minutes/seconds rationals, converted to decimal degrees. |
 | 6 | `test_gps_coordinate_conversion` | Image with N/W GPS | Positive lat, negative lon | GPS with N/W references | Tests GPS sign conversion: N=positive lat, S=negative lat, E=positive lon, W=negative lon. |
-| 7 | `test_extract_resolution_from_real_image` | Real image (1920×1080) | Tuple (1920, 1080) | Valid image | Extracts resolution from real image using PIL. |
-| 8 | `test_extract_from_png` | PNG file | Resolution extracted, EXIF empty | PNG format | Handles PNG files (no EXIF) using PIL. |
-| 9 | `test_extract_from_image_without_exif` | Image with no EXIF | Empty EXIF dict, resolution works | No EXIF present | Handles images without EXIF gracefully using PIL. |
-| 10 | `test_rational_value_parsing` | Image with rational EXIF (28/10, 50/1) | Float values (2.8, 50.0) | Rational EXIF values | Converts EXIF rational values (fractions) to floats using PIL. |
+| 7 | `test_extract_resolution_from_real_image` | Real image (1920×1080) | Tuple (1920, 1080) | Valid image | Extracts resolution from real image. |
+| 8 | `test_extract_from_png` | PNG file | Resolution extracted, EXIF empty | PNG format | Handles PNG files (no EXIF). |
+| 9 | `test_extract_from_image_without_exif` | Image with no EXIF | Empty EXIF dict, resolution works | No EXIF present | Handles images without EXIF gracefully. |
+| 10 | `test_rational_value_parsing` | Image with rational EXIF (28/10, 50/1) | Float values (2.8, 50.0) | Rational EXIF values | Converts EXIF rational values (fractions) to floats. |
 
 ### test_file_processor.py
 
-Tests for CPU-intensive file processing (19 tests).
+Tests for CPU-intensive file processing (14 tests).
 
 | # | Test | Input | Output | Conditions/Assumptions | Logic |
 |---|------|-------|--------|----------------------|-------|
-| 1 | `test_calculate_crc32_deterministic` | Same file read twice | Identical 8-char hex CRC32 | File unchanged | Verifies CRC32 is deterministic |
-| 2 | `test_calculate_crc32_different_files` | Two different files | Different CRC32 values | Different content | Verifies CRC32 detects differences |
-| 3 | `test_calculate_crc32_large_file` | File >64KB | Valid 8-char hex CRC32 | Large file | Tests chunked CRC32 |
-| 4 | `test_process_file_cpu_work_success` | Valid image file | Dict with success=True, mime_type, crc32, fingerprint | Valid file | Performs all CPU operations |
-| 5 | `test_process_file_cpu_work_mime_type` | Image file | MIME type detected | Valid file | Detects file MIME type |
-| 6 | `test_process_file_cpu_work_crc32` | Text file | CRC32 matches direct calculation | Valid file | Verifies CRC32 calculation |
-| 7 | `test_process_file_cpu_work_fingerprint` | Text file | 64-char hex SHA-256 | Valid file | Calculates content fingerprint |
-| 8 | `test_process_file_cpu_work_exif_data` | Image file | Dict with exif_data (may be empty) | Valid image | Attempts EXIF extraction |
-| 9 | `test_process_file_cpu_work_resolution` | Image file | Width and height fields | Valid image | Attempts resolution extraction |
-| 10 | `test_process_file_cpu_work_video_data` | Non-video file | video_data=None | Image file | Returns None for non-video |
-| 11 | `test_process_file_cpu_work_nonexistent_file` | Non-existent path | success=False, error fields | File doesn't exist | Handles missing files |
-| 12 | `test_process_file_cpu_work_error_handling` | Invalid file data | Result with success/error, no exception | Invalid file | Catches all exceptions |
-| 13 | `test_process_file_cpu_work_use_exiftool_flag` | File with use_exiftool flag | Success with flag respected | Flag parameter | Accepts exiftool flag |
-| 14 | `test_process_file_cpu_work_use_ffprobe_flag` | File with use_ffprobe flag | Success with flag respected | Flag parameter | Accepts ffprobe flag |
-| 15 | `test_process_file_cpu_work_small_file` | File <128KB | CRC32 and fingerprint | Small file | Processes small files |
-| 16 | `test_process_file_cpu_work_large_file` | File >128KB | CRC32 and fingerprint | Large file | Handles large files with chunking |
-| 17 | `test_process_file_cpu_work_empty_file` | Empty file (0 bytes) | Result with success and crc32 | Empty file | Handles empty files |
+| 1 | `test_calculate_crc32_different_files` | Two different files | Different CRC32 values | Different content | Tests our calculate_crc32() wrapper detects file differences. |
+| 2 | `test_calculate_crc32_large_file` | File >64KB | Valid 8-char hex CRC32 | Large file | Tests chunked CRC32 |
+| 3 | `test_process_file_cpu_work_success` | Valid image file | Dict with success=True, mime_type, crc32, fingerprint | Valid file | Performs all CPU operations |
+| 4 | `test_process_file_cpu_work_mime_type` | Image file | MIME type detected | Valid file | Detects file MIME type |
+| 5 | `test_process_file_cpu_work_crc32` | Text file | CRC32 from process_file_cpu_work() matches direct calculate_crc32() call | Valid file | Tests integration: calls process_file_cpu_work() and calculate_crc32() separately on same file, verifies both return identical CRC32. Ensures process_file_cpu_work() wrapper has no bugs. Note: calculate_crc32() is a wrapper in file_processor.py (not the compute_crc32() from fingerprint.py). |
+| 6 | `test_process_file_cpu_work_fingerprint` | Text file | 64-char hex SHA-256 | Valid file | Calculates SHA-256 of first 64KB + last 64KB for files >128KB, or entire file if ≤128KB. |
+| 7 | `test_process_file_cpu_work_exif_data` | Image file | Dict with exif_data (may be empty) | Valid image | Attempts EXIF extraction |
+| 8 | `test_process_file_cpu_work_resolution` | Image file | Width and height fields | Valid image | Attempts resolution extraction |
+| 9 | `test_process_file_cpu_work_video_data` | Non-video file | video_data=None | Image file | Returns None for non-video |
+| 10 | `test_process_file_cpu_work_nonexistent_file` | Non-existent path | success=False, error fields | File doesn't exist | Handles missing files |
+| 11 | `test_process_file_cpu_work_error_handling` | Invalid file data | Result with success/error, no exception | Invalid file | Catches all exceptions |
+| 12 | `test_process_file_cpu_work_small_file` | File <128KB | CRC32 and fingerprint | Small file | Processes small files |
+| 13 | `test_process_file_cpu_work_large_file` | File >128KB | CRC32 and fingerprint | Large file | Handles large files with chunking |
+| 14 | `test_process_file_cpu_work_empty_file` | Empty file (0 bytes) | Result with success and crc32 | Empty file | Handles empty files |
 
 ### test_fingerprint.py
 
-Tests for content fingerprinting utilities (8 tests).
+Tests for content fingerprinting utilities (7 tests).
 
 | # | Test | Input | Output | Conditions/Assumptions | Logic |
 |---|------|-------|--------|----------------------|-------|
@@ -298,7 +309,8 @@ Tests for content fingerprinting utilities (8 tests).
 | 3 | `test_change_detection` | File before/after modification | Different fingerprints | Content changed | Verifies fingerprint detects changes |
 | 4 | `test_identical_files_same_fingerprint` | Two identical files | Same fingerprint | Identical content | Verifies identical files match |
 | 5 | `test_crc32_computation` | File content | 32-bit unsigned integer | Valid file | Tests basic CRC32 |
-| 6 | `test_crc32_consistency` | Same content twice | Identical CRC32 | Same content | Verifies CRC32 consistency |
+| 6 | `test_crc32_different_files` | File before/after modification | Different CRC32 | Content changed | Verifies CRC32 detects changes |
+| 7 | `test_large_file_crc32` | ~1MB file | Valid CRC32 | Large file | Tests CRC32 on large files |
 
 ### test_imports.py
 

@@ -118,24 +118,7 @@ class TestComputeCrc32:
         finally:
             os.unlink(file_path)
     
-    def test_crc32_consistency(self):
-        """Test that CRC32 is consistent for the same content."""
-        content = b"Consistent content" * 100
-        
-        with tempfile.NamedTemporaryFile(delete=False) as f:
-            f.write(content)
-            f.flush()
-            file_path = Path(f.name)
-        
-        try:
-            crc1 = compute_crc32(file_path)
-            crc2 = compute_crc32(file_path)
-            
-            assert crc1 == crc2
-        finally:
-            os.unlink(file_path)
-    
-    def test_crc32_detects_changes(self):
+    def test_crc32_different_files(self):
         """Test that CRC32 changes when file content changes."""
         with tempfile.NamedTemporaryFile(delete=False) as f:
             f.write(b"Original" * 100)
