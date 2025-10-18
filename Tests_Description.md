@@ -316,20 +316,6 @@ Tests for EXIF metadata extraction (8 tests).
 | 7 | `test_extract_exif_invalid_file` | File with garbage data | Empty dictionary | Invalid image data | Handles corrupted files |
 | 8 | `test_resolution_extraction_png` | PNG file (640×480) | Tuple (640, 480) | PNG format (no EXIF) | Tests resolution extraction for PNG format specifically. While `test_extract_exif_no_data` already tests JPEG without EXIF (fallback behavior), this test validates that PIL's `.size` property works correctly for PNG's different decoder/format. Ensures format-specific bugs don't break resolution extraction. Real-world: Google Photos exports contain PNGs (screenshots). Note: JPEG/HEIC have EXIF; PNG/GIF/WebP don't; videos use different standards. |
 
-### test_exif_extractor_raw_integration.py
-
-Integration tests for RAW format EXIF extraction with ExifTool (5 tests).
-
-**Rationale**: Tests ExifTool integration for RAW camera formats (CR2, NEF, ARW, DNG) that Pillow cannot read. Tests are skipped if ExifTool is not installed.
-
-| # | Test | Input | Output | Conditions/Assumptions | Logic |
-|---|------|-------|--------|----------------------|-------|
-| 1 | `test_extract_exif_with_exiftool_cr2` | Mock CR2 file | Dict with metadata | ExifTool available | Tests extract_exif_with_exiftool() with RAW file |
-| 2 | `test_extract_exif_smart_with_raw_file` | Mock CR2 file, use_exiftool=True | Dict with metadata | ExifTool available | Tests extract_exif_smart() invokes ExifTool for RAW formats |
-| 3 | `test_extract_exif_smart_raw_without_exiftool_flag` | Mock CR2 file, use_exiftool=False | Empty dict | ExifTool available but disabled | Tests that ExifTool is NOT invoked when flag is False |
-| 4 | `test_extract_raises_error_when_exiftool_not_available` | CR2 file | FileNotFoundError | ExifTool NOT available | Tests graceful error when ExifTool missing |
-| 5 | `test_extract_smart_raw_without_exiftool_returns_empty` | CR2 file, use_exiftool=True | Empty dict | ExifTool NOT available | Tests fallback when ExifTool unavailable |
-
 ### test_exif_extractor_integration.py
 
 Integration tests for EXIF extraction (10 tests).
@@ -348,6 +334,20 @@ Integration tests for EXIF extraction (10 tests).
 | 8 | `test_extract_from_png` | PNG file | Resolution extracted, EXIF empty | PNG format | Handles PNG files (no EXIF). |
 | 9 | `test_extract_from_image_without_exif` | Image with no EXIF | Empty EXIF dict, resolution works | No EXIF present | Handles images without EXIF gracefully. |
 | 10 | `test_rational_value_parsing` | Image with rational EXIF (28/10, 50/1) | Float values (2.8, 50.0) | Rational EXIF values | Converts EXIF rational values (fractions) to floats. |
+
+### test_exif_extractor_raw_integration.py
+
+Integration tests for RAW format EXIF extraction with ExifTool (5 tests).
+
+**Rationale**: Tests ExifTool integration for RAW camera formats (CR2, NEF, ARW, DNG) that Pillow cannot read. Tests are skipped if ExifTool is not installed.
+
+| # | Test | Input | Output | Conditions/Assumptions | Logic |
+|---|------|-------|--------|----------------------|-------|
+| 1 | `test_extract_exif_with_exiftool_cr2` | Mock CR2 file | Dict with metadata | ExifTool available | Tests extract_exif_with_exiftool() with RAW file |
+| 2 | `test_extract_exif_smart_with_raw_file` | Mock CR2 file, use_exiftool=True | Dict with metadata | ExifTool available | Tests extract_exif_smart() invokes ExifTool for RAW formats |
+| 3 | `test_extract_exif_smart_raw_without_exiftool_flag` | Mock CR2 file, use_exiftool=False | Empty dict | ExifTool available but disabled | Tests that ExifTool is NOT invoked when flag is False |
+| 4 | `test_extract_raises_error_when_exiftool_not_available` | CR2 file | FileNotFoundError | ExifTool NOT available | Tests graceful error when ExifTool missing |
+| 5 | `test_extract_smart_raw_without_exiftool_returns_empty` | CR2 file, use_exiftool=True | Empty dict | ExifTool NOT available | Tests fallback when ExifTool unavailable |
 
 ### test_file_processor.py
 
