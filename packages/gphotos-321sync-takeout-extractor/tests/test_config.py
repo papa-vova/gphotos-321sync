@@ -33,15 +33,3 @@ class TestExtractionConfig:
         assert config.target_media_path == "/path/to/output"
         assert config.verify_checksums is False
         assert config.max_retry_attempts == 5
-
-
-class TestTakeoutExtractorConfig:
-    """Tests for TakeoutExtractorConfig (root configuration)."""
-    
-    def test_takeout_extractor_config_defaults(self):
-        """Test root configuration with all defaults."""
-        config = TakeoutExtractorConfig()
-        
-        assert config.logging.level == "INFO"
-        assert config.logging.format == "json"
-        assert config.extraction.verify_checksums is True

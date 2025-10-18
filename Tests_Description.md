@@ -38,7 +38,7 @@ Tests for shared `LoggingConfig` validation (9 tests).
 
 ### test_config.py (takeout-extractor)
 
-Tests for extractor-specific configuration (3 tests).
+Tests for extractor-specific configuration (2 tests).
 
 **Rationale**: Tests ONLY extractor-specific parameters and their defaults/overrides. Common validation patterns (extra='forbid', dict/object input) are tested in gphotos-321sync-common.
 
@@ -46,35 +46,33 @@ Tests for extractor-specific configuration (3 tests).
 |---|------|-------|--------|----------------------|-------|
 | 1 | `test_extraction_config_defaults` | No parameters | source_dir=".", target_media_path="./extracted", verify_checksums=True, max_retry_attempts=10 | Using defaults | Tests extractor-specific default values |
 | 2 | `test_extraction_config_custom_values` | Extractor-specific parameters | Config with custom values | Parameters provided | Tests extractor-specific parameter overrides |
-| 3 | `test_takeout_extractor_config_defaults` | No parameters | Root config with nested defaults | Using defaults | Tests root configuration structure with extractor defaults |
 
 ### test_extractor.py
 
-Tests for archive extraction functionality (17 tests).
+Tests for archive extraction functionality (16 tests).
 
 | # | Test | Input | Output | Conditions/Assumptions | Logic |
 |---|------|-------|--------|----------------------|-------|
 | 1 | `test_discover_archives` | Directory with ZIP and TAR.GZ | 2 archives discovered | Archives present | Discovers archives by extension |
-| 2 | `test_discover_no_archives` | Empty directory | Empty list | No archives | Handles empty directory |
-| 3 | `test_discover_recursive` | Nested directory with archive | Archive found recursively | Recursive=True | Discovers archives in subdirectories |
-| 4 | `test_invalid_source_dir` | Non-existent directory | FileNotFoundError raised | Invalid path | Validates source directory |
-| 5 | `test_source_is_file` | Path to file | NotADirectoryError raised | Path is file | Validates source is directory |
-| 6 | `test_extract_zip` | ZIP archive | Files extracted to target | Valid ZIP | Extracts ZIP archive |
-| 7 | `test_extract_tar_gz` | TAR.GZ archive | Files extracted to target | Valid TAR.GZ | Extracts TAR.GZ archive |
-| 8 | `test_extract_with_progress` | Archive with progress callback | Progress callbacks invoked | Callback provided | Reports extraction progress |
-| 9 | `test_extract_all` | Multiple archives | All archives extracted | Multiple archives | Extracts all archives |
-| 10 | `test_preserve_structure` | Archive with preserve_structure flag | Structure preserved or flattened | Flag setting | Respects preserve_structure option |
-| 11 | `test_run` | Source dir with archives | All archives extracted | Valid setup | Complete extraction workflow |
-| 12 | `test_run_with_progress` | Extraction with progress callback | Progress callbacks invoked | Callback provided | Reports overall progress |
-| 13 | `test_run_no_archives` | Empty source directory | Empty results | No archives | Handles no archives gracefully |
-| 14 | `test_state_save_and_load` | Extraction state | State saved and loaded | State file used | Persists extraction state |
-| 15 | `test_resume_extraction` | Interrupted extraction | Extraction resumes | State file exists | Resumes from saved state |
-| 16 | `test_retry_on_transient_failure` | Flaky operation | Operation succeeds after retries | Transient failures | Retries with exponential backoff |
-| 17 | `test_retry_gives_up_after_max_attempts` | Always-failing operation | RuntimeError after max attempts | Persistent failure | Gives up after max retries |
+| 2 | `test_discover_no_archives` | Empty directory | Empty list | No archives | Returns empty list when no archives found (discovery only, not extraction) |
+| 3 | `test_invalid_source_dir` | Non-existent source_dir path | FileNotFoundError raised immediately | source_dir doesn't exist | Validates source_dir parameter: app fails promptly if path not found/inaccessible |
+| 4 | `test_source_is_file` | source_dir points to file instead of directory | NotADirectoryError raised immediately | source_dir is a file, not directory | Validates source_dir must be directory: app fails promptly if parameter is file |
+| 5 | `test_extract_zip` | ZIP archive | Files extracted to target | Valid ZIP | Extracts ZIP archive |
+| 6 | `test_extract_tar_gz` | TAR.GZ archive | Files extracted to target | Valid TAR.GZ | Extracts TAR.GZ archive |
+| 7 | `test_extract_with_progress` | Archive with progress callback | Progress callbacks invoked | Callback provided | Reports extraction progress |
+| 8 | `test_extract_all` | Multiple archives | All archives extracted | Multiple archives | Extracts all archives |
+| 9 | `test_preserve_structure` | Archive with preserve_structure flag | Structure preserved or flattened | Flag setting | Respects preserve_structure option |
+| 10 | `test_run` | Source dir with 2 archives (ZIP + TAR.GZ) | All 2 archives extracted to target_media_path | Valid source_dir and target_media_path | Complete extraction workflow: discovers archives, extracts all, returns results dict with archive paths |
+| 11 | `test_run_with_progress` | Extraction with progress callback | Progress callbacks invoked | Callback provided | Reports overall progress |
+| 12 | `test_run_no_archives` | Empty source directory (no archives) | RuntimeError raised with "No archives found" | No archives found | App fails with error when source folder is empty (no archives to extract) |
+| 13 | `test_state_save_and_load` | Extraction state | State saved and loaded | State file used | Persists extraction state |
+| 14 | `test_resume_extraction` | Interrupted extraction | Extraction resumes | State file exists | Resumes from saved state |
+| 15 | `test_retry_on_transient_failure` | Flaky operation (fails 2x, succeeds 3rd) | Operation succeeds after retries | Transient failures | Retries with exponential backoff (initial_retry_delay=32s doubles each attempt: 32s, 64s, 128s...) |
+| 16 | `test_retry_gives_up_after_max_attempts` | Always-failing operation | RuntimeError after max_retry_attempts | Persistent failure | Gives up after max retries (WARNING: with default initial_retry_delay=32s and max_retry_attempts=10, total wait = 9+ hours!), logs error and exits |
 
 ### test_extractor_verification.py
 
-Tests for archive verification and selective re-extraction (27 tests).
+Tests for archive verification and selective re-extraction (26 tests).
 
 | # | Test | Input | Output | Conditions/Assumptions | Logic |
 |---|------|-------|--------|----------------------|-------|
@@ -588,8 +586,8 @@ Tests for writer thread database operations (9 tests).
 
 ## Summary
 
-**Total: 341 tests** (9 + 286 + 46)
+**Total: 339 tests** (9 + 286 + 44)
 
 - **gphotos-321sync-common**: 9 tests
 - **gphotos-321sync-media-scanner**: 286 tests
-- **gphotos-321sync-takeout-extractor**: 46 tests
+- **gphotos-321sync-takeout-extractor**: 44 tests (2 config + 16 extractor + 26 verification)

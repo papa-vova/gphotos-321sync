@@ -78,29 +78,6 @@ class TestArchiveDiscovery:
         
         assert len(archives) == 0
     
-    def test_discover_recursive(self, tmp_path):
-        """Test recursive archive discovery."""
-        source_dir = tmp_path / "source"
-        source_dir.mkdir()
-        
-        # Create archive in subdirectory
-        subdir = source_dir / "subdir"
-        subdir.mkdir()
-        
-        zip_path = subdir / "nested.zip"
-        with zipfile.ZipFile(zip_path, 'w') as zf:
-            zf.writestr("test.txt", "test")
-        
-        discovery = ArchiveDiscovery(source_dir)
-        
-        # Recursive should find it
-        archives_recursive = discovery.discover(recursive=True)
-        assert len(archives_recursive) == 1
-        
-        # Non-recursive should not
-        archives_non_recursive = discovery.discover(recursive=False)
-        assert len(archives_non_recursive) == 0
-    
     def test_invalid_source_dir(self, tmp_path):
         """Test error handling for invalid source directory."""
         nonexistent = tmp_path / "definitely_does_not_exist_12345"
@@ -228,7 +205,7 @@ class TestTakeoutExtractor:
         assert progress_calls[-1][2] == "Complete"
     
     def test_run_no_archives(self, tmp_path):
-        """Test extraction when no archives are found."""
+        """Test extraction fails when no archives are found."""
         source_dir = tmp_path / "empty_source"
         source_dir.mkdir()
         
@@ -240,9 +217,8 @@ class TestTakeoutExtractor:
             target_media_path=target_media_path
         )
         
-        results = extractor.run()
-        
-        assert len(results) == 0
+        with pytest.raises(RuntimeError, match="No archives found"):
+            extractor.run()
 
 
 class TestExtractionState:

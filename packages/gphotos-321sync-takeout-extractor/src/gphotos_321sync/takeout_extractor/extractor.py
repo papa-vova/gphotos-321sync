@@ -1,6 +1,7 @@
 """Archive discovery and extraction for Google Takeout files."""
 
 import logging
+import os
 import zipfile
 import tarfile
 import tempfile
@@ -365,6 +366,13 @@ class ArchiveExtractor:
         if not self.target_media_path.is_dir():
             raise NotADirectoryError(
                 f"Target media path is not a directory: {self.target_media_path}"
+            )
+        
+        # Validate target media directory is writable
+        if not os.access(self.target_media_path, os.W_OK):
+            raise PermissionError(
+                f"Target media directory is not writable: {self.target_media_path}\n"
+                f"Please check directory permissions."
             )
         
         # Load or create extraction state
@@ -1157,8 +1165,10 @@ class TakeoutExtractor:
         archives = self.discovery.discover(recursive=recursive)
         
         if not archives:
-            logger.warning("No archives found")
-            return {}
+            raise RuntimeError(
+                f"No archives found in source directory: {self.discovery.source_dir}\n"
+                f"Please ensure the directory contains valid archive files (.zip, .tar.gz, etc.)"
+            )
         
         # Extract all archives
         results = self.extractor.extract_all(archives, progress_callback)
