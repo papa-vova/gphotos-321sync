@@ -450,7 +450,7 @@ Tests for MIME type detection (7 tests).
 | 6 | `test_is_image_mime_type` | Various MIME types | True for images, False otherwise | MIME type strings | Identifies image MIME types |
 | 7 | `test_is_video_mime_type` | Various MIME types | True for videos, False otherwise | MIME type strings | Identifies video MIME types |
 
-### .py (media-scanner)
+### test_path_utils.py (media-scanner)
 
 Tests for media scanner path utilities (6 tests).
 
