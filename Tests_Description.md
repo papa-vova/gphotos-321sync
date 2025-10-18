@@ -264,7 +264,7 @@ Tests for album discovery and metadata parsing (16 tests).
 
 ### test_discovery.py
 
-Tests for file discovery functionality (14 tests).
+Tests for file discovery functionality (13 tests).
 
 **Rationale**: Ensures all media files are discovered correctly, JSON sidecars are paired with their media files, and hidden/system files are filtered out to avoid processing unwanted files.
 
