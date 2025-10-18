@@ -55,14 +55,6 @@ def test_albums(tmp_path):
     regular = tmp_path / "Random Folder"
     regular.mkdir()
     
-    # Nested album
-    nested = tmp_path / "2024" / "January"
-    nested.mkdir(parents=True)
-    nested_metadata = {
-        "title": "January Photos"
-    }
-    (nested / "metadata.json").write_text(json.dumps(nested_metadata))
-    
     # Album with invalid metadata.json
     invalid = tmp_path / "Invalid Album"
     invalid.mkdir()
@@ -146,8 +138,8 @@ def test_extract_year_from_folder_invalid():
     assert extract_year_from_folder("My Vacation") is None
     assert extract_year_from_folder("Photos 2023") is None
     assert extract_year_from_folder("2023 Photos") is None
-    assert extract_year_from_folder("Photos from 1800") is None  # Too old
-    assert extract_year_from_folder("Photos from 2200") is None  # Too far future
+    assert extract_year_from_folder("Photos from 1899") is None  # Too old
+    assert extract_year_from_folder("Photos from 2201") is None  # Too far future
 
 
 def test_discover_albums_user_album(test_albums, album_dal):
@@ -189,19 +181,11 @@ def test_discover_albums_regular_folder(test_albums, album_dal):
     assert regular.description is None
 
 
-def test_discover_albums_nested(test_albums, album_dal):
-    """Test discovering nested albums."""
-    albums = list(discover_albums(test_albums, album_dal, "scan-123"))
-    
-    # Find the nested album
-    nested = next(a for a in albums if a.title == "January Photos")
-    
-    assert nested.album_folder_path == Path("2024") / "January"
-    assert nested.is_user_album is True
-
-
-def test_discover_albums_invalid_metadata(test_albums, album_dal):
+def test_discover_albums_invalid_metadata(test_albums, album_dal, caplog):
     """Test handling album with invalid metadata.json."""
+    import logging
+    caplog.set_level(logging.WARNING)
+    
     albums = list(discover_albums(test_albums, album_dal, "scan-123"))
     
     # Should still discover the album, but with error status
@@ -209,6 +193,9 @@ def test_discover_albums_invalid_metadata(test_albums, album_dal):
     invalid = next((a for a in albums if a.album_folder_path == Path("Invalid Album")), None)
     assert invalid is not None
     assert invalid.title == "Invalid Album"  # Falls back to folder name
+    
+    # Check that warning was logged
+    assert any("Failed to parse album metadata" in record.message for record in caplog.records)
 
 
 def test_discover_albums_database_insertion(test_albums, album_dal):
@@ -237,26 +224,38 @@ def test_discover_albums_album_id_generation(test_albums, album_dal):
         assert albums1_dict[folder_path] == albums2_dict[folder_path]
 
 
-def test_discover_albums_empty_directory(tmp_path, album_dal):
+def test_discover_albums_empty_directory(tmp_path, album_dal, caplog):
     """Test discovering albums in empty directory."""
+    import logging
+    caplog.set_level(logging.WARNING)
+    
     albums = list(discover_albums(tmp_path, album_dal, "scan-123"))
     assert len(albums) == 0
+    
+    # Check that warning was logged
+    assert any("No albums discovered" in record.message for record in caplog.records)
 
 
-def test_discover_albums_nonexistent_path(tmp_path, album_dal):
+def test_discover_albums_nonexistent_path(tmp_path, album_dal, caplog):
     """Test discovering albums with non-existent path."""
+    import logging
+    caplog.set_level(logging.WARNING)
+    
     nonexistent = tmp_path / "does_not_exist"
     albums = list(discover_albums(nonexistent, album_dal, "scan-123"))
     assert len(albums) == 0
+    
+    # Check that warning was logged
+    assert any("does not exist" in record.message for record in caplog.records)
 
 
 def test_discover_albums_count(test_albums, album_dal):
-    """Test that all folders are discovered as albums."""
+    """Test that all top-level folders are discovered as albums."""
     albums = list(discover_albums(test_albums, album_dal, "scan-123"))
     
-    # Should discover all folders (including nested parent folders)
-    # My Vacation, Photos from 2023, Random Folder, 2024, 2024/January, Invalid Album
-    assert len(albums) >= 6
+    # Should discover all top-level folders only (no nested albums)
+    # My Vacation, Photos from 2023, Random Folder, Invalid Album
+    assert len(albums) == 4
 
 
 def test_discover_albums_update_existing(test_albums, album_dal):

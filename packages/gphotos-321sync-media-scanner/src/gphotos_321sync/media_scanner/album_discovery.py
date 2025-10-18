@@ -97,7 +97,7 @@ def extract_year_from_folder(folder_name: str) -> Optional[int]:
     if match:
         year = int(match.group(1))
         # Sanity check: reasonable year range
-        if 1900 <= year <= 2100:
+        if 1900 <= year <= 2200:
             return year
     return None
 
@@ -105,7 +105,7 @@ def extract_year_from_folder(folder_name: str) -> Optional[int]:
 def discover_albums(target_media_path: Path, album_dal: AlbumDAL, scan_run_id: str) -> Iterator[AlbumInfo]:
     """Discover and process albums from directory structure.
     
-    Walks the directory tree to find:
+    Discovers top-level folders only (Google Photos doesn't support nested albums):
     1. User albums: Folders with metadata.json
     2. Year-based albums: Folders named "Photos from YYYY"
     
@@ -124,16 +124,17 @@ def discover_albums(target_media_path: Path, album_dal: AlbumDAL, scan_run_id: s
         AlbumInfo objects for each discovered album
         
     Note:
+        - Only top-level folders are discovered (no recursion)
         - Every folder is treated as an album (album_id always generated)
         - Metadata parsing errors are logged and recorded in processing_errors
         - Albums are inserted into database immediately (needed before file processing)
     """
     if not target_media_path.exists():
-        logger.error(f"Target media path does not exist: {target_media_path}")
+        logger.warning(f"Target media path does not exist: {target_media_path}")
         return
     
     if not target_media_path.is_dir():
-        logger.error(f"Target media path is not a directory: {target_media_path}")
+        logger.warning(f"Target media path is not a directory: {target_media_path}")
         return
     
     logger.info(f"Starting album discovery from: {target_media_path}")
@@ -143,8 +144,8 @@ def discover_albums(target_media_path: Path, album_dal: AlbumDAL, scan_run_id: s
     year_albums = 0
     errors = 0
     
-    # Walk directory tree to find all folders
-    for folder_path in target_media_path.rglob("*"):
+    # Walk directory to find top-level folders only (Google Photos doesn't support nested albums)
+    for folder_path in target_media_path.iterdir():
         if not folder_path.is_dir():
             continue
         
@@ -180,7 +181,7 @@ def discover_albums(target_media_path: Path, album_dal: AlbumDAL, scan_run_id: s
                 user_albums += 1
                 
             except ParseError as e:
-                logger.error(f"Failed to parse album metadata {metadata_path}: {e}")
+                logger.warning(f"Failed to parse album metadata {metadata_path}: {e}")
                 status = 'error'
                 errors += 1
                 # Continue with default values
@@ -236,7 +237,10 @@ def discover_albums(target_media_path: Path, album_dal: AlbumDAL, scan_run_id: s
             metadata_path=metadata_path if is_user_album else None
         )
     
-    logger.info(
-        f"Album discovery complete: {albums_discovered} albums discovered "
-        f"({user_albums} user albums, {year_albums} year-based albums, {errors} errors)"
-    )
+    if albums_discovered == 0:
+        logger.warning(f"No albums discovered in: {target_media_path}")
+    else:
+        logger.info(
+            f"Album discovery complete: {albums_discovered} albums discovered "
+            f"({user_albums} user albums, {year_albums} year-based albums, {errors} errors)"
+        )

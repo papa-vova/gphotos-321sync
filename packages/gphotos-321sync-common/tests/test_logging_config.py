@@ -13,14 +13,12 @@ class TestLoggingConfig:
         config = LoggingConfig(level="INFO", format="json")
         assert config.level == "INFO"
         assert config.format == "json"
-        assert config.file is None
     
     def test_default_values(self):
         """Test default values."""
         config = LoggingConfig()
         assert config.level == "INFO"
         assert config.format == "json"
-        assert config.file is None
     
     
     def test_rejects_invalid_log_level(self):
@@ -35,14 +33,6 @@ class TestLoggingConfig:
         """Test that invalid formats are rejected."""
         with pytest.raises(ValidationError):
             LoggingConfig(format="xml")
-    
-    def test_optional_file_parameter(self):
-        """Test that file parameter is optional."""
-        config = LoggingConfig(level="INFO")
-        assert config.file is None
-        
-        config_with_file = LoggingConfig(level="INFO", file="/path/to/log.txt")
-        assert config_with_file.file == "/path/to/log.txt"
     
     def test_rejects_unknown_fields(self):
         """Test that unknown fields are rejected."""
@@ -74,24 +64,21 @@ class TestLoggingConfig:
     
     def test_serialization(self):
         """Test that config can be serialized."""
-        config = LoggingConfig(level="DEBUG", format="detailed", file="/tmp/log.txt")
+        config = LoggingConfig(level="DEBUG", format="detailed")
         data = config.model_dump()
         
         assert data == {
             "level": "DEBUG",
-            "format": "detailed",
-            "file": "/tmp/log.txt"
+            "format": "detailed"
         }
     
     def test_deserialization(self):
         """Test that config can be deserialized from dict."""
         data = {
             "level": "WARNING",
-            "format": "simple",
-            "file": "/var/log/app.log"
+            "format": "simple"
         }
         config = LoggingConfig(**data)
         
         assert config.level == "WARNING"
         assert config.format == "simple"
-        assert config.file == "/var/log/app.log"

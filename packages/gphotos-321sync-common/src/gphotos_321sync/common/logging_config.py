@@ -17,7 +17,6 @@ class LoggingConfig(BaseModel):
         default="json",
         description="Log format type"
     )
-    file: str | None = Field(default=None, description="Optional log file path")
     
     @field_validator('level', mode='before')
     @classmethod

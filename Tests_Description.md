@@ -16,17 +16,16 @@ Comprehensive documentation of all test suites in the gphotos-321sync project.
 
 ### test_logging_config.py
 
-Tests for shared `LoggingConfig` validation (10 tests).
+Tests for shared `LoggingConfig` validation (8 tests).
 
 **Rationale**: Ensures logging configuration accepts valid values, rejects invalid ones, and handles case-insensitive input for better user experience.
 
 | Test | Input | Output | Conditions/Assumptions | Logic |
 |------|-------|--------|----------------------|-------|
 | `test_valid_config` | level="INFO", format="json" | Valid LoggingConfig object | Valid parameters | Validates Pydantic model accepts correct values |
-| `test_default_values` | No parameters | level="INFO", format="json", file=None | Using defaults | Ensures default configuration values are sensible |
+| `test_default_values` | No parameters | level="INFO", format="json" | Using defaults | Ensures default configuration values are sensible |
 | `test_rejects_invalid_log_level` | level="TRACE" or "CRITICAL" | ValidationError raised | Invalid log level (not in allowed list) | Rejects unsupported log levels (only DEBUG/INFO/WARNING/ERROR allowed) |
 | `test_rejects_invalid_format` | format="xml" | ValidationError raised | Invalid format (not in allowed list) | Rejects unsupported formats (only simple/detailed/json allowed) |
-| `test_optional_file_parameter` | With/without file parameter | file=None or "/path/to/log.txt" | Optional parameter | Validates file parameter is optional |
 | `test_rejects_unknown_fields` | unknown_field="value" | ValidationError with "extra_forbidden" | Extra field not in schema | Ensures Pydantic's extra="forbid" rejects unknown fields |
 | `test_case_insensitive_log_level` | level="info" or "Debug" | Normalized to "INFO", "DEBUG" | Case-insensitive input | Accepts any case, normalizes to uppercase for consistency |
 | `test_case_insensitive_format` | format="JSON" or "Simple" | Normalized to "json", "simple" | Case-insensitive input | Accepts any case, normalizes to lowercase for consistency |
@@ -39,9 +38,9 @@ Tests for shared `LoggingConfig` validation (10 tests).
 
 ### test_album_discovery.py
 
-Tests for album discovery and metadata parsing (18 tests).
+Tests for album discovery and metadata parsing (17 tests).
 
-**Rationale**: Ensures albums are correctly discovered from Google Photos Takeout structure, metadata is parsed from JSON files, and album IDs remain consistent across scans for proper tracking.
+**Rationale**: Ensures albums are correctly discovered from Google Photos Takeout structure (top-level folders only, as Google Photos doesn't support nested albums), metadata is parsed from JSON files, and album IDs remain consistent across scans for proper tracking.
 
 | Test | Input | Output | Conditions/Assumptions | Logic |
 |------|-------|--------|----------------------|-------|
@@ -49,17 +48,17 @@ Tests for album discovery and metadata parsing (18 tests).
 | `test_parse_album_metadata_minimal` | metadata.json with only {"title": "My Album"} | Dict with title="My Album", others None | Minimal metadata | Handles sparse metadata gracefully without errors |
 | `test_parse_album_metadata_invalid_json` | Malformed JSON file (syntax error) | ParseError raised | Invalid JSON syntax | Validates error handling for corrupted metadata files |
 | `test_parse_album_metadata_missing_file` | Path to non-existent metadata.json | ParseError raised | File doesn't exist | Validates error handling for missing metadata files |
-| `test_extract_year_from_folder_valid` | Folder name "Photos from 2023" | Integer 2023 | Valid year pattern (1900-2099) | Extracts year from Google Photos year-based album folders |
-| `test_extract_year_from_folder_invalid` | "Photos", "Photos from 1899", "Random Folder" | None | No valid year pattern | Returns None for non-matching or invalid year patterns |
+| `test_extract_year_from_folder_valid` | Folder name "Photos from 2023" | Integer 2023 | Valid year pattern (1900-2200) | Extracts year from Google Photos year-based album folders |
+| `test_extract_year_from_folder_invalid` | "Photos", "Photos from 1899", "Photos from 2201" | None | No valid year pattern or out of range | Returns None for non-matching or invalid year patterns |
 | `test_discover_albums_user_album` | Directory containing metadata.json | AlbumInfo with is_user_album=True, parsed metadata | Album has metadata.json | Discovers user-created albums (have metadata.json) |
 | `test_discover_albums_year_based` | Folder "Photos from 2023" (no metadata.json) | AlbumInfo with is_user_album=False, year in title | Folder matches year pattern | Identifies Google Photos year-based albums |
-| `test_discover_albums_regular_folder` | Regular folder "Vacation" (no metadata, no year) | AlbumInfo using folder name as title | Generic folder | Treats any folder as potential album |
-| `test_discover_albums_nested` | Albums in nested directories (e.g., "root/sub/album") | AlbumInfo with correct relative_path | Albums in subdirectories | Discovers albums at any depth in directory tree |
-| `test_discover_albums_invalid_metadata` | Album with corrupted metadata.json | AlbumInfo using folder name as fallback | Invalid JSON in metadata | Gracefully handles metadata parsing errors, uses folder name |
+| `test_discover_albums_regular_folder` | Regular folder "Vacation" (no metadata, no year) | AlbumInfo using folder name as title | Generic folder | Treats any top-level folder as potential album |
+| `test_discover_albums_invalid_metadata` | Album with corrupted metadata.json | AlbumInfo using folder name as fallback, warning logged | Invalid JSON in metadata | Gracefully handles metadata parsing errors, logs warning, uses folder name |
 | `test_discover_albums_database_insertion` | Discovered albums + DB connection | Albums inserted into albums table | Valid DB connection | Verifies albums are persisted to database correctly |
 | `test_discover_albums_album_id_generation` | Same album path in different scans | Identical album_ids (UUID5 based on path) | Deterministic ID generation | Ensures album IDs remain consistent across scans for tracking |
-| `test_discover_albums_empty_directory` | Empty directory (no folders) | Empty list | No folders to discover | Handles empty directories without errors |
-| `test_discover_albums_nonexistent_path` | Path that doesn't exist | Empty list | Invalid path | Handles missing paths gracefully without crashing |
+| `test_discover_albums_empty_directory` | Empty directory (no folders) | Empty list, warning logged | No folders to discover | Handles empty directories without errors, logs warning |
+| `test_discover_albums_nonexistent_path` | Path that doesn't exist | Empty list, warning logged | Invalid path | Handles missing paths gracefully without crashing, logs warning |
+| `test_discover_albums_count` | Test fixture with 4 top-level folders | Exactly 4 albums discovered | Only top-level folders | Verifies only top-level folders are discovered (no recursion) |
 | `test_discover_albums_update_existing` | Re-scan with new scan_run_id | Albums updated with new scan_run_id | Albums already in database | Updates existing albums rather than creating duplicates |
 
 ### test_config.py (media-scanner)
@@ -70,8 +69,8 @@ Tests for configuration models (7 tests).
 
 | Test | Input | Output | Conditions/Assumptions | Logic |
 |------|-------|--------|----------------------|-------|
-| `test_default_values` (LoggingConfig) | No parameters | level="INFO", format="json", file=None | Using defaults | Validates default logging configuration values are sensible |
-| `test_custom_values` (LoggingConfig) | level="DEBUG", format="detailed", file="/path/to/log" | Config with specified values | All parameters provided | Validates custom logging configuration overrides defaults |
+| `test_default_values` (LoggingConfig) | No parameters | level="INFO", format="json" | Using defaults | Validates default logging configuration values are sensible |
+| `test_custom_values` (LoggingConfig) | level="DEBUG", format="simple" | Config with specified values | Parameters provided | Validates custom logging configuration overrides defaults |
 | `test_default_values_are_reasonable` (ScannerConfig) | No parameters | num_workers=CPU_count, use_ffprobe=False, use_exiftool=False | Using defaults | Ensures scanner defaults are appropriate for typical systems |
 | `test_custom_values_override_defaults` (ScannerConfig) | num_workers=4, batch_size=50, use_ffprobe=True | Config with specified values | All parameters provided | Validates custom scanner configuration overrides defaults |
 | `test_default_values` (MediaScannerConfig) | No parameters | Root config with nested defaults | Using defaults | Validates nested configuration structure with all defaults |

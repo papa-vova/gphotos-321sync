@@ -17,18 +17,15 @@ class TestLoggingConfig:
         config = LoggingConfig()
         assert config.level == "INFO"
         assert config.format == "json"
-        assert config.file is None
     
     def test_custom_values(self):
         """Test custom logging configuration."""
         config = LoggingConfig(
             level="DEBUG",
-            format="simple",
-            file="/var/log/scanner.log"
+            format="simple"
         )
         assert config.level == "DEBUG"
         assert config.format == "simple"
-        assert config.file == "/var/log/scanner.log"
 
 
 class TestScannerConfig:
