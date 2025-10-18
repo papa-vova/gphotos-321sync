@@ -2,6 +2,14 @@
 
 Comprehensive documentation of all test suites in the gphotos-321sync project.
 
+## Summary
+
+**Total: 330 tests** (12 + 42 + 276)
+
+- **gphotos-321sync-common:** 12 tests (9 logging + 3 path utils)
+- **gphotos-321sync-takeout-extractor:** 42 tests (2 config + 16 extractor + 24 verification)
+- **gphotos-321sync-media-scanner:** 276 tests (285 originally - 1 deleted invalid test + 8 worker + 8 writer = 276)
+
 ---
 
 ## Table of Contents
@@ -86,7 +94,7 @@ Tests for archive extraction functionality (16 tests).
 
 ### test_extractor_verification.py
 
-Tests for archive verification and selective re-extraction (23 tests).
+Tests for archive verification and selective re-extraction (24 tests).
 
 **Purpose**: The app has a custom verification system that checks extracted files against ZIP metadata (CRC32 checksums). On resume, if files are missing/corrupted, it selectively re-extracts ONLY the bad files instead of re-extracting the entire archive.
 
@@ -598,13 +606,3 @@ Tests for writer thread database operations (9 tests).
 | 5 | `test_shutdown_event` | Shutdown event set | Thread exits quickly | Shutdown requested | Respects shutdown event |
 | 6 | `test_empty_queue` | Empty results queue | No items written | Writer thread running | Handles empty queue |
 | 7 | `test_write_batch_empty` | Empty batch | No error raised | Batch write function | Handles empty batch |
-
----
-
-## Summary
-
-**Total: 337 tests** (9 + 286 + 42)
-
-- **gphotos-321sync-common**: 9 tests
-- **gphotos-321sync-media-scanner**: 286 tests
-- **gphotos-321sync-takeout-extractor**: 42 tests (2 config + 16 extractor + 24 verification)
