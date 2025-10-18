@@ -276,6 +276,54 @@ Tests for file discovery functionality (14 tests).
 | 12 | `test_discover_files_file_size` | Files with various sizes | FileInfo with correct file_size in bytes | Files exist | Captures file size from filesystem metadata |
 | 13 | `test_discover_files_large_tree` | 10 albums × 5 files = 50 files | All 50 files discovered with sidecars paired | Large file set | Tests scalability of discovery algorithm |
 
+### test_file_processor.py
+
+Tests for CPU-intensive file processing (14 tests).
+
+| # | Test | Input | Output | Conditions/Assumptions | Logic |
+|---|------|-------|--------|----------------------|-------|
+| 1 | `test_calculate_crc32_different_files` | Two different files | Different CRC32 values | Different content | Tests our calculate_crc32() wrapper detects file differences. |
+| 2 | `test_calculate_crc32_large_file` | File >64KB | Valid 8-char hex CRC32 | Large file | Tests chunked CRC32 |
+| 3 | `test_process_file_cpu_work_success` | Image file | Dict with success=True, mime_type, crc32, fingerprint | Valid file | Performs all CPU operations |
+| 4 | `test_process_file_cpu_work_mime_type` | Image file | MIME type detected | Valid file | Detects file MIME type |
+| 5 | `test_process_file_cpu_work_crc32` | Text file | CRC32 from process_file_cpu_work() matches direct calculate_crc32() call | Valid file | Tests integration: calls process_file_cpu_work() and calculate_crc32() separately on same file, verifies both return identical CRC32. Ensures process_file_cpu_work() wrapper has no bugs. Note: calculate_crc32() is a wrapper in file_processor.py (not the compute_crc32() from fingerprint.py). |
+| 6 | `test_process_file_cpu_work_fingerprint` | Text file | 64-char hex SHA-256 | Valid file | Calculates SHA-256 of first 64KB + last 64KB for files >128KB, or entire file if ≤128KB. |
+| 7 | `test_process_file_cpu_work_exif_data` | Image file | Dict with exif_data (may be empty) | Valid image | Attempts EXIF extraction |
+| 8 | `test_process_file_cpu_work_resolution` | Image file | Width and height fields | Valid image | Attempts resolution extraction |
+| 9 | `test_process_file_cpu_work_video_data` | Non-video file | video_data=None | Image file | Returns None for non-video |
+| 10 | `test_process_file_cpu_work_nonexistent_file` | Non-existent path | success=False, error fields | File doesn't exist | Handles missing files |
+| 11 | `test_process_file_cpu_work_error_handling` | Invalid file data | Result with success/error, no exception | Invalid file | Catches all exceptions |
+| 12 | `test_process_file_cpu_work_small_file` | File <128KB | CRC32 and fingerprint | Small file | Processes small files |
+| 13 | `test_process_file_cpu_work_large_file` | File >128KB | CRC32 and fingerprint | Large file | Handles large files with chunking |
+| 14 | `test_process_file_cpu_work_empty_file` | Empty file (0 bytes) | Result with success and crc32 | Empty file | Handles empty files |
+
+### test_fingerprint.py
+
+Tests for content fingerprinting utilities (3 tests).
+
+| # | Test | Input | Output | Conditions/Assumptions | Logic |
+|---|------|-------|--------|----------------------|-------|
+| 1 | `test_change_detection` | File before/after modification | Different fingerprints | Content changed | Verifies fingerprint detects changes |
+| 2 | `test_identical_files_same_fingerprint` | Two identical files | Same fingerprint | Identical content | Verifies identical files match |
+| 3 | `test_large_file_crc32` | ~1MB file | Valid CRC32 | Large file | Tests CRC32 on large files |
+
+### test_json_parser.py
+
+Tests for JSON sidecar parser (10 tests).
+
+| # | Test | Input | Output | Conditions/Assumptions | Logic |
+|---|------|-------|--------|----------------------|-------|
+| 1 | `test_parse_complete_json` | JSON with all fields | Dict with title, description, photoTakenTime, geoData, people | Complete JSON | Parses all Google Photos JSON fields |
+| 2 | `test_parse_minimal_json` | JSON with only title | Dict with title only | Minimal JSON | Handles sparse JSON |
+| 3 | `test_parse_timestamp_formats` | JSON with timestamp | ISO-formatted timestamp | Timestamp present | Converts timestamp to ISO |
+| 4 | `test_parse_creation_time_fallback` | JSON with creationTime | creationTime parsed | photoTakenTime missing | Uses fallback timestamp field |
+| 5 | `test_parse_geo_data_exif_fallback` | JSON with geoDataExif | geoData populated from geoDataExif | geoData missing | Uses fallback geo field |
+| 6 | `test_parse_people_array` | JSON with people array | List of person names | People present | Extracts person names from array |
+| 7 | `test_parse_invalid_json` | Malformed JSON | JSONDecodeError raised | Invalid JSON | Validates error handling |
+| 8 | `test_parse_missing_file` | Non-existent file | FileNotFoundError raised | File doesn't exist | Validates error handling |
+| 9 | `test_parse_empty_people_array` | JSON with empty people | Empty list | No people | Handles empty people array |
+| 10 | `test_parse_partial_geo_data` | JSON with lat/lon only | geoData with lat/lon, no altitude | Partial geo data | Handles partial geo data |
+
 ### test_edited_variants.py
 
 Tests for edited variant detection and linking (14 tests).
@@ -349,65 +397,19 @@ Integration tests for RAW format EXIF extraction with ExifTool (5 tests).
 | 4 | `test_extract_raises_error_when_exiftool_not_available` | CR2 file | FileNotFoundError | ExifTool NOT available | Tests graceful error when ExifTool missing |
 | 5 | `test_extract_smart_raw_without_exiftool_returns_empty` | CR2 file, use_exiftool=True | Empty dict | ExifTool NOT available | Tests fallback when ExifTool unavailable |
 
-### test_file_processor.py
+### test_video_extractor_integration.py
 
-Tests for CPU-intensive file processing (14 tests).
-
-| # | Test | Input | Output | Conditions/Assumptions | Logic |
-|---|------|-------|--------|----------------------|-------|
-| 1 | `test_calculate_crc32_different_files` | Two different files | Different CRC32 values | Different content | Tests our calculate_crc32() wrapper detects file differences. |
-| 2 | `test_calculate_crc32_large_file` | File >64KB | Valid 8-char hex CRC32 | Large file | Tests chunked CRC32 |
-| 3 | `test_process_file_cpu_work_success` | Image file | Dict with success=True, mime_type, crc32, fingerprint | Valid file | Performs all CPU operations |
-| 4 | `test_process_file_cpu_work_mime_type` | Image file | MIME type detected | Valid file | Detects file MIME type |
-| 5 | `test_process_file_cpu_work_crc32` | Text file | CRC32 from process_file_cpu_work() matches direct calculate_crc32() call | Valid file | Tests integration: calls process_file_cpu_work() and calculate_crc32() separately on same file, verifies both return identical CRC32. Ensures process_file_cpu_work() wrapper has no bugs. Note: calculate_crc32() is a wrapper in file_processor.py (not the compute_crc32() from fingerprint.py). |
-| 6 | `test_process_file_cpu_work_fingerprint` | Text file | 64-char hex SHA-256 | Valid file | Calculates SHA-256 of first 64KB + last 64KB for files >128KB, or entire file if ≤128KB. |
-| 7 | `test_process_file_cpu_work_exif_data` | Image file | Dict with exif_data (may be empty) | Valid image | Attempts EXIF extraction |
-| 8 | `test_process_file_cpu_work_resolution` | Image file | Width and height fields | Valid image | Attempts resolution extraction |
-| 9 | `test_process_file_cpu_work_video_data` | Non-video file | video_data=None | Image file | Returns None for non-video |
-| 10 | `test_process_file_cpu_work_nonexistent_file` | Non-existent path | success=False, error fields | File doesn't exist | Handles missing files |
-| 11 | `test_process_file_cpu_work_error_handling` | Invalid file data | Result with success/error, no exception | Invalid file | Catches all exceptions |
-| 12 | `test_process_file_cpu_work_small_file` | File <128KB | CRC32 and fingerprint | Small file | Processes small files |
-| 13 | `test_process_file_cpu_work_large_file` | File >128KB | CRC32 and fingerprint | Large file | Handles large files with chunking |
-| 14 | `test_process_file_cpu_work_empty_file` | Empty file (0 bytes) | Result with success and crc32 | Empty file | Handles empty files |
-
-### test_fingerprint.py
-
-Tests for content fingerprinting utilities (3 tests).
+Integration tests for video metadata extraction (8 tests, requires ffprobe).
 
 | # | Test | Input | Output | Conditions/Assumptions | Logic |
 |---|------|-------|--------|----------------------|-------|
-| 1 | `test_change_detection` | File before/after modification | Different fingerprints | Content changed | Verifies fingerprint detects changes |
-| 2 | `test_identical_files_same_fingerprint` | Two identical files | Same fingerprint | Identical content | Verifies identical files match |
-| 3 | `test_large_file_crc32` | ~1MB file | Valid CRC32 | Large file | Tests CRC32 on large files |
-
-### test_imports.py
-
-Basic import tests (5 tests).
-
-| # | Test | Input | Output | Conditions/Assumptions | Logic |
-|---|------|-------|--------|----------------------|-------|
-| 1 | `test_common_import` | Import common module | Successful import | Dependencies installed | Verifies common package imports |
-| 2 | `test_pillow_import` | Import PIL.Image | Successful import | Pillow installed | Verifies Pillow available |
-| 3 | `test_filetype_import` | Import filetype | Successful import | filetype installed | Verifies filetype available |
-| 4 | `test_platformdirs_import` | Import platformdirs | Successful import | platformdirs installed | Verifies platformdirs available |
-| 5 | `test_media_scanner_import` | Import media_scanner | Successful import | Package installed | Verifies media_scanner imports |
-
-### test_json_parser.py
-
-Tests for JSON sidecar parser (10 tests).
-
-| # | Test | Input | Output | Conditions/Assumptions | Logic |
-|---|------|-------|--------|----------------------|-------|
-| 1 | `test_parse_complete_json` | JSON with all fields | Dict with title, description, photoTakenTime, geoData, people | Complete JSON | Parses all Google Photos JSON fields |
-| 2 | `test_parse_minimal_json` | JSON with only title | Dict with title only | Minimal JSON | Handles sparse JSON |
-| 3 | `test_parse_timestamp_formats` | JSON with timestamp | ISO-formatted timestamp | Timestamp present | Converts timestamp to ISO |
-| 4 | `test_parse_creation_time_fallback` | JSON with creationTime | creationTime parsed | photoTakenTime missing | Uses fallback timestamp field |
-| 5 | `test_parse_geo_data_exif_fallback` | JSON with geoDataExif | geoData populated from geoDataExif | geoData missing | Uses fallback geo field |
-| 6 | `test_parse_people_array` | JSON with people array | List of person names | People present | Extracts person names from array |
-| 7 | `test_parse_invalid_json` | Malformed JSON | JSONDecodeError raised | Invalid JSON | Validates error handling |
-| 8 | `test_parse_missing_file` | Non-existent file | FileNotFoundError raised | File doesn't exist | Validates error handling |
-| 9 | `test_parse_empty_people_array` | JSON with empty people | Empty list | No people | Handles empty people array |
-| 10 | `test_parse_partial_geo_data` | JSON with lat/lon only | geoData with lat/lon, no altitude | Partial geo data | Handles partial geo data |
+| 1 | `test_extract_video_metadata_real_file` | Real video file | Dict with width, height, duration, frame_rate | ffprobe available | Extracts metadata from real video |
+| 2 | `test_extract_video_resolution` | Video file (640×480) | width=640, height=480 | ffprobe available | Extracts video resolution |
+| 3 | `test_extract_video_duration` | 2-second video | duration ≈ 2 seconds | ffprobe available | Extracts video duration |
+| 4 | `test_extract_video_frame_rate` | 30fps video | frame_rate ≈ 30 | ffprobe available | Extracts frame rate |
+| 5 | `test_extract_from_missing_file` | Non-existent file | CalledProcessError raised | ffprobe available | Handles missing files |
+| 6 | `test_is_video_file_mime_types` | Various MIME types | True for video types | MIME strings | Identifies video MIME types |
+| 7 | `test_extract_raises_error_when_ffprobe_not_available` | Video file, no ffprobe | FileNotFoundError raised | ffprobe not available | Handles missing ffprobe |
 
 ### test_live_photos.py
 
@@ -559,20 +561,6 @@ Tests for scan summary generation (17 tests).
 | 11 | `test_formats_basic_summary` | Summary dict | Human-readable text | Valid summary | Formats as readable text |
 | 12 | `test_includes_scan_run_id` | Summary dict | Scan ID in formatted text | Valid summary | Includes scan ID |
 | 13 | `test_formats_errors_section` | Summary with errors | Error details in text | Errors present | Formats error section |
-
-### test_video_extractor_integration.py
-
-Integration tests for video metadata extraction (8 tests, requires ffprobe).
-
-| # | Test | Input | Output | Conditions/Assumptions | Logic |
-|---|------|-------|--------|----------------------|-------|
-| 1 | `test_extract_video_metadata_real_file` | Real video file | Dict with width, height, duration, frame_rate | ffprobe available | Extracts metadata from real video |
-| 2 | `test_extract_video_resolution` | Video file (640×480) | width=640, height=480 | ffprobe available | Extracts video resolution |
-| 3 | `test_extract_video_duration` | 2-second video | duration ≈ 2 seconds | ffprobe available | Extracts video duration |
-| 4 | `test_extract_video_frame_rate` | 30fps video | frame_rate ≈ 30 | ffprobe available | Extracts frame rate |
-| 5 | `test_extract_from_missing_file` | Non-existent file | CalledProcessError raised | ffprobe available | Handles missing files |
-| 6 | `test_is_video_file_mime_types` | Various MIME types | True for video types | MIME strings | Identifies video MIME types |
-| 7 | `test_extract_raises_error_when_ffprobe_not_available` | Video file, no ffprobe | FileNotFoundError raised | ffprobe not available | Handles missing ffprobe |
 
 ### test_worker_thread.py
 
