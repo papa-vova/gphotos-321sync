@@ -9,7 +9,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 from .dal.albums import AlbumDAL
 from .errors import ParseError
@@ -220,8 +220,8 @@ def discover_albums(target_media_path: Path, album_dal: AlbumDAL, scan_run_id: s
                 access_level=access_level,
                 status=status,
                 scan_run_id=scan_run_id,
-                # Use UTC to match SQLite's CURRENT_TIMESTAMP
-                last_seen_timestamp=datetime.utcnow()
+                # Use UTC timezone-aware datetime
+                last_seen_timestamp=datetime.now(timezone.utc)
             )
         else:
             # Insert new album

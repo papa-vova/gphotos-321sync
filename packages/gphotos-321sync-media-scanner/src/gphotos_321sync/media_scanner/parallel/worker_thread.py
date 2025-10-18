@@ -166,18 +166,18 @@ def _process_file_work(
     
     # Wait for CPU work to complete
     # Worker thread blocks here, but other threads continue working
-    cpu_result = cpu_future.get()
+    metadata_ext = cpu_future.get()
     
     # Check if CPU work resulted in an error
-    if cpu_result.get("error"):
+    if metadata_ext.get("error"):
         # Return error result
         return {
             "type": "error",
             "file_path": str(file_info.file_path),
             "relative_path": file_info.relative_path,
             "error_type": "media_file",
-            "error_category": cpu_result["error_category"],
-            "error_message": cpu_result["error_message"],
+            "error_category": metadata_ext["error_category"],
+            "error_message": metadata_ext["error_message"],
             "scan_run_id": scan_run_id,
         }
     
@@ -185,7 +185,7 @@ def _process_file_work(
     # This runs in the worker thread (I/O-bound)
     media_item_record = coordinate_metadata(
         file_info=file_info,
-        cpu_result=cpu_result,
+        metadata_ext=metadata_ext,
         album_id=album_id,
         scan_run_id=scan_run_id,
     )
@@ -277,17 +277,17 @@ def worker_thread_batch_main(
             # Drain results asynchronously
             for future, file_info, album_id in futures:
                 try:
-                    cpu_result = future.get()
+                    metadata_ext = future.get()
                     
                     # Check for CPU errors
-                    if cpu_result.get("error"):
+                    if metadata_ext.get("error"):
                         error_result = {
                             "type": "error",
                             "file_path": str(file_info.file_path),
                             "relative_path": file_info.relative_path,
                             "error_type": "media_file",
-                            "error_category": cpu_result["error_category"],
-                            "error_message": cpu_result["error_message"],
+                            "error_category": metadata_ext["error_category"],
+                            "error_message": metadata_ext["error_message"],
                             "scan_run_id": scan_run_id,
                         }
                         results_queue.put(error_result)
@@ -296,7 +296,7 @@ def worker_thread_batch_main(
                         # Coordinate metadata
                         media_item_record = coordinate_metadata(
                             file_info=file_info,
-                            cpu_result=cpu_result,
+                            metadata_ext=metadata_ext,
                             album_id=album_id,
                             scan_run_id=scan_run_id,
                         )

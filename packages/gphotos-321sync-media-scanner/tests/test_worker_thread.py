@@ -61,7 +61,7 @@ class TestProcessFileWork:
     def test_successful_processing(self, sample_file_info, mock_process_pool):
         """Test successful file processing."""
         # Mock CPU result
-        cpu_result = {
+        metadata_ext = {
             "mime_type": "image/jpeg",
             "file_size": 12,
             "crc32": "abc123",
@@ -72,7 +72,7 @@ class TestProcessFileWork:
         
         # Mock process pool
         future = MagicMock()
-        future.get.return_value = cpu_result
+        future.get.return_value = metadata_ext
         mock_process_pool.apply_async.return_value = future
         
         # Mock coordinate_metadata
@@ -107,14 +107,14 @@ class TestProcessFileWork:
     def test_cpu_error_handling(self, sample_file_info, mock_process_pool):
         """Test handling of CPU processing errors."""
         # Mock CPU error result
-        cpu_result = {
+        metadata_ext = {
             "error": True,
             "error_category": "corrupted",
             "error_message": "File is corrupted",
         }
         
         future = MagicMock()
-        future.get.return_value = cpu_result
+        future.get.return_value = metadata_ext
         mock_process_pool.apply_async.return_value = future
         
         result = _process_file_work(
@@ -150,14 +150,14 @@ class TestWorkerThreadMain:
         work_queue.put(None)  # Sentinel to stop
         
         # Mock CPU result
-        cpu_result = {
+        metadata_ext = {
             "mime_type": "image/jpeg",
             "file_size": 12,
             "crc32": "abc123",
             "content_fingerprint": "def456",
         }
         future = MagicMock()
-        future.get.return_value = cpu_result
+        future.get.return_value = metadata_ext
         mock_process_pool.apply_async.return_value = future
         
         # Mock coordinate_metadata
@@ -273,9 +273,9 @@ class TestWorkerThreadMain:
         work_queue.put(None)  # Sentinel
         
         # Mock CPU results
-        cpu_result = {"mime_type": "image/jpeg", "file_size": 10}
+        metadata_ext = {"mime_type": "image/jpeg", "file_size": 10}
         future = MagicMock()
-        future.get.return_value = cpu_result
+        future.get.return_value = metadata_ext
         mock_process_pool.apply_async.return_value = future
         
         # Mock coordinate_metadata
@@ -311,9 +311,9 @@ class TestWorkerThreadMain:
         work_queue.put(None)
         
         # Mock CPU result
-        cpu_result = {"mime_type": "image/jpeg"}
+        metadata_ext = {"mime_type": "image/jpeg"}
         future = MagicMock()
-        future.get.return_value = cpu_result
+        future.get.return_value = metadata_ext
         mock_process_pool.apply_async.return_value = future
         
         with patch("gphotos_321sync.media_scanner.parallel.worker_thread.coordinate_metadata") as mock_coord:
@@ -360,9 +360,9 @@ class TestWorkerThreadBatchMain:
         work_queue.put(None)  # Sentinel
         
         # Mock CPU results
-        cpu_result = {"mime_type": "image/jpeg"}
+        metadata_ext = {"mime_type": "image/jpeg"}
         future = MagicMock()
-        future.get.return_value = cpu_result
+        future.get.return_value = metadata_ext
         mock_process_pool.apply_async.return_value = future
         
         # Mock coordinate_metadata
@@ -475,9 +475,9 @@ class TestWorkerThreadBatchMain:
         work_queue.put(None)
         
         # Mock CPU results
-        cpu_result = {"mime_type": "image/jpeg"}
+        metadata_ext = {"mime_type": "image/jpeg"}
         future = MagicMock()
-        future.get.return_value = cpu_result
+        future.get.return_value = metadata_ext
         mock_process_pool.apply_async.return_value = future
         
         with patch("gphotos_321sync.media_scanner.parallel.worker_thread.coordinate_metadata") as mock_coord:

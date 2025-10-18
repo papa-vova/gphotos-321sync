@@ -121,7 +121,7 @@ class MediaItemRecord:
 
 def coordinate_metadata(
     file_info: FileInfo,
-    cpu_result: dict,
+    metadata_ext: dict,
     album_id: str,
     scan_run_id: str
 ) -> MediaItemRecord:
@@ -135,7 +135,7 @@ def coordinate_metadata(
     
     Args:
         file_info: File discovery information
-        cpu_result: Results from CPU-bound processing
+        metadata_ext: Metadata extraction results (MIME, CRC32, fingerprint, EXIF, video)
         album_id: Album ID for this file
         scan_run_id: Current scan run ID
         
@@ -155,9 +155,9 @@ def coordinate_metadata(
             logger.warning(f"Failed to parse JSON sidecar for {file_info.relative_path}: {e}")
             # Continue without JSON metadata
     
-    # 2. Extract data from CPU result
-    exif_data = cpu_result.get('exif_data', {})
-    video_data = cpu_result.get('video_data', {})
+    # 2. Extract data from metadata extraction result
+    exif_data = metadata_ext.get('exif_data', {})
+    video_data = metadata_ext.get('video_data', {})
     
     # 3. Aggregate metadata (apply precedence rules: JSON > EXIF > filename > NULL)
     aggregated = aggregate_metadata(
@@ -204,12 +204,12 @@ def coordinate_metadata(
         relative_path=normalize_path(file_info.relative_path),
         album_id=album_id,
         title=aggregated.get('title'),
-        mime_type=cpu_result.get('mime_type'),
+        mime_type=metadata_ext.get('mime_type'),
         file_size=file_info.file_size,
-        crc32=cpu_result.get('crc32'),
-        content_fingerprint=cpu_result.get('content_fingerprint'),
-        width=cpu_result.get('width'),
-        height=cpu_result.get('height'),
+        crc32=metadata_ext.get('crc32'),
+        content_fingerprint=metadata_ext.get('content_fingerprint'),
+        width=metadata_ext.get('width'),
+        height=metadata_ext.get('height'),
         duration_seconds=duration_seconds,
         frame_rate=frame_rate,
         capture_timestamp=aggregated.get('capture_timestamp'),

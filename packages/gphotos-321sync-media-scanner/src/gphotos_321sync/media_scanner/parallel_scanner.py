@@ -10,7 +10,7 @@ Coordinates all parallel processing components:
 import logging
 import multiprocessing
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
 from multiprocessing import Pool
 from pathlib import Path
 from typing import Optional
@@ -113,8 +113,8 @@ class ParallelScanner:
         album_dal = AlbumDAL(conn)
         
         scan_run_id = scan_run_dal.create_scan_run()
-        # Use UTC to match SQLite's CURRENT_TIMESTAMP
-        scan_start_time = datetime.utcnow()
+        # Use UTC timezone-aware datetime
+        scan_start_time = datetime.now(timezone.utc)
         
         logger.info(f"Created scan run: {scan_run_id}")
         

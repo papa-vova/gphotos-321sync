@@ -4,7 +4,7 @@ import json
 import logging
 from pathlib import Path
 from typing import Dict, Any, Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -154,6 +154,9 @@ def _parse_formatted_timestamp(formatted: str) -> Optional[str]:
     for fmt in formats:
         try:
             dt = datetime.strptime(formatted, fmt)
+            # Make timezone-aware (Google Photos timestamps are UTC)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
             return dt.isoformat()
         except ValueError:
             continue

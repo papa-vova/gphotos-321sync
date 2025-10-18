@@ -152,7 +152,7 @@ def test_timestamp_precedence():
     
     # Filename when no JSON or EXIF
     result = _aggregate_timestamp({}, {}, file_path)
-    assert result == '2021-01-01T12:00:00'
+    assert result == '2021-01-01T12:00:00+00:00'
 
 
 def test_gps_precedence():
@@ -182,25 +182,25 @@ def test_gps_precedence():
 def test_parse_timestamp_from_filename_img_pattern():
     """Test parsing IMG_YYYYMMDD_HHMMSS pattern."""
     result = _parse_timestamp_from_filename("IMG_20210615_143022.jpg")
-    assert result == "2021-06-15T14:30:22"
+    assert result == "2021-06-15T14:30:22+00:00"
 
 
 def test_parse_timestamp_from_filename_vid_pattern():
     """Test parsing VID_YYYYMMDD_HHMMSS pattern."""
     result = _parse_timestamp_from_filename("VID_20210615_143022.mp4")
-    assert result == "2021-06-15T14:30:22"
+    assert result == "2021-06-15T14:30:22+00:00"
 
 
 def test_parse_timestamp_from_filename_simple_pattern():
     """Test parsing YYYYMMDD_HHMMSS pattern."""
     result = _parse_timestamp_from_filename("20210615_143022.jpg")
-    assert result == "2021-06-15T14:30:22"
+    assert result == "2021-06-15T14:30:22+00:00"
 
 
 def test_parse_timestamp_from_filename_date_only():
     """Test parsing YYYY-MM-DD pattern."""
     result = _parse_timestamp_from_filename("2021-06-15.jpg")
-    assert result == "2021-06-15T00:00:00"
+    assert result == "2021-06-15T00:00:00+00:00"
 
 
 def test_parse_timestamp_from_filename_no_match():

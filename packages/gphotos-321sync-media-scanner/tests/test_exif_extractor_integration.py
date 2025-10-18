@@ -104,9 +104,9 @@ class TestExifExtractorIntegration:
         assert 'datetime_original' in metadata
         assert 'datetime_digitized' in metadata
         
-        # Should be in ISO format
+        # Should be in ISO format with UTC timezone
         assert 'T' in metadata['datetime_original']
-        assert metadata['datetime_original'] == "2021-06-15T14:30:22"
+        assert metadata['datetime_original'] == "2021-06-15T14:30:22+00:00"
     
     def test_extract_exposure_settings(self, image_with_full_exif):
         """Test extracting exposure settings."""

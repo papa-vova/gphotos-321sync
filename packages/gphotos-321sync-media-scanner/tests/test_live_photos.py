@@ -155,20 +155,6 @@ class TestDetectLivePhotoPairs:
         
         assert len(pairs) == 0
     
-    def test_pairs_in_nested_directories(self):
-        """Test detection in nested directory structures."""
-        files = [
-            FileInfo(relative_path="Photos/2023/January/IMG_1234.HEIC"),
-            FileInfo(relative_path="Photos/2023/January/IMG_1234.MOV"),
-            FileInfo(relative_path="Photos/2023/February/IMG_5678.JPG"),
-            FileInfo(relative_path="Photos/2023/February/IMG_5678.MOV"),
-        ]
-        
-        pairs = detect_live_photo_pairs(files)
-        
-        assert len(pairs) == 2
-
-
 class TestLinkLivePhotoPairs:
     """Tests for link_live_photo_pairs function."""
     

@@ -4,7 +4,7 @@ import logging
 from pathlib import Path
 from typing import Dict, Any, Optional
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -200,7 +200,7 @@ def _parse_timestamp_from_filename(filename: str) -> Optional[str]:
     if match:
         year, month, day, hour, minute, second = match.groups()
         try:
-            dt = datetime(int(year), int(month), int(day), int(hour), int(minute), int(second))
+            dt = datetime(int(year), int(month), int(day), int(hour), int(minute), int(second), tzinfo=timezone.utc)
             return dt.isoformat()
         except ValueError:
             pass
@@ -211,7 +211,7 @@ def _parse_timestamp_from_filename(filename: str) -> Optional[str]:
     if match:
         year, month, day, hour, minute, second = match.groups()
         try:
-            dt = datetime(int(year), int(month), int(day), int(hour), int(minute), int(second))
+            dt = datetime(int(year), int(month), int(day), int(hour), int(minute), int(second), tzinfo=timezone.utc)
             return dt.isoformat()
         except ValueError:
             pass
@@ -222,7 +222,7 @@ def _parse_timestamp_from_filename(filename: str) -> Optional[str]:
     if match:
         year, month, day, hour, minute, second = match.groups()
         try:
-            dt = datetime(int(year), int(month), int(day), int(hour), int(minute), int(second))
+            dt = datetime(int(year), int(month), int(day), int(hour), int(minute), int(second), tzinfo=timezone.utc)
             return dt.isoformat()
         except ValueError:
             pass
@@ -233,7 +233,7 @@ def _parse_timestamp_from_filename(filename: str) -> Optional[str]:
     if match:
         year, month, day = match.groups()
         try:
-            dt = datetime(int(year), int(month), int(day))
+            dt = datetime(int(year), int(month), int(day), tzinfo=timezone.utc)
             return dt.isoformat()
         except ValueError:
             pass

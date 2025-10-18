@@ -330,13 +330,13 @@ Tests for MIME type detection (7 tests).
 
 | # | Test | Input | Output | Conditions/Assumptions | Logic |
 |---|------|-------|--------|----------------------|-------|
-| 1 | `test_jpeg_detection` | File with JPEG header | "image/jpeg" | Valid JPEG | Detects JPEG by magic bytes |
-| 2 | `test_png_detection` | File with PNG signature | "image/png" | Valid PNG | Detects PNG by magic bytes |
-| 3 | `test_mp4_detection` | File with MP4 ftyp box | "video/mp4" | Valid MP4 | Detects MP4 by ftyp box |
-| 4 | `test_unknown_extension` | File with .xyz extension | "application/octet-stream" | Unknown type | Returns default MIME type |
-| 5 | `test_case_insensitive_extension` | File with .JPG (uppercase) | "image/jpeg" | Case variation | Extension matching is case-insensitive |
-| 6 | `test_is_image_mime_type` | Various MIME types | True for images, False otherwise | MIME type strings | Identifies image MIME types |
-| 7 | `test_is_video_mime_type` | Various MIME types | True for videos, False otherwise | MIME type strings | Identifies video MIME types |
+| 1 | `test_jpeg_detection` | Temp file with JPEG magic bytes `\xff\xd8\xff\xe0\x00\x10JFIF` | detect_mime_type() returns "image/jpeg" | Valid JPEG header | Detects JPEG by reading first 8 bytes (magic bytes), NOT by file extension. Uses `filetype` library which reads file signatures. |
+| 2 | `test_png_detection` | Temp file with PNG signature `\x89PNG\r\n\x1a\n` | detect_mime_type() returns "image/png" | Valid PNG header | Detects PNG by reading first 8 bytes (PNG signature), NOT by file extension. |
+| 3 | `test_mp4_detection` | Temp file with MP4 ftyp box structure (24 bytes: size + 'ftyp' + 'mp42' + version + brands) | detect_mime_type() returns "video/mp4" | Valid MP4 ftyp box | Detects MP4 by reading ftyp box structure (ISO base media file format), NOT by file extension. |
+| 4 | `test_unknown_extension` | Temp file with random data `b'random data'` and .xyz extension | detect_mime_type() returns "application/octet-stream" | Unknown file type | Returns default MIME type when `filetype` library cannot identify file signature. Handles unknown formats gracefully. |
+| 5 | `test_case_insensitive_extension` | Temp file named `.JPG` (uppercase) with JPEG magic bytes | detect_mime_type() returns "image/jpeg" | Case variation in extension | Verifies detection works regardless of extension case (reads magic bytes, ignores extension). |
+| 6 | `test_is_image_mime_type` | Strings: "image/jpeg", "image/png", "image/gif", "video/mp4", "application/pdf" | is_image_mime_type() returns True for "image/*", False for others | MIME type strings | Helper function that checks if MIME type starts with "image/". Used in extract_exif_smart() to route JPEG/PNG to Pillow vs RAW formats to ExifTool. NOT used for database insertion. |
+| 7 | `test_is_video_mime_type` | Strings: "video/mp4", "video/quicktime", "video/x-matroska", "image/jpeg", "application/pdf" | is_video_mime_type() returns True for "video/*", False for others | MIME type strings | Helper function that checks if MIME type starts with "video/". Used for conditional video metadata extraction. NOT used for database insertion. |
 
 ### test_edited_variants.py
 
@@ -427,7 +427,7 @@ Integration tests for video metadata extraction (8 tests, requires ffprobe).
 
 ### test_live_photos.py
 
-Tests for Live Photos detection and linking (17 tests).
+Tests for Live Photos detection and linking (15 tests).
 
 **Rationale**: Ensures Apple Live Photos (photo + video pairs with same base name) are correctly detected and linked in the database, so users can identify which MOV files are Live Photo components rather than standalone videos.
 
@@ -443,30 +443,34 @@ Tests for Live Photos detection and linking (17 tests).
 | 8 | `test_ignores_non_media_files` | HEIC, MOV, JSON, PDF files | Only media pairs detected | Non-media present | Ignores non-media files like JSON sidecars |
 | 9 | `test_case_insensitive_extensions` | IMG_1234.heic + IMG_1234.mov (lowercase) | Pair detected | Case-insensitive | Extension matching is case-insensitive (.HEIC = .heic) |
 | 10 | `test_empty_file_list` | Empty list | No pairs | No files | Handles empty input without errors |
-| 11 | `test_pairs_in_nested_directories` | Pairs in "Photos/2023/", "Photos/2024/" | All pairs detected | Files at various depths | Processes all directories recursively |
-| 12 | `test_links_pair_in_database` | DB with HEIC+MOV media items | live_photo_pair_id set on both items | Both in database | Links Live Photo pair with shared UUID in DB |
-| 13 | `test_links_multiple_pairs` | DB with 3 HEIC+MOV pairs | All 3 pairs linked with unique pair_ids | Multiple pairs | Batch links all pairs efficiently |
-| 14 | `test_links_by_path_when_no_media_item_id` | FileInfo without media_item_id field | Pairs linked by path lookup in DB | No media_item_id | Links using path-based database lookup |
-| 15 | `test_end_to_end_detection_and_linking` | DB with files, full workflow | Pairs detected and linked in DB | Complete workflow | Tests entire detection and linking pipeline |
-| 16 | `test_no_pairs_found` | Only regular photos (no Live Photos) | Stats: pairs_linked=0 | No Live Photos | Handles case with no Live Photos gracefully |
+| 11 | `test_links_pair_in_database` | DB with HEIC+MOV media items | live_photo_pair_id set on both items | Both in database | Links Live Photo pair with shared UUID in DB |
+| 12 | `test_links_multiple_pairs` | DB with 3 HEIC+MOV pairs | All 3 pairs linked with unique pair_ids | Multiple pairs | Batch links all pairs efficiently |
+| 13 | `test_links_by_path_when_no_media_item_id` | FileInfo without media_item_id field | Pairs linked by path lookup in DB | No media_item_id | Links using path-based database lookup |
+| 14 | `test_end_to_end_detection_and_linking` | DB with files, full workflow | Pairs detected and linked in DB | Complete workflow | Tests entire detection and linking pipeline |
+| 15 | `test_no_pairs_found` | Only regular photos (no Live Photos) | Stats: pairs_linked=0 | No Live Photos | Handles case with no Live Photos gracefully |
 
 ### test_metadata_coordinator.py
 
-Tests for metadata coordination and MediaItemRecord creation (14 tests).
+Tests for metadata coordination and MediaItemRecord creation (12 tests).
+
+**Rationale**: The coordinator combines data from multiple sources (FileInfo from discovery, CPU processing results, JSON sidecars) into a single `MediaItemRecord` ready for database insertion. Tests validate that all data sources are correctly merged and edge cases (missing data, parse errors) are handled.
 
 | # | Test | Input | Output | Conditions/Assumptions | Logic |
 |---|------|-------|--------|----------------------|-------|
-| 1 | `test_coordinate_metadata_basic` | FileInfo, CPU result, album_id, scan_run_id | MediaItemRecord with basic fields | Valid inputs | Creates basic media item record |
-| 2 | `test_coordinate_metadata_cpu_data` | FileInfo, CPU result | Record with MIME, CRC32, fingerprint, dimensions | CPU data present | Includes CPU processing results |
-| 3 | `test_coordinate_metadata_exif_data` | FileInfo, CPU result with EXIF | Record with EXIF fields | EXIF present | Extracts EXIF data into record |
-| 4 | `test_coordinate_metadata_with_json_sidecar` | FileInfo with JSON sidecar | Record with JSON metadata | JSON sidecar present | Parses and includes JSON metadata |
-| 5 | `test_coordinate_metadata_json_parse_error` | FileInfo with invalid JSON | Record without JSON metadata | Invalid JSON | Handles JSON parse errors gracefully |
-| 6 | `test_coordinate_metadata_video_data` | FileInfo, CPU result with video data | Record with duration, frame_rate | Video data present | Includes video metadata |
-| 7 | `test_coordinate_metadata_no_video_data` | FileInfo, CPU result without video | Record with duration=None, frame_rate=None | Image file | Handles non-video files |
-| 8 | `test_coordinate_metadata_minimal_cpu_result` | FileInfo, minimal CPU result | Record with minimal data | Sparse CPU result | Handles minimal CPU data |
-| 9 | `test_media_item_record_to_dict` | MediaItemRecord | Dictionary representation | Valid record | Converts record to dict |
-| 10 | `test_media_item_record_has_media_item_id` | MediaItemRecord | Record with 36-char UUID | ID generated | Generates media_item_id |
-| 11 | `test_media_item_record_deterministic_ids` | Same inputs twice | Identical media_item_ids | UUID5 generation | IDs are deterministic |
+| 1 | `test_coordinate_metadata_basic` | FileInfo (path, size, mtime), CPU result (MIME, CRC32), album_id, scan_run_id | MediaItemRecord with all basic fields populated | Valid inputs from all sources | Creates complete media item record by merging FileInfo + CPU result + IDs |
+| 2 | `test_coordinate_metadata_cpu_data` | FileInfo, CPU result with MIME/CRC32/fingerprint/width/height | Record with mime_type='image/jpeg', crc32='a1b2c3d4', fingerprint='fff...', width=1920, height=1080 | CPU processing completed successfully | Verifies CPU processing results (MIME detection, checksums, dimensions) are correctly copied into record |
+| 3 | `test_coordinate_metadata_exif_data` | FileInfo, CPU result with exif_data dict (camera_make, camera_model, GPS, timestamps) | Record with exif_datetime_original, exif_camera_make='Canon', exif_gps_latitude=37.7749, etc. | EXIF extraction succeeded | Extracts specific EXIF fields from nested dict into flat record fields (datetime_original, camera_make, camera_model, lens_make, lens_model, focal_length, aperture, iso, GPS) |
+| 4 | `test_coordinate_metadata_with_json_sidecar` | FileInfo with json_sidecar_path pointing to valid .json file | Record with title, description, people tags, geo_data from JSON | JSON sidecar exists and is valid | Calls parse_google_photos_json() to extract Google Takeout metadata (title, description, photoTakenTime, geoData, people) and merges into record |
+| 5 | `test_coordinate_metadata_json_parse_error` | FileInfo with json_sidecar_path pointing to malformed JSON file | Record created WITHOUT JSON metadata, no exception raised | JSON file is corrupted/invalid | Catches JSONDecodeError, logs warning, continues without JSON data (graceful degradation) |
+| 6 | `test_coordinate_metadata_video_data` | FileInfo, CPU result with video_data dict (duration=120.5, frame_rate=30.0) | Record with duration_seconds=120.5, frame_rate=30.0 | Video metadata extraction succeeded (ffprobe) | Extracts video-specific fields (duration, frame_rate) from CPU result into record |
+| 7 | `test_coordinate_metadata_no_video_data` | FileInfo, CPU result with video_data=None (image file) | Record with duration_seconds=None, frame_rate=None | File is an image, not a video | Handles non-video files by setting video fields to None (no error) |
+| 8 | `test_coordinate_metadata_minimal_cpu_result` | FileInfo, CPU result with only success=True, mime_type, crc32, fingerprint (no dimensions, no EXIF) | Record created with mime_type, width=None, height=None, exif fields=None | CPU processing succeeded but extracted minimal data | Handles sparse CPU results without crashing (missing optional fields default to None) |
+| 9 | `test_media_item_record_to_dict` | MediaItemRecord object | Dictionary with all record fields as key-value pairs | Record is valid | Tests .to_dict() method for database insertion (converts dataclass to dict) |
+| 10 | `test_media_item_record_has_media_item_id` | MediaItemRecord created from inputs | Record has media_item_id field with 36-character UUID string | ID generation enabled | Verifies UUID is generated and formatted correctly (UUID5 based on path+size+mtime) |
+| 11 | `test_media_item_record_deterministic_ids` | Call coordinate_metadata() TWICE with identical FileInfo, CPU result, album_id, scan_run_id | Both calls return records with SAME media_item_id | UUID5 is deterministic (not random) | Verifies IDs are reproducible (same inputs → same UUID). Critical for idempotent re-scans. If someone changes UUID5 to UUID4 (random), this test catches it. |
+| 12 | `test_coordinate_metadata_all_exif_fields` | FileInfo, CPU result with exif_data containing ALL possible EXIF fields (datetime_original, datetime_digitized, camera, lens, focal_length, aperture, iso, exposure_time, orientation, GPS) | Record with ALL exif_* fields populated correctly | Complete EXIF data available | Validates coordinator doesn't miss any EXIF fields during extraction (regression test for completeness) |
+| 13 | `test_coordinate_metadata_with_exiftool` | FileInfo, CPU result with use_exiftool=True | Record with exif_data populated from ExifTool | ExifTool available | Tests ExifTool integration for RAW formats |
+| 14 | `test_coordinate_metadata_with_exiftool_error` | FileInfo, CPU result with use_exiftool=True, ExifTool returns error | Record created without ExifTool data, no exception raised | ExifTool error | Catches ExifTool errors, logs warning, continues without ExifTool data |
 
 ### test_metadata_aggregator.py
 
@@ -476,17 +480,19 @@ Tests for metadata aggregation from multiple sources (13 tests).
 
 | # | Test | Input | Output | Conditions/Assumptions | Logic |
 |---|------|-------|--------|----------------------|-------|
-| 1 | `test_aggregate_metadata_all_sources` | Path: "IMG_20210101_120000.jpg", JSON (title, GPS), EXIF (camera, GPS), video data | Aggregated dict: JSON GPS used, EXIF camera kept, video dimensions | All sources present | Combines metadata with precedence: JSON > EXIF > video > filename |
-| 2 | `test_aggregate_metadata_json_only` | Path + JSON metadata (title, description, timestamp) | Dict with JSON fields only | Only JSON present | Handles single source without errors |
-| 3 | `test_aggregate_metadata_exif_only` | Path + EXIF metadata (camera, GPS) | Dict with EXIF fields + title from filename | Only EXIF present | Handles EXIF-only case, falls back to filename for title |
-| 4 | `test_aggregate_metadata_no_sources` | Path: "vacation.jpg", no metadata | Dict with title="vacation" from filename | No metadata sources | Handles no metadata gracefully, extracts title from filename |
-| 5 | `test_timestamp_precedence` | JSON timestamp, EXIF timestamp, filename timestamp | JSON timestamp used in result | Multiple timestamp sources | Validates precedence: JSON > EXIF > filename for timestamps |
-| 6 | `test_gps_precedence` | JSON GPS (37.7749, -122.4194), EXIF GPS (40.7128, -74.0060) | JSON GPS used, EXIF GPS stored separately | Multiple GPS sources | JSON GPS takes precedence, EXIF GPS preserved in separate fields |
-| 7 | `test_parse_timestamp_from_filename_img_pattern` | Filename: "IMG_20210615_143022.jpg" | "2021-06-15T14:30:22" | IMG_YYYYMMDD_HHMMSS pattern | Parses IMG prefix pattern from camera phones |
-| 8 | `test_parse_timestamp_from_filename_vid_pattern` | Filename: "VID_20210615_143022.mp4" | "2021-06-15T14:30:22" | VID_YYYYMMDD_HHMMSS pattern | Parses VID prefix pattern from camera phones |
-| 9 | `test_parse_timestamp_from_filename_simple_pattern` | Filename: "20210615_143022.jpg" | "2021-06-15T14:30:22" | YYYYMMDD_HHMMSS pattern | Parses simple timestamp pattern without prefix |
-| 10 | `test_parse_timestamp_from_filename_date_only` | Filename: "2021-06-15.jpg" | "2021-06-15T00:00:00" | YYYY-MM-DD pattern | Parses date-only pattern, sets time to midnight |
-| 11 | `test_parse_timestamp_from_filename_no_match` | Filename: "random_photo.jpg" | None | No recognizable pattern | Returns None for unparseable filenames without crashing |
+| 1 | `test_aggregates_exif_timestamp` | EXIF has timestamp "2023-01-01T12:00:00", no JSON, no filename timestamp | Result has capture_timestamp from EXIF | Only EXIF source available | Tests that EXIF timestamp CAN be used when it's the only source available |
+| 2 | `test_aggregates_json_timestamp` | JSON has timestamp "2023-02-01T14:00:00", no EXIF, no filename timestamp | Result has capture_timestamp from JSON | Only JSON source available | Tests that JSON timestamp CAN be used when it's the only source available |
+| 3 | `test_aggregates_filename_timestamp` | Filename "IMG_20230315_100000.jpg", no EXIF, no JSON | Result has capture_timestamp parsed from filename | Only filename source available | Tests that filename timestamp CAN be parsed when it's the only source available |
+| 4 | `test_timestamp_priority_exif_over_json` | EXIF has "2023-01-01", JSON has "2023-02-01" | Result uses EXIF timestamp "2023-01-01" | Both EXIF and JSON present | Tests PRIORITY RULE: when both EXIF and JSON exist, EXIF wins (camera timestamp more reliable than Google's metadata) |
+| 5 | `test_timestamp_priority_json_over_filename` | JSON has "2023-02-01", filename has "IMG_20230315_100000.jpg" | Result uses JSON timestamp "2023-02-01" | Both JSON and filename present | Tests PRIORITY RULE: when both JSON and filename exist, JSON wins (Google metadata more reliable than filename parsing) |
+| 6 | `test_aggregates_geo_data_from_exif` | EXIF has GPS (lat=37.7749, lon=-122.4194), no JSON geo | Result has geo_data from EXIF | Only EXIF GPS available | Tests that EXIF GPS CAN be used when it's the only source |
+| 7 | `test_aggregates_geo_data_from_json` | JSON has GPS (lat=40.7128, lon=-74.0060), no EXIF GPS | Result has geo_data from JSON | Only JSON GPS available | Tests that JSON GPS CAN be used when it's the only source |
+| 8 | `test_parse_timestamp_from_filename_img_pattern` | Filename: "IMG_20210615_143022.jpg" | "2021-06-15T14:30:22+00:00" (UTC timezone-aware) | IMG_YYYYMMDD_HHMMSS pattern | Parses IMG prefix pattern from Android camera phones, returns ISO format with UTC timezone |
+| 9 | `test_parse_timestamp_from_filename_vid_pattern` | Filename: "VID_20210615_143022.mp4" | "2021-06-15T14:30:22+00:00" (UTC timezone-aware) | VID_YYYYMMDD_HHMMSS pattern | Parses VID prefix pattern from Android camera phones, returns ISO format with UTC timezone |
+| 10 | `test_parse_timestamp_from_filename_simple_pattern` | Filename: "20210615_143022.jpg" | "2021-06-15T14:30:22+00:00" (UTC timezone-aware) | YYYYMMDD_HHMMSS pattern | Parses simple timestamp pattern without prefix, returns ISO format with UTC timezone |
+| 11 | `test_parse_timestamp_from_filename_date_only` | Filename: "2021-06-15.jpg" | "2021-06-15T00:00:00+00:00" (UTC timezone-aware) | YYYY-MM-DD pattern | Parses date-only pattern, sets time to midnight UTC |
+| 12 | `test_parse_timestamp_from_filename_no_match` | Filename: "random_photo.jpg" | None | No recognizable pattern | Returns None for unparseable filenames without crashing (graceful fallback) |
+| 13 | `test_dimensions_video_priority` | Video file with dimensions in both EXIF (1920×1080) and video metadata (1280×720) | Result uses video metadata dimensions (1280×720) | Both sources present | Tests that video metadata dimensions are more accurate than EXIF for videos (EXIF may be from thumbnail) |
 
 ### test_post_scan.py
 

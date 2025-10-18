@@ -3,7 +3,7 @@
 import logging
 import uuid
 from typing import Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 
 from ..database import DatabaseConnection
 
@@ -70,8 +70,8 @@ class AlbumDAL:
                 creation_timestamp=album.get('creation_timestamp'),
                 access_level=album.get('access_level'),
                 status=album.get('status', 'present'),
-                # Use UTC to match SQLite's CURRENT_TIMESTAMP
-                last_seen_timestamp=datetime.utcnow().isoformat(),
+                # Use UTC timezone-aware datetime
+                last_seen_timestamp=datetime.now(timezone.utc).isoformat(),
                 scan_run_id=album['scan_run_id']
             )
             logger.debug(f"Updated existing album: {album_id} ({album_folder_path})")

@@ -3,7 +3,7 @@
 import json
 import pytest
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 
 from gphotos_321sync.media_scanner.metadata_coordinator import (
     coordinate_metadata,
@@ -28,8 +28,8 @@ def test_file_info(tmp_path):
 
 
 @pytest.fixture
-def test_cpu_result():
-    """Create test CPU processing result."""
+def test_metadata_ext():
+    """Create test metadata extraction result."""
     return {
         'success': True,
         'mime_type': 'image/jpeg',
@@ -38,7 +38,7 @@ def test_cpu_result():
         'width': 1920,
         'height': 1080,
         'exif_data': {
-            'datetime_original': datetime(2023, 7, 1, 12, 30, 0),
+            'datetime_original': datetime(2023, 7, 1, 12, 30, 0, tzinfo=timezone.utc),
             'camera_make': 'Canon',
             'camera_model': 'EOS R5',
             'gps': {
@@ -52,11 +52,11 @@ def test_cpu_result():
     }
 
 
-def test_coordinate_metadata_basic(test_file_info, test_cpu_result):
+def test_coordinate_metadata_basic(test_file_info, test_metadata_ext):
     """Test basic metadata coordination."""
     record = coordinate_metadata(
         file_info=test_file_info,
-        cpu_result=test_cpu_result,
+        metadata_ext=test_metadata_ext,
         album_id='album-123',
         scan_run_id='scan-456'
     )
@@ -68,11 +68,11 @@ def test_coordinate_metadata_basic(test_file_info, test_cpu_result):
     assert record.status == 'present'
 
 
-def test_coordinate_metadata_cpu_data(test_file_info, test_cpu_result):
+def test_coordinate_metadata_cpu_data(test_file_info, test_metadata_ext):
     """Test that CPU result data is included."""
     record = coordinate_metadata(
         file_info=test_file_info,
-        cpu_result=test_cpu_result,
+        metadata_ext=test_metadata_ext,
         album_id='album-123',
         scan_run_id='scan-456'
     )
@@ -85,16 +85,16 @@ def test_coordinate_metadata_cpu_data(test_file_info, test_cpu_result):
     assert record.file_size == 100
 
 
-def test_coordinate_metadata_exif_data(test_file_info, test_cpu_result):
+def test_coordinate_metadata_exif_data(test_file_info, test_metadata_ext):
     """Test that EXIF data is extracted."""
     record = coordinate_metadata(
         file_info=test_file_info,
-        cpu_result=test_cpu_result,
+        metadata_ext=test_metadata_ext,
         album_id='album-123',
         scan_run_id='scan-456'
     )
     
-    assert record.exif_datetime_original == datetime(2023, 7, 1, 12, 30, 0)
+    assert record.exif_datetime_original == datetime(2023, 7, 1, 12, 30, 0, tzinfo=timezone.utc)
     assert record.exif_camera_make == 'Canon'
     assert record.exif_camera_model == 'EOS R5'
     assert record.exif_gps_latitude == 37.7749
@@ -102,7 +102,7 @@ def test_coordinate_metadata_exif_data(test_file_info, test_cpu_result):
     assert record.exif_gps_altitude == 10.5
 
 
-def test_coordinate_metadata_with_json_sidecar(tmp_path, test_cpu_result):
+def test_coordinate_metadata_with_json_sidecar(tmp_path, test_metadata_ext):
     """Test coordination with JSON sidecar."""
     # Create file with JSON sidecar
     file_path = tmp_path / "test.jpg"
@@ -131,7 +131,7 @@ def test_coordinate_metadata_with_json_sidecar(tmp_path, test_cpu_result):
     
     record = coordinate_metadata(
         file_info=file_info,
-        cpu_result=test_cpu_result,
+        metadata_ext=test_metadata_ext,
         album_id='album-123',
         scan_run_id='scan-456'
     )
@@ -143,7 +143,7 @@ def test_coordinate_metadata_with_json_sidecar(tmp_path, test_cpu_result):
     assert record.google_geo_longitude == -74.0060
 
 
-def test_coordinate_metadata_json_parse_error(tmp_path, test_cpu_result):
+def test_coordinate_metadata_json_parse_error(tmp_path, test_metadata_ext):
     """Test handling of invalid JSON sidecar."""
     # Create file with invalid JSON sidecar
     file_path = tmp_path / "test.jpg"
@@ -163,7 +163,7 @@ def test_coordinate_metadata_json_parse_error(tmp_path, test_cpu_result):
     # Should not raise exception, just log warning
     record = coordinate_metadata(
         file_info=file_info,
-        cpu_result=test_cpu_result,
+        metadata_ext=test_metadata_ext,
         album_id='album-123',
         scan_run_id='scan-456'
     )
@@ -175,7 +175,7 @@ def test_coordinate_metadata_json_parse_error(tmp_path, test_cpu_result):
 
 def test_coordinate_metadata_video_data(test_file_info):
     """Test coordination with video metadata."""
-    cpu_result = {
+    metadata_ext = {
         'success': True,
         'mime_type': 'video/mp4',
         'crc32': 'a1b2c3d4',
@@ -194,7 +194,7 @@ def test_coordinate_metadata_video_data(test_file_info):
     
     record = coordinate_metadata(
         file_info=test_file_info,
-        cpu_result=cpu_result,
+        metadata_ext=metadata_ext,
         album_id='album-123',
         scan_run_id='scan-456'
     )
@@ -203,11 +203,11 @@ def test_coordinate_metadata_video_data(test_file_info):
     assert record.frame_rate == 30.0
 
 
-def test_coordinate_metadata_no_video_data(test_file_info, test_cpu_result):
+def test_coordinate_metadata_no_video_data(test_file_info, test_metadata_ext):
     """Test coordination without video metadata (image file)."""
     record = coordinate_metadata(
         file_info=test_file_info,
-        cpu_result=test_cpu_result,
+        metadata_ext=test_metadata_ext,
         album_id='album-123',
         scan_run_id='scan-456'
     )
@@ -216,9 +216,9 @@ def test_coordinate_metadata_no_video_data(test_file_info, test_cpu_result):
     assert record.frame_rate is None
 
 
-def test_coordinate_metadata_minimal_cpu_result(test_file_info):
+def test_coordinate_metadata_minimal_metadata_ext(test_file_info):
     """Test coordination with minimal CPU result."""
-    cpu_result = {
+    metadata_ext = {
         'success': True,
         'mime_type': 'image/jpeg',
         'crc32': 'a1b2c3d4',
@@ -232,7 +232,7 @@ def test_coordinate_metadata_minimal_cpu_result(test_file_info):
     
     record = coordinate_metadata(
         file_info=test_file_info,
-        cpu_result=cpu_result,
+        metadata_ext=metadata_ext,
         album_id='album-123',
         scan_run_id='scan-456'
     )
@@ -243,11 +243,11 @@ def test_coordinate_metadata_minimal_cpu_result(test_file_info):
     assert record.exif_camera_make is None
 
 
-def test_media_item_record_to_dict(test_file_info, test_cpu_result):
+def test_media_item_record_to_dict(test_file_info, test_metadata_ext):
     """Test MediaItemRecord.to_dict() conversion."""
     record = coordinate_metadata(
         file_info=test_file_info,
-        cpu_result=test_cpu_result,
+        metadata_ext=test_metadata_ext,
         album_id='album-123',
         scan_run_id='scan-456'
     )
@@ -262,11 +262,11 @@ def test_media_item_record_to_dict(test_file_info, test_cpu_result):
     assert data['status'] == 'present'
 
 
-def test_media_item_record_has_media_item_id(test_file_info, test_cpu_result):
+def test_media_item_record_has_media_item_id(test_file_info, test_metadata_ext):
     """Test that MediaItemRecord has a generated media_item_id."""
     record = coordinate_metadata(
         file_info=test_file_info,
-        cpu_result=test_cpu_result,
+        metadata_ext=test_metadata_ext,
         album_id='album-123',
         scan_run_id='scan-456'
     )
@@ -275,18 +275,18 @@ def test_media_item_record_has_media_item_id(test_file_info, test_cpu_result):
     assert len(record.media_item_id) == 36  # UUID5 format (same length as UUID4)
 
 
-def test_media_item_record_deterministic_ids(test_file_info, test_cpu_result):
+def test_media_item_record_deterministic_ids(test_file_info, test_metadata_ext):
     """Test that UUID5 generates deterministic IDs for same inputs."""
     record1 = coordinate_metadata(
         file_info=test_file_info,
-        cpu_result=test_cpu_result,
+        metadata_ext=test_metadata_ext,
         album_id='album-123',
         scan_run_id='scan-456'
     )
     
     record2 = coordinate_metadata(
         file_info=test_file_info,
-        cpu_result=test_cpu_result,
+        metadata_ext=test_metadata_ext,
         album_id='album-123',
         scan_run_id='scan-456'
     )
@@ -297,7 +297,7 @@ def test_media_item_record_deterministic_ids(test_file_info, test_cpu_result):
 
 def test_coordinate_metadata_all_exif_fields(test_file_info):
     """Test that all EXIF fields are extracted."""
-    cpu_result = {
+    metadata_ext = {
         'success': True,
         'mime_type': 'image/jpeg',
         'crc32': 'a1b2c3d4',
@@ -305,8 +305,8 @@ def test_coordinate_metadata_all_exif_fields(test_file_info):
         'width': 1920,
         'height': 1080,
         'exif_data': {
-            'datetime_original': datetime(2023, 7, 1, 12, 30, 0),
-            'datetime_digitized': datetime(2023, 7, 1, 12, 35, 0),
+            'datetime_original': datetime(2023, 7, 1, 12, 30, 0, tzinfo=timezone.utc),
+            'datetime_digitized': datetime(2023, 7, 1, 12, 35, 0, tzinfo=timezone.utc),
             'camera_make': 'Canon',
             'camera_model': 'EOS R5',
             'lens_make': 'Canon',
@@ -328,13 +328,13 @@ def test_coordinate_metadata_all_exif_fields(test_file_info):
     
     record = coordinate_metadata(
         file_info=test_file_info,
-        cpu_result=cpu_result,
+        metadata_ext=metadata_ext,
         album_id='album-123',
         scan_run_id='scan-456'
     )
     
-    assert record.exif_datetime_original == datetime(2023, 7, 1, 12, 30, 0)
-    assert record.exif_datetime_digitized == datetime(2023, 7, 1, 12, 35, 0)
+    assert record.exif_datetime_original == datetime(2023, 7, 1, 12, 30, 0, tzinfo=timezone.utc)
+    assert record.exif_datetime_digitized == datetime(2023, 7, 1, 12, 35, 0, tzinfo=timezone.utc)
     assert record.exif_lens_make == 'Canon'
     assert record.exif_lens_model == 'RF 24-70mm F2.8'
     assert record.exif_focal_length == 50.0

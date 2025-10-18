@@ -3,6 +3,7 @@
 import json
 import logging
 import subprocess
+from datetime import timezone
 from pathlib import Path
 from typing import Dict, Any, Optional, Tuple
 from PIL import Image
@@ -231,16 +232,16 @@ def _parse_rational(value) -> Optional[float]:
 
 def _parse_exif_datetime(value: str) -> Optional[str]:
     """
-    Parse EXIF datetime to ISO format.
+    Parse EXIF datetime to ISO format with UTC timezone.
     
     EXIF format: "2020:01:01 12:00:00"
-    ISO format: "2020-01-01T12:00:00"
+    ISO format: "2020-01-01T12:00:00+00:00"
     
     Args:
         value: EXIF datetime string
         
     Returns:
-        ISO format datetime string or None
+        ISO format datetime string with UTC timezone or None
     """
     try:
         # Replace colons in date part with hyphens
@@ -248,7 +249,8 @@ def _parse_exif_datetime(value: str) -> Optional[str]:
         if len(parts) == 2:
             date_part = parts[0].replace(':', '-')
             time_part = parts[1]
-            return f"{date_part}T{time_part}"
+            # Add UTC timezone suffix
+            return f"{date_part}T{time_part}+00:00"
     except Exception:
         pass
     
@@ -428,17 +430,18 @@ def extract_exif_with_exiftool(file_path: Path) -> Dict[str, Any]:
 
 def _normalize_exiftool_datetime(dt_str: str) -> Optional[str]:
     """
-    Normalize ExifTool datetime to ISO format.
+    Normalize ExifTool datetime to ISO format with UTC timezone.
     
     ExifTool format: "2020:01:01 12:00:00"
-    ISO format: "2020-01-01T12:00:00"
+    ISO format: "2020-01-01T12:00:00+00:00"
     """
     try:
         parts = dt_str.split(' ')
         if len(parts) == 2:
             date_part = parts[0].replace(':', '-')
             time_part = parts[1]
-            return f"{date_part}T{time_part}"
+            # Add UTC timezone suffix
+            return f"{date_part}T{time_part}+00:00"
     except Exception:
         pass
     return None

@@ -1,7 +1,7 @@
 """Tests for post-scan validation."""
 
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import pytest
 
@@ -61,8 +61,8 @@ class TestValidateScan:
         })
         
         # Create media item with OLD scan_run_id and old timestamp
-        # Use UTC to match SQLite's CURRENT_TIMESTAMP
-        old_timestamp = (datetime.utcnow() - timedelta(hours=1)).strftime('%Y-%m-%d %H:%M:%S')
+        # Use UTC timezone-aware datetime
+        old_timestamp = (datetime.now(timezone.utc) - timedelta(hours=1)).strftime('%Y-%m-%d %H:%M:%S')
         media_item_id = str(uuid.uuid4())
         
         conn.execute(
@@ -77,7 +77,7 @@ class TestValidateScan:
         conn.commit()
         
         # Create NEW scan run
-        scan_start_time = datetime.utcnow()
+        scan_start_time = datetime.now(timezone.utc)
         new_scan_run_id = scan_run_dal.create_scan_run()
         
         conn.close()
@@ -131,8 +131,8 @@ class TestValidateScan:
         })
         
         # Create new scan run (capture start time BEFORE creating scan)
-        # Use UTC to match SQLite's CURRENT_TIMESTAMP
-        scan_start_time = datetime.utcnow()
+        # Use UTC timezone-aware datetime
+        scan_start_time = datetime.now(timezone.utc)
         new_scan_run_id = scan_run_dal.create_scan_run()
         
         conn.close()
@@ -174,8 +174,8 @@ class TestValidateScan:
         })
         
         # Create new scan run (capture start time BEFORE creating scan)
-        # Use UTC to match SQLite's CURRENT_TIMESTAMP
-        scan_start_time = datetime.utcnow()
+        # Use UTC timezone-aware datetime
+        scan_start_time = datetime.now(timezone.utc)
         new_scan_run_id = scan_run_dal.create_scan_run()
         
         conn.close()
@@ -208,8 +208,8 @@ class TestValidateScan:
         album_dal = AlbumDAL(conn)
         
         # Create scan run (capture start time BEFORE creating scan)
-        # Use UTC to match SQLite's CURRENT_TIMESTAMP
-        scan_start_time = datetime.utcnow()
+        # Use UTC timezone-aware datetime
+        scan_start_time = datetime.now(timezone.utc)
         scan_run_id = scan_run_dal.create_scan_run()
         
         # Create album
@@ -265,8 +265,8 @@ class TestValidateScan:
         album_dal = AlbumDAL(conn)
         
         # Create scan run (capture start time BEFORE creating scan)
-        # Use UTC to match SQLite's CURRENT_TIMESTAMP
-        scan_start_time = datetime.utcnow()
+        # Use UTC timezone-aware datetime
+        scan_start_time = datetime.now(timezone.utc)
         scan_run_id = scan_run_dal.create_scan_run()
         
         # Create album
