@@ -6,9 +6,9 @@ Comprehensive documentation of all test suites in the gphotos-321sync project.
 
 **Total: 330 tests** (12 + 42 + 276)
 
-- **gphotos-321sync-common:** 12 tests (9 logging + 3 path utils)
-- **gphotos-321sync-takeout-extractor:** 42 tests (2 config + 16 extractor + 24 verification)
-- **gphotos-321sync-media-scanner:** 276 tests (285 originally - 1 deleted invalid test + 8 worker + 8 writer = 276)
+- **gphotos-321sync-common:** 12 tests
+- **gphotos-321sync-takeout-extractor:** 42 tests
+- **gphotos-321sync-media-scanner:** 276 tests
 
 ---
 
