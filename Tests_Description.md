@@ -63,32 +63,15 @@ Tests for album discovery and metadata parsing (17 tests).
 
 ### test_config.py (media-scanner)
 
-Tests for scanner-specific configuration models (5 tests).
+Tests for scanner-specific configuration (3 tests).
 
-**Rationale**: Ensures scanner-specific configuration objects are properly constructed with correct defaults and accept valid custom values. LoggingConfig is tested in gphotos-321sync-common.
-
-| Test | Input | Output | Conditions/Assumptions | Logic |
-|------|-------|--------|----------------------|-------|
-| `test_default_values_are_reasonable` (ScannerConfig) | No parameters | num_workers=CPU_count, use_ffprobe=False, use_exiftool=False | Using defaults | Ensures scanner defaults are appropriate for typical systems |
-| `test_custom_values_override_defaults` (ScannerConfig) | num_workers=4, batch_size=50, use_ffprobe=True | Config with specified values | All parameters provided | Validates custom scanner configuration overrides defaults |
-| `test_default_values` (MediaScannerConfig) | No parameters | Root config with nested defaults | Using defaults | Validates nested configuration structure with all defaults |
-| `test_nested_custom_values` | Custom logging + scanner configs | Root config with custom nested values | Nested objects | Validates nested configuration construction from objects |
-| `test_from_dict` | Dict: {"logging": {...}, "scanner": {...}} | Valid MediaScannerConfig | Dictionary-based | Tests Pydantic dict parsing for nested configs |
-
-### test_config_validation.py (media-scanner)
-
-Tests for configuration validation rules (6 tests).
-
-**Rationale**: Ensures Pydantic validation rejects unknown fields to prevent configuration errors and provides clear error messages.
+**Rationale**: Tests ONLY scanner-specific parameters and their defaults/overrides. Common validation patterns (extra='forbid', dict/object input) are tested in gphotos-321sync-common.
 
 | Test | Input | Output | Conditions/Assumptions | Logic |
 |------|-------|--------|----------------------|-------|
-| `test_valid_config` (ScannerConfig) | target_media_path="/path/to/media", batch_size=100 | Valid config object | Correct parameters | Validates basic configuration acceptance with correct field names |
-| `test_rejects_unknown_field` (ScannerConfig) | unknown_parameter="value" | ValidationError | Extra field not in schema | Validates strict schema enforcement (extra="forbid") catches unknown fields |
-| `test_valid_config` (MediaScannerConfig) | Valid nested logging + scanner configs | Valid root config | Correct nested structure | Validates full configuration structure with nested objects |
-| `test_rejects_unknown_top_level_section` | unknown_section={...} | ValidationError | Extra top-level section | Validates top-level schema enforcement rejects unknown sections |
-| `test_scanner_config_with_defaults` | No parameters | target_media_path="", batch_size=100, use_ffprobe=False | Using defaults | Validates defaults work correctly with validation enabled |
-| `test_full_config_with_defaults` | No parameters | Full config tree with all defaults | Using defaults | Validates entire config tree defaults with validation |
+| `test_scanner_config_defaults` | No parameters | target_media_path="", batch_size=100, worker_threads>0, use_ffprobe=False, use_exiftool=False | Using defaults | Tests scanner-specific default values |
+| `test_scanner_config_custom_values` | Scanner-specific parameters | Config with custom values | Parameters provided | Tests scanner-specific parameter overrides |
+| `test_media_scanner_config_defaults` | No parameters | Root config with nested defaults | Using defaults | Tests root configuration structure with scanner defaults |
 
 ### test_database.py
 
@@ -532,20 +515,17 @@ Tests for writer thread database operations (9 tests).
 
 ## gphotos-321sync-takeout-extractor
 
-### test_config_validation.py (takeout-extractor)
+### test_config.py (takeout-extractor)
 
-Tests for extractor-specific configuration validation (6 tests).
+Tests for extractor-specific configuration (3 tests).
 
-**Rationale**: Ensures Pydantic validation rejects unknown fields to prevent configuration errors in the takeout extractor. Tests only extractor-specific configs (ExtractionConfig, TakeoutExtractorConfig). LoggingConfig is tested in gphotos-321sync-common.
+**Rationale**: Tests ONLY extractor-specific parameters and their defaults/overrides. Common validation patterns (extra='forbid', dict/object input) are tested in gphotos-321sync-common.
 
 | Test | Input | Output | Conditions/Assumptions | Logic |
 |------|-------|--------|----------------------|-------|
-| `test_valid_config` (ExtractionConfig) | source_dir="/archives", target_media_path="/output" | Valid config object | Correct parameters | Validates basic configuration acceptance with correct field names |
-| `test_rejects_unknown_field` (ExtractionConfig) | unknown_parameter="value" | ValidationError | Extra field not in schema | Validates strict schema enforcement (extra="forbid") catches unknown fields |
-| `test_valid_config` (TakeoutExtractorConfig) | Valid nested logging + extraction configs | Valid root config | Correct nested structure | Validates full configuration structure with nested objects |
-| `test_rejects_unknown_top_level_section` | unknown_section={...} | ValidationError | Extra top-level section | Validates top-level schema enforcement rejects unknown sections |
-| `test_extraction_config_with_defaults` | No parameters | source_dir=".", target_media_path="./extracted", verify_checksums=True | Using defaults | Validates defaults work correctly with validation enabled |
-| `test_full_config_with_defaults` | No parameters | Full config tree with all defaults | Using defaults | Validates entire config tree defaults with validation |
+| `test_extraction_config_defaults` | No parameters | source_dir=".", target_media_path="./extracted", verify_checksums=True, max_retry_attempts=10 | Using defaults | Tests extractor-specific default values |
+| `test_extraction_config_custom_values` | Extractor-specific parameters | Config with custom values | Parameters provided | Tests extractor-specific parameter overrides |
+| `test_takeout_extractor_config_defaults` | No parameters | Root config with nested defaults | Using defaults | Tests root configuration structure with extractor defaults |
 
 ### test_extractor.py
 
@@ -608,8 +588,8 @@ Tests for archive verification and selective re-extraction (27 tests).
 
 ## Summary
 
-**Total: 356 tests** (10 + 297 + 49)
+**Total: 341 tests** (8 + 287 + 46)
 
-- **gphotos-321sync-common**: 10 tests
-- **gphotos-321sync-media-scanner**: 297 tests  
-- **gphotos-321sync-takeout-extractor**: 49 tests
+- **gphotos-321sync-common**: 8 tests
+- **gphotos-321sync-media-scanner**: 287 tests  
+- **gphotos-321sync-takeout-extractor**: 46 tests
