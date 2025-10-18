@@ -32,6 +32,18 @@ Tests for shared `LoggingConfig` validation (9 tests).
 | 8 | `test_serialization` | Config with all fields | Dictionary matching input | Using model_dump() | Tests Pydantic serialization to dict |
 | 9 | `test_deserialization` | Dictionary with config values | Valid LoggingConfig object | Using **dict unpacking | Tests Pydantic deserialization from dict |
 
+### test_path_utils.py
+
+Tests for path normalization utilities (3 tests).
+
+**Rationale**: Ensures paths are normalized consistently across platforms (Windows/Unix) and Unicode forms for database storage and comparison.
+
+| # | Test | Input | Output | Conditions/Assumptions | Logic |
+|---|------|-------|--------|----------------------|-------|
+| 1 | `test_forward_slashes` | Path: "C:\\Users\\test\\photos\\image.jpg" (Windows) | "C:/Users/test/photos/image.jpg" | Windows backslashes | Converts backslashes to forward slashes for cross-platform consistency |
+| 2 | `test_unicode_normalization` | Path: "café" (NFD: cafe\u0301) | "café" (NFC: caf\u00e9) | Decomposed Unicode | Normalizes to NFC form for consistent string comparison across filesystems |
+| 3 | `test_relative_path` | Path: "photos/2023/image.jpg" | "photos/2023/image.jpg" (normalized) | Relative path | Handles relative paths correctly |
+
 ---
 
 ## gphotos-321sync-takeout-extractor
@@ -74,7 +86,7 @@ Tests for archive extraction functionality (16 tests).
 
 ### test_extractor_verification.py
 
-Tests for archive verification and selective re-extraction (24 tests).
+Tests for archive verification and selective re-extraction (23 tests).
 
 **Purpose**: The app has a custom verification system that checks extracted files against ZIP metadata (CRC32 checksums). On resume, if files are missing/corrupted, it selectively re-extracts ONLY the bad files instead of re-extracting the entire archive.
 
@@ -285,7 +297,7 @@ Tests for CPU-intensive file processing (14 tests).
 |---|------|-------|--------|----------------------|-------|
 | 1 | `test_calculate_crc32_different_files` | Two different files | Different CRC32 values | Different content | Tests our calculate_crc32() wrapper detects file differences. |
 | 2 | `test_calculate_crc32_large_file` | File >64KB | Valid 8-char hex CRC32 | Large file | Tests chunked CRC32 |
-| 3 | `test_process_file_cpu_work_success` | Valid image file | Dict with success=True, mime_type, crc32, fingerprint | Valid file | Performs all CPU operations |
+| 3 | `test_process_file_cpu_work_success` | Image file | Dict with success=True, mime_type, crc32, fingerprint | Valid file | Performs all CPU operations |
 | 4 | `test_process_file_cpu_work_mime_type` | Image file | MIME type detected | Valid file | Detects file MIME type |
 | 5 | `test_process_file_cpu_work_crc32` | Text file | CRC32 from process_file_cpu_work() matches direct calculate_crc32() call | Valid file | Tests integration: calls process_file_cpu_work() and calculate_crc32() separately on same file, verifies both return identical CRC32. Ensures process_file_cpu_work() wrapper has no bugs. Note: calculate_crc32() is a wrapper in file_processor.py (not the compute_crc32() from fingerprint.py). |
 | 6 | `test_process_file_cpu_work_fingerprint` | Text file | 64-char hex SHA-256 | Valid file | Calculates SHA-256 of first 64KB + last 64KB for files >128KB, or entire file if ≤128KB. |
@@ -300,17 +312,13 @@ Tests for CPU-intensive file processing (14 tests).
 
 ### test_fingerprint.py
 
-Tests for content fingerprinting utilities (7 tests).
+Tests for content fingerprinting utilities (3 tests).
 
 | # | Test | Input | Output | Conditions/Assumptions | Logic |
 |---|------|-------|--------|----------------------|-------|
-| 1 | `test_small_file` | File <16KB | 64-char hex SHA-256 | Small file | Computes SHA-256 of entire file |
-| 2 | `test_large_file` | File >16KB | 64-char hex SHA-256 | Large file | Computes SHA-256 with chunking |
-| 3 | `test_change_detection` | File before/after modification | Different fingerprints | Content changed | Verifies fingerprint detects changes |
-| 4 | `test_identical_files_same_fingerprint` | Two identical files | Same fingerprint | Identical content | Verifies identical files match |
-| 5 | `test_crc32_computation` | File content | 32-bit unsigned integer | Valid file | Tests basic CRC32 |
-| 6 | `test_crc32_different_files` | File before/after modification | Different CRC32 | Content changed | Verifies CRC32 detects changes |
-| 7 | `test_large_file_crc32` | ~1MB file | Valid CRC32 | Large file | Tests CRC32 on large files |
+| 1 | `test_change_detection` | File before/after modification | Different fingerprints | Content changed | Verifies fingerprint detects changes |
+| 2 | `test_identical_files_same_fingerprint` | Two identical files | Same fingerprint | Identical content | Verifies identical files match |
+| 3 | `test_large_file_crc32` | ~1MB file | Valid CRC32 | Large file | Tests CRC32 on large files |
 
 ### test_imports.py
 
@@ -442,23 +450,20 @@ Tests for MIME type detection (7 tests).
 | 6 | `test_is_image_mime_type` | Various MIME types | True for images, False otherwise | MIME type strings | Identifies image MIME types |
 | 7 | `test_is_video_mime_type` | Various MIME types | True for videos, False otherwise | MIME type strings | Identifies video MIME types |
 
-### test_path_utils.py
+### .py (media-scanner)
 
-Tests for path utilities (9 tests).
+Tests for media scanner path utilities (6 tests).
 
-**Rationale**: Ensures paths are normalized consistently across platforms (Windows/Unix) and Unicode forms, and that hidden/system/temp files are correctly filtered to avoid processing unwanted files.
+**Rationale**: Tests media-scanner specific file filtering (hidden/system/temp files).
 
 | # | Test | Input | Output | Conditions/Assumptions | Logic |
 |---|------|-------|--------|----------------------|-------|
-| 1 | `test_forward_slashes` | Path: "Photos\\2023\\image.jpg" (Windows) | "Photos/2023/image.jpg" | Windows backslashes | Converts backslashes to forward slashes for cross-platform consistency |
-| 2 | `test_unicode_normalization` | Path: "café" (NFD: cafe\u0301) | "café" (NFC: caf\u00e9) | Decomposed Unicode | Normalizes to NFC form for consistent string comparison |
-| 3 | `test_relative_path` | Path: "Photos/2023/image.jpg" | "Photos/2023/image.jpg" (normalized) | Relative path | Handles relative paths correctly |
-| 4 | `test_unix_hidden_files` | Files: .hidden, .DS_Store, .gitignore | is_hidden=True for all | Unix hidden files | Identifies files starting with . as hidden |
-| 5 | `test_regular_files_not_hidden` | Files: photo.jpg, document.pdf | is_hidden=False for all | Normal files | Regular files not marked as hidden |
-| 6 | `test_regular_files_should_scan` | Files: photo.jpg, video.mp4 | should_scan=True for all | Normal files | All regular media files should be scanned |
-| 7 | `test_hidden_files_should_skip` | Files: .hidden, .DS_Store | should_scan=False for all | Hidden files | Skips Unix hidden files (system metadata) |
-| 8 | `test_system_files_should_skip` | Files: Thumbs.db, desktop.ini, .DS_Store | should_scan=False for all | Windows/Mac system files | Skips system-generated files |
-| 9 | `test_temp_files_should_skip` | Files: file.tmp, cache.cache, backup.bak | should_scan=False for all | Temporary file extensions | Skips temporary and backup files |
+| 1 | `test_unix_hidden_files` | Files: .hidden, .DS_Store, .gitignore | is_hidden=True for all | Unix hidden files | Identifies files starting with . as hidden |
+| 2 | `test_regular_files_not_hidden` | Files: photo.jpg, document.pdf | is_hidden=False for all | Normal files | Regular files not marked as hidden |
+| 3 | `test_regular_files_should_scan` | Files: photo.jpg, video.mp4 | should_scan=True for all | Normal files | All regular media files should be scanned |
+| 4 | `test_hidden_files_should_skip` | Files: .hidden, .DS_Store | should_scan=False for all | Hidden files | Skips Unix hidden files (system metadata) |
+| 5 | `test_system_files_should_skip` | Files: Thumbs.db, desktop.ini, .DS_Store | should_scan=False for all | Windows/Mac system files | Skips system-generated files |
+| 6 | `test_temp_files_should_skip` | Files: file.tmp, cache.cache, backup.bak | should_scan=False for all | Temporary file extensions | Skips temporary and backup files |
 
 ### test_post_scan.py
 

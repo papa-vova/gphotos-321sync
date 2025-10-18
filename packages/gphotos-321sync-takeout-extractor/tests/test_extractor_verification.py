@@ -3,7 +3,6 @@
 import pytest
 import zipfile
 import zlib
-import unicodedata
 from pathlib import Path
 from gphotos_321sync.takeout_extractor.extractor import (
     ArchiveDiscovery,
@@ -477,17 +476,7 @@ class TestEdgeCases:
 
 
 class TestUnicodePathHandling:
-    """Test Unicode path normalization and verification across multiple languages."""
-    
-    def test_normalize_unicode_path_nfc(self):
-        """Test that normalize_unicode_path converts to NFC form."""
-        # NFD (decomposed) form of "café"
-        nfd_path = "cafe\u0301"  # e + combining acute accent
-        # NFC (composed) form of "café"
-        nfc_path = "café"
-        
-        assert normalize_unicode_path(nfd_path) == nfc_path
-        assert normalize_unicode_path(nfc_path) == nfc_path
+    """Test Unicode path verification with files from multiple languages."""
     
     def test_cyrillic_filenames(self, tmp_path):
         """Test extraction and verification with Cyrillic filenames."""
