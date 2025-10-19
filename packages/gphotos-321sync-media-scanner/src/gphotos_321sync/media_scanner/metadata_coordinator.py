@@ -145,97 +145,116 @@ def coordinate_metadata(
     Raises:
         Exception: Any errors during processing (caller should handle)
     """
-    # 1. Parse JSON sidecar if present (I/O operation)
-    json_metadata = {}
-    if file_info.json_sidecar_path:
+    try:
+        # 1. Parse JSON sidecar if present (I/O operation)
+        json_metadata = {}
+        if file_info.json_sidecar_path:
+            try:
+                json_metadata = parse_json_sidecar(file_info.json_sidecar_path)
+                logger.debug(f"Parsed JSON sidecar for {file_info.relative_path}")
+            except (ParseError, Exception) as e:
+                logger.warning(f"Failed to parse JSON sidecar for {file_info.relative_path}: {e}")
+                # Continue without JSON metadata
+        
+        # 2. Extract data from metadata extraction result
+        exif_data = metadata_ext.get('exif_data', {})
+        video_data = metadata_ext.get('video_data', {})
+        
+        # 3. Aggregate metadata (apply precedence rules: JSON > EXIF > filename > NULL)
         try:
-            json_metadata = parse_json_sidecar(file_info.json_sidecar_path)
-            logger.debug(f"Parsed JSON sidecar for {file_info.relative_path}")
-        except (ParseError, Exception) as e:
-            logger.warning(f"Failed to parse JSON sidecar for {file_info.relative_path}: {e}")
-            # Continue without JSON metadata
-    
-    # 2. Extract data from metadata extraction result
-    exif_data = metadata_ext.get('exif_data', {})
-    video_data = metadata_ext.get('video_data', {})
-    
-    # 3. Aggregate metadata (apply precedence rules: JSON > EXIF > filename > NULL)
-    aggregated = aggregate_metadata(
-        file_path=file_info.file_path,
-        json_metadata=json_metadata,
-        exif_data=exif_data,
-        video_data=video_data
-    )
-    
-    # 4. Generate media_item_id (UUID5 - deterministic based on canonical tuple)
-    # Canonical tuple: (relative_path, photoTakenTime, file_size, creationTime)
-    # This ensures the same media item gets the same UUID on re-imports
-    media_item_id = _generate_media_item_id(
-        relative_path=file_info.relative_path,
-        json_metadata=json_metadata,
-        file_size=file_info.file_size
-    )
-    
-    # 5. Extract EXIF fields
-    exif_datetime_original = exif_data.get('datetime_original')
-    exif_datetime_digitized = exif_data.get('datetime_digitized')
-    exif_gps = exif_data.get('gps', {})
-    exif_camera_make = exif_data.get('camera_make')
-    exif_camera_model = exif_data.get('camera_model')
-    exif_lens_make = exif_data.get('lens_make')
-    exif_lens_model = exif_data.get('lens_model')
-    exif_focal_length = exif_data.get('focal_length')
-    exif_f_number = exif_data.get('f_number')
-    exif_iso = exif_data.get('iso')
-    exif_exposure_time = exif_data.get('exposure_time')
-    exif_orientation = exif_data.get('orientation')
-    
-    # 6. Extract Google Photos metadata from JSON
-    google_description = json_metadata.get('description')
-    google_geo = json_metadata.get('geoData', {})
-    
-    # 7. Extract video metadata
-    duration_seconds = video_data.get('duration') if video_data else None
-    frame_rate = video_data.get('frame_rate') if video_data else None
-    
-    # 8. Create MediaItemRecord
-    record = MediaItemRecord(
-        media_item_id=media_item_id,
-        relative_path=normalize_path(file_info.relative_path),
-        album_id=album_id,
-        title=aggregated.get('title'),
-        mime_type=metadata_ext.get('mime_type'),
-        file_size=file_info.file_size,
-        crc32=metadata_ext.get('crc32'),
-        content_fingerprint=metadata_ext.get('content_fingerprint'),
-        width=metadata_ext.get('width'),
-        height=metadata_ext.get('height'),
-        duration_seconds=duration_seconds,
-        frame_rate=frame_rate,
-        capture_timestamp=aggregated.get('capture_timestamp'),
-        exif_datetime_original=exif_datetime_original,
-        exif_datetime_digitized=exif_datetime_digitized,
-        exif_gps_latitude=exif_gps.get('latitude'),
-        exif_gps_longitude=exif_gps.get('longitude'),
-        exif_gps_altitude=exif_gps.get('altitude'),
-        exif_camera_make=exif_camera_make,
-        exif_camera_model=exif_camera_model,
-        exif_lens_make=exif_lens_make,
-        exif_lens_model=exif_lens_model,
-        exif_focal_length=exif_focal_length,
-        exif_f_number=exif_f_number,
-        exif_iso=exif_iso,
-        exif_exposure_time=exif_exposure_time,
-        exif_orientation=exif_orientation,
-        google_description=google_description,
-        google_geo_latitude=google_geo.get('latitude'),
-        google_geo_longitude=google_geo.get('longitude'),
-        google_geo_altitude=google_geo.get('altitude'),
-        status='present',
-        scan_run_id=scan_run_id
-    )
-    
-    return record
+            aggregated = aggregate_metadata(
+                file_path=file_info.file_path,
+                json_metadata=json_metadata,
+                exif_data=exif_data,
+                video_data=video_data
+            )
+        except Exception as e:
+            logger.error(f"Failed to aggregate metadata for {file_info.relative_path}: {e}", exc_info=True)
+            # Use empty aggregated metadata as fallback
+            aggregated = {}
+        
+        # 4. Generate media_item_id (UUID5 - deterministic based on canonical tuple)
+        # Canonical tuple: (relative_path, photoTakenTime, file_size, creationTime)
+        # This ensures the same media item gets the same UUID on re-imports
+        try:
+            media_item_id = _generate_media_item_id(
+                relative_path=file_info.relative_path,
+                json_metadata=json_metadata,
+                file_size=file_info.file_size
+            )
+        except Exception as e:
+            logger.error(f"Failed to generate media_item_id for {file_info.relative_path}: {e}", exc_info=True)
+            # Generate fallback UUID based on file path only
+            media_item_id = str(uuid.uuid5(MEDIA_ITEM_NAMESPACE, file_info.relative_path))
+        
+        # 5. Extract EXIF fields
+        exif_datetime_original = exif_data.get('datetime_original')
+        exif_datetime_digitized = exif_data.get('datetime_digitized')
+        exif_gps = exif_data.get('gps', {})
+        exif_camera_make = exif_data.get('camera_make')
+        exif_camera_model = exif_data.get('camera_model')
+        exif_lens_make = exif_data.get('lens_make')
+        exif_lens_model = exif_data.get('lens_model')
+        exif_focal_length = exif_data.get('focal_length')
+        exif_f_number = exif_data.get('f_number')
+        exif_iso = exif_data.get('iso')
+        exif_exposure_time = exif_data.get('exposure_time')
+        exif_orientation = exif_data.get('orientation')
+        
+        # 6. Extract Google Photos metadata from JSON
+        google_description = json_metadata.get('description')
+        google_geo = json_metadata.get('geoData', {})
+        
+        # 7. Extract video metadata
+        duration_seconds = video_data.get('duration') if video_data else None
+        frame_rate = video_data.get('frame_rate') if video_data else None
+        
+        # 8. Create MediaItemRecord
+        record = MediaItemRecord(
+            media_item_id=media_item_id,
+            relative_path=normalize_path(file_info.relative_path),
+            album_id=album_id,
+            title=aggregated.get('title'),
+            mime_type=metadata_ext.get('mime_type'),
+            file_size=file_info.file_size,
+            crc32=metadata_ext.get('crc32'),
+            content_fingerprint=metadata_ext.get('content_fingerprint'),
+            width=metadata_ext.get('width'),
+            height=metadata_ext.get('height'),
+            duration_seconds=duration_seconds,
+            frame_rate=frame_rate,
+            capture_timestamp=aggregated.get('capture_timestamp'),
+            exif_datetime_original=exif_datetime_original,
+            exif_datetime_digitized=exif_datetime_digitized,
+            exif_gps_latitude=exif_gps.get('latitude'),
+            exif_gps_longitude=exif_gps.get('longitude'),
+            exif_gps_altitude=exif_gps.get('altitude'),
+            exif_camera_make=exif_camera_make,
+            exif_camera_model=exif_camera_model,
+            exif_lens_make=exif_lens_make,
+            exif_lens_model=exif_lens_model,
+            exif_focal_length=exif_focal_length,
+            exif_f_number=exif_f_number,
+            exif_iso=exif_iso,
+            exif_exposure_time=exif_exposure_time,
+            exif_orientation=exif_orientation,
+            google_description=google_description,
+            google_geo_latitude=google_geo.get('latitude'),
+            google_geo_longitude=google_geo.get('longitude'),
+            google_geo_altitude=google_geo.get('altitude'),
+            status='present',
+            scan_run_id=scan_run_id
+        )
+        
+        return record
+        
+    except Exception as e:
+        logger.error(
+            f"Critical error in coordinate_metadata for {file_info.relative_path}: {e}",
+            exc_info=True
+        )
+        # Re-raise to let worker thread handle it
+        raise
 
 
 def _generate_media_item_id(

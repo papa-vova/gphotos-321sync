@@ -311,3 +311,162 @@ def test_parse_complete_takeout_json(temp_json_file):
     assert result['googlePhotosOrigin']['mobileUpload']['deviceType'] == "ANDROID_PHONE"
     assert result['googlePhotosOrigin']['mobileUpload']['deviceFolder']['localFolderName'] == "WhatsApp Images"
     assert result['appSource']['androidPackageName'] == "com.whatsapp"
+
+
+def test_parse_integer_timestamp(temp_json_file):
+    """Test parsing timestamp as raw integer (not string in dict)."""
+    data = {
+        "title": "IMG_001.jpg",
+        "photoTakenTime": {
+            "timestamp": 1609459200,  # INTEGER, not string
+            "formatted": "Jan 1, 2021, 12:00:00 AM UTC"
+        }
+    }
+    
+    temp_json_file.write_text(json.dumps(data), encoding='utf-8')
+    result = parse_json_sidecar(temp_json_file)
+    
+    assert result['photoTakenTime'] is not None
+    assert 'T' in result['photoTakenTime']  # ISO format
+    assert result['photoTakenTime'].startswith('2021-01-01T00:00:00')
+
+
+def test_parse_direct_integer_timestamp(temp_json_file):
+    """Test parsing timestamp as direct integer value (edge case)."""
+    data = {
+        "title": "IMG_002.jpg",
+        "photoTakenTime": 1609459200  # Direct integer, no dict wrapper
+    }
+    
+    temp_json_file.write_text(json.dumps(data), encoding='utf-8')
+    result = parse_json_sidecar(temp_json_file)
+    
+    # Should handle gracefully and convert to ISO format
+    assert result['photoTakenTime'] is not None
+    assert 'T' in result['photoTakenTime']
+    assert result['photoTakenTime'].startswith('2021-01-01T00:00:00')
+
+
+def test_parse_string_timestamp(temp_json_file):
+    """Test parsing timestamp as direct string (already ISO format)."""
+    data = {
+        "title": "IMG_003.jpg",
+        "photoTakenTime": "2021-01-01T00:00:00+00:00"  # Direct ISO string
+    }
+    
+    temp_json_file.write_text(json.dumps(data), encoding='utf-8')
+    result = parse_json_sidecar(temp_json_file)
+    
+    # Should return as-is
+    assert result['photoTakenTime'] == "2021-01-01T00:00:00+00:00"
+
+
+def test_parse_malformed_timestamp_dict(temp_json_file):
+    """Test parsing malformed timestamp dict (missing both timestamp and formatted)."""
+    data = {
+        "title": "IMG_004.jpg",
+        "photoTakenTime": {
+            "invalid_field": "some value"
+        }
+    }
+    
+    temp_json_file.write_text(json.dumps(data), encoding='utf-8')
+    result = parse_json_sidecar(temp_json_file)
+    
+    # Should handle gracefully and return None
+    assert result['photoTakenTime'] is None
+
+
+def test_parse_invalid_timestamp_value(temp_json_file):
+    """Test parsing invalid timestamp value (negative, out of range)."""
+    data = {
+        "title": "IMG_005.jpg",
+        "photoTakenTime": {
+            "timestamp": -1  # Invalid negative timestamp
+        }
+    }
+    
+    temp_json_file.write_text(json.dumps(data), encoding='utf-8')
+    result = parse_json_sidecar(temp_json_file)
+    
+    # Should handle gracefully and return None
+    assert result['photoTakenTime'] is None
+
+
+def test_parse_null_timestamp(temp_json_file):
+    """Test parsing null timestamp."""
+    data = {
+        "title": "IMG_006.jpg",
+        "photoTakenTime": None
+    }
+    
+    temp_json_file.write_text(json.dumps(data), encoding='utf-8')
+    result = parse_json_sidecar(temp_json_file)
+    
+    # Should handle gracefully
+    assert result.get('photoTakenTime') is None
+
+
+def test_parse_malformed_people_array(temp_json_file):
+    """Test parsing malformed people array (missing name field)."""
+    data = {
+        "title": "IMG_007.jpg",
+        "people": [
+            {"name": "Alice"},
+            {"invalid_field": "Bob"},  # Missing 'name' field
+            {"name": "Charlie"}
+        ]
+    }
+    
+    temp_json_file.write_text(json.dumps(data), encoding='utf-8')
+    result = parse_json_sidecar(temp_json_file)
+    
+    # Should extract valid names and skip invalid entries
+    assert len(result['people']) == 2
+    assert "Alice" in result['people']
+    assert "Charlie" in result['people']
+    assert "Bob" not in result['people']
+
+
+def test_parse_malformed_geo_data(temp_json_file):
+    """Test parsing malformed geo data (non-numeric values)."""
+    data = {
+        "title": "IMG_008.jpg",
+        "geoData": {
+            "latitude": "invalid",
+            "longitude": -122.4194,
+            "altitude": None
+        }
+    }
+    
+    temp_json_file.write_text(json.dumps(data), encoding='utf-8')
+    result = parse_json_sidecar(temp_json_file)
+    
+    # Should handle gracefully - extract what's valid, skip invalid
+    assert 'geoData' in result
+    # Invalid latitude should be skipped
+    assert 'latitude' not in result['geoData']
+    # Valid longitude should be parsed
+    assert result['geoData']['longitude'] == -122.4194
+    # None altitude should be skipped
+    assert 'altitude' not in result['geoData']
+
+
+def test_parse_mixed_timestamp_formats(temp_json_file):
+    """Test parsing with mixed timestamp formats in same file."""
+    data = {
+        "title": "IMG_009.jpg",
+        "photoTakenTime": 1609459200,  # Integer
+        "creationTime": {
+            "timestamp": "1609459300"  # String in dict
+        }
+    }
+    
+    temp_json_file.write_text(json.dumps(data), encoding='utf-8')
+    result = parse_json_sidecar(temp_json_file)
+    
+    # Both should be parsed successfully
+    assert result['photoTakenTime'] is not None
+    assert result['creationTime'] is not None
+    assert 'T' in result['photoTakenTime']
+    assert 'T' in result['creationTime']

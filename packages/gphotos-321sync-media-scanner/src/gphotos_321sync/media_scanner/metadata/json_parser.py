@@ -90,47 +90,74 @@ def parse_json_sidecar(json_path: Path) -> Dict[str, Any]:
     return metadata
 
 
-def _parse_photo_taken_time(photo_taken_time: Dict[str, Any]) -> Optional[str]:
+def _parse_photo_taken_time(photo_taken_time: Any) -> Optional[str]:
     """
     Parse photoTakenTime object to ISO timestamp.
     
     Args:
-        photo_taken_time: Dictionary with timestamp, formatted
+        photo_taken_time: Dictionary with timestamp/formatted, or int timestamp, or str
         
     Returns:
         ISO format timestamp string or None
     """
-    if 'timestamp' in photo_taken_time:
-        # Unix timestamp (seconds since epoch)
-        timestamp = int(photo_taken_time['timestamp'])
-        # Use timezone-aware datetime (UTC)
-        dt = datetime.fromtimestamp(timestamp, tz=timezone.utc)
-        return dt.isoformat()
-    elif 'formatted' in photo_taken_time:
-        # Try to parse formatted string
-        return _parse_formatted_timestamp(photo_taken_time['formatted'])
+    try:
+        # Handle direct integer timestamp
+        if isinstance(photo_taken_time, int):
+            dt = datetime.fromtimestamp(photo_taken_time, tz=timezone.utc)
+            return dt.isoformat()
+        
+        # Handle string (already formatted or ISO)
+        if isinstance(photo_taken_time, str):
+            return photo_taken_time
+        
+        # Handle dictionary
+        if isinstance(photo_taken_time, dict):
+            if 'timestamp' in photo_taken_time:
+                # Unix timestamp (seconds since epoch)
+                timestamp = int(photo_taken_time['timestamp'])
+                # Use timezone-aware datetime (UTC)
+                dt = datetime.fromtimestamp(timestamp, tz=timezone.utc)
+                return dt.isoformat()
+            elif 'formatted' in photo_taken_time:
+                # Try to parse formatted string
+                return _parse_formatted_timestamp(photo_taken_time['formatted'])
+    except (ValueError, TypeError, OSError) as e:
+        logger.debug(f"Failed to parse photo taken time: {e}")
     
     return None
 
 
-def _parse_timestamp(timestamp_data: Dict[str, Any]) -> Optional[str]:
+def _parse_timestamp(timestamp_data: Any) -> Optional[str]:
     """
     Parse generic timestamp object.
     
     Args:
-        timestamp_data: Dictionary with timestamp or formatted
+        timestamp_data: Dictionary with timestamp/formatted, or int timestamp, or str
         
     Returns:
         ISO format timestamp string or None
     """
-    if isinstance(timestamp_data, dict):
-        if 'timestamp' in timestamp_data:
-            timestamp = int(timestamp_data['timestamp'])
-            # Use timezone-aware datetime (UTC)
-            dt = datetime.fromtimestamp(timestamp, tz=timezone.utc)
+    try:
+        # Handle direct integer timestamp
+        if isinstance(timestamp_data, int):
+            dt = datetime.fromtimestamp(timestamp_data, tz=timezone.utc)
             return dt.isoformat()
-        elif 'formatted' in timestamp_data:
-            return _parse_formatted_timestamp(timestamp_data['formatted'])
+        
+        # Handle string (already formatted or ISO)
+        if isinstance(timestamp_data, str):
+            return timestamp_data
+        
+        # Handle dictionary
+        if isinstance(timestamp_data, dict):
+            if 'timestamp' in timestamp_data:
+                timestamp = int(timestamp_data['timestamp'])
+                # Use timezone-aware datetime (UTC)
+                dt = datetime.fromtimestamp(timestamp, tz=timezone.utc)
+                return dt.isoformat()
+            elif 'formatted' in timestamp_data:
+                return _parse_formatted_timestamp(timestamp_data['formatted'])
+    except (ValueError, TypeError, OSError) as e:
+        logger.debug(f"Failed to parse timestamp: {e}")
     
     return None
 
@@ -188,19 +215,34 @@ def _parse_geo_data(geo_data: Dict[str, Any]) -> Dict[str, float]:
     result = {}
     
     if 'latitude' in geo_data:
-        result['latitude'] = float(geo_data['latitude'])
+        try:
+            result['latitude'] = float(geo_data['latitude'])
+        except (ValueError, TypeError):
+            logger.debug(f"Failed to parse latitude: {geo_data['latitude']}")
     
     if 'longitude' in geo_data:
-        result['longitude'] = float(geo_data['longitude'])
+        try:
+            result['longitude'] = float(geo_data['longitude'])
+        except (ValueError, TypeError):
+            logger.debug(f"Failed to parse longitude: {geo_data['longitude']}")
     
     if 'altitude' in geo_data:
-        result['altitude'] = float(geo_data['altitude'])
+        try:
+            result['altitude'] = float(geo_data['altitude'])
+        except (ValueError, TypeError):
+            logger.debug(f"Failed to parse altitude: {geo_data['altitude']}")
     
     if 'latitudeSpan' in geo_data:
-        result['latitudeSpan'] = float(geo_data['latitudeSpan'])
+        try:
+            result['latitudeSpan'] = float(geo_data['latitudeSpan'])
+        except (ValueError, TypeError):
+            logger.debug(f"Failed to parse latitudeSpan: {geo_data['latitudeSpan']}")
     
     if 'longitudeSpan' in geo_data:
-        result['longitudeSpan'] = float(geo_data['longitudeSpan'])
+        try:
+            result['longitudeSpan'] = float(geo_data['longitudeSpan'])
+        except (ValueError, TypeError):
+            logger.debug(f"Failed to parse longitudeSpan: {geo_data['longitudeSpan']}")
     
     return result
 

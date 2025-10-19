@@ -4,11 +4,11 @@ Comprehensive documentation of all test suites in the gphotos-321sync project.
 
 ## Summary
 
-**Total: 340 tests** (12 + 42 + 286)
+**Total: 350 tests** (12 + 42 + 296)
 
 - **gphotos-321sync-common:** 12 tests
 - **gphotos-321sync-takeout-extractor:** 42 tests
-- **gphotos-321sync-media-scanner:** 286 tests
+- **gphotos-321sync-media-scanner:** 296 tests
 
 ---
 
@@ -320,9 +320,9 @@ Tests for content fingerprinting utilities (3 tests).
 
 ### test_json_parser.py
 
-Tests for JSON sidecar parser (17 tests).
+Tests for JSON sidecar parser (27 tests).
 
-**Rationale**: Ensures Google Takeout JSON metadata is correctly parsed, including new fields (imageViews, appSource), origin types (fromSharedAlbum), and timezone-aware timestamp handling.
+**Rationale**: Ensures Google Takeout JSON metadata is correctly parsed, including new fields (imageViews, appSource), origin types (fromSharedAlbum), timezone-aware timestamp handling, and robust error handling for malformed/unexpected data formats.
 
 | # | Test | Input | Output | Conditions/Assumptions | Logic |
 |---|------|-------|--------|----------------------|-------|
@@ -343,6 +343,15 @@ Tests for JSON sidecar parser (17 tests).
 | 15 | `test_parse_timezone_aware_timestamp` | JSON with photoTakenTime.timestamp="1609459200" | result['photoTakenTime']=="2021-01-01T00:00:00+00:00" (with timezone) | Unix timestamp | Tests timezone-aware datetime parsing. App uses datetime.fromtimestamp(timestamp, tz=timezone.utc) to ensure all timestamps are UTC-aware. Prevents DST bugs and cross-timezone issues. |
 | 16 | `test_parse_complete_takeout_json` | Real-world JSON with all fields: title, description, imageViews, creationTime, photoTakenTime, geoData, people, url, googlePhotosOrigin.mobileUpload, appSource | All fields correctly parsed | Complete real-world export | Integration test with actual Google Takeout JSON structure. Tests: imageViews="6", appSource.androidPackageName="com.whatsapp", googlePhotosOrigin.mobileUpload.deviceFolder.localFolderName="WhatsApp Images", people=["John Doe"]. Validates end-to-end parsing of modern (2024) Takeout format. |
 | 17 | `test_parse_timezone_aware_timestamp` | JSON with photoTakenTime.timestamp="1609459200" | Timestamp contains '+00:00' or 'Z', starts with '2021-01-01T00:00:00' | Timezone-aware parsing | Verifies parsed timestamps are timezone-aware (UTC) using datetime.fromtimestamp(timestamp, tz=timezone.utc). Critical for preventing DST bugs. |
+| 18 | `test_parse_integer_timestamp` | JSON with photoTakenTime.timestamp=1609459200 (INTEGER, not string) | result['photoTakenTime'] is ISO format starting with '2021-01-01T00:00:00' | Real Google Takeout data | Tests that parser handles integer timestamps in dict (Google sometimes exports timestamp as int, not string). Prevents TypeError: fromisoformat: argument must be str, not int. |
+| 19 | `test_parse_direct_integer_timestamp` | JSON with photoTakenTime=1609459200 (direct integer, no dict wrapper) | result['photoTakenTime'] is ISO format starting with '2021-01-01T00:00:00' | Edge case format | Tests parser handles timestamp as direct integer value (no dict). Rare but possible in malformed exports. |
+| 20 | `test_parse_string_timestamp` | JSON with photoTakenTime="2021-01-01T00:00:00+00:00" (direct ISO string) | result['photoTakenTime']=="2021-01-01T00:00:00+00:00" | Already formatted | Tests parser handles pre-formatted ISO strings (returns as-is). |
+| 21 | `test_parse_malformed_timestamp_dict` | JSON with photoTakenTime={"invalid_field": "value"} (missing timestamp and formatted) | result['photoTakenTime'] is None | Malformed data | Tests parser handles malformed timestamp dict gracefully (returns None instead of crashing). |
+| 22 | `test_parse_invalid_timestamp_value` | JSON with photoTakenTime.timestamp=-1 (negative, out of range) | result['photoTakenTime'] is None | Invalid timestamp | Tests parser handles invalid timestamp values (negative/out of range) gracefully. |
+| 23 | `test_parse_null_timestamp` | JSON with photoTakenTime=null | result.get('photoTakenTime') is None | Null value | Tests parser handles null timestamps gracefully. |
+| 24 | `test_parse_malformed_people_array` | JSON with people=[{"name": "Alice"}, {"invalid_field": "Bob"}, {"name": "Charlie"}] | result['people']==["Alice", "Charlie"] (Bob skipped) | Missing name field | Tests parser skips malformed people entries (missing 'name' field) and continues with valid ones. |
+| 25 | `test_parse_malformed_geo_data` | JSON with geoData={"latitude": "invalid", "longitude": -122.4194, "altitude": null} | result['geoData']=={'longitude': -122.4194} (invalid latitude skipped, null altitude skipped) | Non-numeric geo values | Tests parser handles non-numeric/null geo coordinates gracefully (skips invalid, keeps valid). |
+| 26 | `test_parse_mixed_timestamp_formats` | JSON with photoTakenTime=1609459200 (int), creationTime={"timestamp": "1609459300"} (string in dict) | Both timestamps parsed successfully to ISO format | Mixed formats in same file | Tests parser handles multiple timestamp formats in single JSON file. |
 
 ### test_mime_detector.py
 
