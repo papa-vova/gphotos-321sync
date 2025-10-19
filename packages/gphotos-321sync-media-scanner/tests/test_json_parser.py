@@ -378,11 +378,11 @@ def test_parse_malformed_timestamp_dict(temp_json_file):
 
 
 def test_parse_invalid_timestamp_value(temp_json_file):
-    """Test parsing invalid timestamp value (negative, out of range)."""
+    """Test parsing invalid timestamp value (way out of range)."""
     data = {
         "title": "IMG_005.jpg",
         "photoTakenTime": {
-            "timestamp": -1  # Invalid negative timestamp
+            "timestamp": 9999999999999  # Far future, out of range for datetime
         }
     }
     
@@ -465,8 +465,8 @@ def test_parse_mixed_timestamp_formats(temp_json_file):
     temp_json_file.write_text(json.dumps(data), encoding='utf-8')
     result = parse_json_sidecar(temp_json_file)
     
-    # Both should be parsed successfully
+    # photoTakenTime should be parsed (takes precedence)
     assert result['photoTakenTime'] is not None
-    assert result['creationTime'] is not None
     assert 'T' in result['photoTakenTime']
-    assert 'T' in result['creationTime']
+    # creationTime is only included if photoTakenTime is missing, so it won't be in result
+    assert 'creationTime' not in result

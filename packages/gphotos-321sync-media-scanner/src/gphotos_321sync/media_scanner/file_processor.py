@@ -74,6 +74,15 @@ def process_file_cpu_work(
     }
     
     try:
+        # Check if file exists first
+        if not file_path.exists():
+            error_msg = f"File does not exist: {file_path}"
+            logger.error(error_msg)
+            result['error'] = error_msg
+            result['error_category'] = 'io'
+            result['success'] = False
+            return result
+        
         # 1. Detect MIME type (reads magic bytes from file header)
         try:
             mime_type = detect_mime_type(file_path)
