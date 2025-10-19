@@ -44,6 +44,12 @@ class MediaItemDAL:
         media_item_id = item.media_item_id
         relative_path = item.relative_path
         
+        # Validate exif_orientation: must be NULL or 1-8
+        exif_orientation = item.exif_orientation
+        if exif_orientation is not None and (exif_orientation < 1 or exif_orientation > 8):
+            logger.warning(f"Invalid exif_orientation {exif_orientation} for {relative_path}, setting to None")
+            exif_orientation = None
+        
         cursor = self.db.execute(
             """
             INSERT INTO media_items (
@@ -100,7 +106,7 @@ class MediaItemDAL:
                 item.exif_f_number,
                 item.exif_exposure_time,
                 item.exif_iso,
-                item.exif_orientation,
+                exif_orientation,  # Validated above
                 None,  # exif_flash (not in MediaItemRecord yet)
                 None,  # exif_white_balance (not in MediaItemRecord yet)
                 item.google_description,

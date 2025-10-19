@@ -152,7 +152,7 @@ class ParallelScanner:
             if total_files == 0:
                 logger.warning("No files found to process")
                 scan_run_dal.complete_scan_run(scan_run_id, "completed")
-                conn.close()
+                db_conn.close()
                 return {
                     "scan_run_id": scan_run_id,
                     "status": "completed",
@@ -165,7 +165,7 @@ class ParallelScanner:
             
             # CRITICAL: Close main connection before parallel processing
             # Writer thread will open its own connection
-            conn.close()
+            db_conn.close()  # Close via DatabaseConnection to clear cached connection
             logger.debug("Closed main connection before parallel processing")
             
             # Initialize components
@@ -215,7 +215,7 @@ class ParallelScanner:
             raise
         
         finally:
-            conn.close()
+            db_conn.close()
     
     def _initialize_components(self, total_files: int) -> None:
         """Initialize parallel processing components."""
