@@ -5,8 +5,26 @@
 #   Mac:     ~/Library/Application Support/gphotos-321sync-takeout-extractor/config.toml
 
 [extraction]
+# REQUIRED: Directory containing Takeout archives
 source_dir = "G:\\My Drive\\Takeout"
+
+# REQUIRED: Target media directory to extract archives to
 target_media_path = "C:\\Users\\papav\\takeout_tests"
+
+# Optional: Verify file checksums after extraction (default: true)
+# verify_checksums = true
+
+# Optional: Enable resuming interrupted extractions (default: true)
+# enable_resume = true
+
+# Optional: Verify extracted files match archive contents (default: true)
+# verify_extracted_files = true
+
+# Optional: Maximum number of retry attempts for failed extractions (default: 10)
+# max_retry_attempts = 10
+
+# Optional: Initial delay in seconds before retrying, doubles each attempt (default: 32.0)
+# initial_retry_delay = 32.0
 
 # Optional: Logging configuration
 [logging]

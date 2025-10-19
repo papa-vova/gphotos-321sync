@@ -38,6 +38,9 @@ dev = [
     "mypy>=1.7.0",
 ]
 
+[project.scripts]
+gphotos_321sync.media_scanner = "gphotos_321sync.media_scanner.cli:main"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 

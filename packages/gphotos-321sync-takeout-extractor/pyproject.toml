@@ -37,7 +37,7 @@ dev = [
 ]
 
 [project.scripts]
-gphotos-extract = "gphotos_321sync.takeout_extractor.cli:main"
+gphotos_321sync.takeout_extractor = "gphotos_321sync.takeout_extractor.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

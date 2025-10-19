@@ -5,15 +5,19 @@
 #   Mac:     ~/Library/Application Support/gphotos-321sync-media-scanner/config.toml
 
 [scanner]
-# Target media path (extracted Takeout files)
+# REQUIRED: Target media path (extracted Takeout files)
 target_media_path = "C:\\Users\\papav\\takeout_tests"
 
-# Optional: Custom database path (defaults to target_media_path/media.db)
+# Optional: Custom database path (default: target_media_path/media.db)
 # database_path = "C:\\Users\\papav\\media.db"
 
-# Tool availability (both optional, default: false)
-use_ffprobe = true          # Extract video metadata (duration, fps, resolution)
-use_exiftool = true         # Extract EXIF from RAW formats (CR2, NEF, ARW, DNG)
+# Optional: Use ffprobe for video metadata extraction (default: false)
+# Requires ffmpeg/ffprobe installed and available in PATH
+# use_ffprobe = true
+
+# Optional: Use exiftool for RAW format EXIF extraction (default: false)
+# Requires exiftool installed and available in PATH
+# use_exiftool = true
 
 # Optional: Performance tuning (auto-detected by default)
 # worker_threads = 16       # I/O threads (default: 2 × CPU cores)
