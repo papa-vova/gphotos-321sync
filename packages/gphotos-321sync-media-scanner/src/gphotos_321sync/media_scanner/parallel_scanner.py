@@ -141,6 +141,7 @@ class ParallelScanner:
             # Phase 2: File discovery
             logger.info("Phase 2: Discovering files...")
             logger.info("Scanning directory tree for media files and JSON sidecars...")
+            logger.debug("Building file list (this may take a while for large libraries)...")
             files_to_process = list(discover_files(target_media_path))
             total_files = len(files_to_process)
             

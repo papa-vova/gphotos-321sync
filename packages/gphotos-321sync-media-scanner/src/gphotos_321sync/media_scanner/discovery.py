@@ -182,8 +182,10 @@ def discover_files(target_media_path: Path) -> Iterator[FileInfo]:
     logger.info(f"Found {len(json_sidecars)} JSON sidecar files")
     
     # Second pass: discover all files and pair with sidecars
+    logger.debug("Discovering media files and pairing with sidecars...")
     files_discovered = 0
     files_with_sidecars = 0
+    progress_interval = 1000  # Log every 1000 files
     
     # CRITICAL: Scan from scan_root, not target_media_path
     for file_path in scan_root.rglob("*"):
@@ -286,6 +288,10 @@ def discover_files(target_media_path: Path) -> Iterator[FileInfo]:
             files_with_sidecars += 1
         
         files_discovered += 1
+        
+        # Progress logging
+        if files_discovered % progress_interval == 0:
+            logger.debug(f"Discovery progress: {files_discovered} files found, {files_with_sidecars} with sidecars")
         
         yield FileInfo(
             file_path=file_path,
