@@ -17,35 +17,38 @@ A **work item** is a tuple of `(FileInfo, album_id)`:
 ```python
 @dataclass
 class FileInfo:
-    file_path: Path           # Absolute path to the media file
-    relative_path: Path       # Path relative to scan root
-    album_folder_path: Path   # Album folder RELATIVE path (for album_id lookup)
-    json_sidecar_path: Optional[Path]  # Path to JSON sidecar if exists
+    file_path: Path           # ABSOLUTE path to the media file on disk
+    relative_path: Path       # Path relative to scan root (stored in DB, excludes Takeout/Google Photos)
+    album_folder_path: Path   # Path relative to scan root (for album_id lookup, excludes Takeout/Google Photos)
+    json_sidecar_path: Optional[Path]  # ABSOLUTE path to JSON sidecar if exists, or None
     file_size: int            # Size of the file in bytes
 ```
 
 **Example:**
 
-If scanning target media path `/mnt/photos/` and finding `/mnt/photos/2023/Vacation/IMG_1234.jpg`:
+If scanning target_media_path=`/mnt/photos/` with Takeout structure:
+
+- Scan root: `/mnt/photos/Takeout/Google Photos/` (where albums live)
+- File: `/mnt/photos/Takeout/Google Photos/Photos from 2023/IMG_1234.jpg`
 
 ```python
 FileInfo(
-    file_path=Path("/mnt/photos/2023/Vacation/IMG_1234.jpg"),
-    relative_path=Path("2023/Vacation/IMG_1234.jpg"),
-    album_folder_path=Path("2023/Vacation"),  # RELATIVE path
-    json_sidecar_path=Path("/mnt/photos/2023/Vacation/IMG_1234.jpg.json"),  # or None
+    file_path=Path("/mnt/photos/Takeout/Google Photos/Photos from 2023/IMG_1234.jpg"),  # ABSOLUTE
+    relative_path=Path("Photos from 2023/IMG_1234.jpg"),  # relative to scan root
+    album_folder_path=Path("Photos from 2023"),  # relative to scan root
+    json_sidecar_path=Path("/mnt/photos/Takeout/Google Photos/Photos from 2023/IMG_1234.jpg.json"),  # ABSOLUTE or None
     file_size=2048576  # bytes
 )
-album_id="uuid-for-vacation-album"  # Looked up from album_map["2023/Vacation"]
+album_id="uuid-for-photos-from-2023"  # Looked up from album_map["Photos from 2023"]
 ```
 
 **Field Purposes:**
 
-- **`file_path`**: Used to read the actual media file for processing
-- **`relative_path`**: Stored in database as the file's identifier (portable across systems, relative to target_media_path)
-- **`album_folder_path`**: Used to lookup which album this file belongs to (see Album Relationship below)
-- **`json_sidecar_path`**: Google Takeout metadata file (contains timestamps, GPS, description)
-- **`file_size`**: Used for change detection (if size changed, file changed)
+- **`file_path`**: ABSOLUTE path - used to read the actual media file for processing
+- **`relative_path`**: Path relative to scan root - stored in database, portable
+- **`album_folder_path`**: Path relative to scan root - used to lookup album
+- **`json_sidecar_path`**: ABSOLUTE path or None - Google Takeout metadata file
+- **`file_size`**: File size in bytes - used for change detection
 
 ### Album Relationship
 

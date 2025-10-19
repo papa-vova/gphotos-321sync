@@ -98,11 +98,19 @@ class ParallelScanner:
     def scan(self, target_media_path: Path) -> dict:
         """Scan directory tree and catalog media files.
         
+        IMPORTANT: Automatically detects Google Takeout structure.
+        If "Takeout/Google Photos/" subfolder exists, albums are scanned from there.
+        
         Args:
             target_media_path: Target media directory to scan
             
         Returns:
-            Scan result summary dict
+            Scan result summary dict with keys:
+            - scan_run_id: UUID of this scan run
+            - status: 'completed' or 'failed'
+            - total_files: Number of files discovered
+            - files_processed: Number of files successfully processed
+            - duration_seconds: Total scan duration
         """
         logger.info(f"Starting parallel scan of: {target_media_path}")
         
@@ -132,10 +140,13 @@ class ParallelScanner:
             
             # Phase 2: File discovery
             logger.info("Phase 2: Discovering files...")
+            logger.info("Scanning directory tree for media files and JSON sidecars...")
             files_to_process = list(discover_files(target_media_path))
             total_files = len(files_to_process)
             
             logger.info(f"Discovered {total_files} files to process")
+            if total_files > 0:
+                logger.info(f"Starting parallel processing: {self.worker_processes} processes, {self.worker_threads} threads")
             
             if total_files == 0:
                 logger.warning("No files found to process")
@@ -158,7 +169,9 @@ class ParallelScanner:
             self._start_workers(scan_run_id)
             
             # Populate work queue
+            logger.info("Submitting files to processing queue...")
             self._populate_work_queue(files_to_process, album_map, target_media_path)
+            logger.info("All files queued. Processing in progress (progress updates every 100 files)...")
             
             # Wait for completion
             self._wait_for_completion()
@@ -249,6 +262,8 @@ class ParallelScanner:
                 scan_run_id,
                 self.batch_size,
                 self.shutdown_event,
+                100,  # progress_interval
+                self.progress_tracker,  # Pass progress tracker for ETA display
             ),
             name="Writer",
         )

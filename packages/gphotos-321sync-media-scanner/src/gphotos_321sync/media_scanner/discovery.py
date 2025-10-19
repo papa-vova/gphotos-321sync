@@ -34,11 +34,10 @@ class FileInfo:
 def discover_files(target_media_path: Path) -> Iterator[FileInfo]:
     """Discover all media files in the directory tree.
     
-    Walks the directory tree starting from target_media_path, identifies media files
-    and their JSON sidecars, and yields FileInfo objects for each media file.
+    Automatically detects Google Takeout structure and makes paths relative to album root.
     
     Args:
-        target_media_path: Target media directory to scan
+        target_media_path: Target media directory to scan (ABSOLUTE path)
         
     Yields:
         FileInfo objects for each discovered media file
@@ -48,6 +47,7 @@ def discover_files(target_media_path: Path) -> Iterator[FileInfo]:
         - Does NOT filter by extension (MIME detection determines media type)
         - Pairs media files with .json sidecars when found
         - JSON sidecars are identified by naming pattern: <filename>.json
+        - relative_path and album_folder_path are relative to scan_root (excludes Takeout/Google Photos)
     """
     if not target_media_path.exists():
         logger.error(f"Target media path does not exist: {target_media_path}")
@@ -59,13 +59,24 @@ def discover_files(target_media_path: Path) -> Iterator[FileInfo]:
     
     logger.info(f"Starting file discovery from: {target_media_path}")
     
+    # Detect Google Takeout structure (same logic as album_discovery)
+    # scan_root is where albums actually live (excludes Takeout/Google Photos prefix)
+    google_photos_path = target_media_path / "Takeout" / "Google Photos"
+    if google_photos_path.exists() and google_photos_path.is_dir():
+        logger.debug(f"Using scan root: {google_photos_path}")
+        scan_root = google_photos_path
+    else:
+        logger.debug(f"Using scan root: {target_media_path}")
+        scan_root = target_media_path
+    
     # Build a map of JSON sidecars for efficient lookup
     # Key: media file path (e.g., parent/IMG_1234.jpg)
     # Value: Path to JSON sidecar file
     json_sidecars: dict[Path, Path] = {}
     
     # First pass: collect all JSON sidecars
-    for json_path in target_media_path.rglob("*.json"):
+    # CRITICAL: Scan from scan_root, not target_media_path
+    for json_path in scan_root.rglob("*.json"):
         if not should_scan_file(json_path):
             continue
         
@@ -174,7 +185,8 @@ def discover_files(target_media_path: Path) -> Iterator[FileInfo]:
     files_discovered = 0
     files_with_sidecars = 0
     
-    for file_path in target_media_path.rglob("*"):
+    # CRITICAL: Scan from scan_root, not target_media_path
+    for file_path in scan_root.rglob("*"):
         # Skip directories
         if file_path.is_dir():
             continue
@@ -195,14 +207,16 @@ def discover_files(target_media_path: Path) -> Iterator[FileInfo]:
             continue
         
         # Calculate relative path
+        # CRITICAL: Use scan_root, not target_media_path, to exclude "Takeout/Google Photos" prefix
+        # This makes paths portable (e.g., "Photos from 2023/IMG_1234.jpg" instead of "Takeout/Google Photos/Photos from 2023/IMG_1234.jpg")
         try:
-            relative_path = file_path.relative_to(target_media_path)
+            relative_path = file_path.relative_to(scan_root)
         except ValueError:
-            logger.warning(f"File is not relative to target media path: {file_path}")
+            logger.warning(f"File is not relative to scan root: {file_path}")
             continue
         
-        # Get album folder path (relative) for album_id
-        album_folder_path = file_path.parent.relative_to(target_media_path)
+        # Get album folder path (relative to scan_root) for album_id lookup
+        album_folder_path = file_path.parent.relative_to(scan_root)
         
         # Check for JSON sidecar
         # For edited files (e.g., IMG_1234-edited.jpg), look for original's sidecar

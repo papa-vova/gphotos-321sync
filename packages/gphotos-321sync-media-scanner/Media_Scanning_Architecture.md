@@ -27,7 +27,7 @@ This document outlines the architecture for scanning and cataloging Google Photo
 
 - Scanning can be interrupted and resumed without duplicate work
 - Change detection (two-tier approach):
-  1. **Fast check:** `(relative_path, file_size)` used only as an index lookup shortcut.
+  1. **Fast check:** `(relative_path, file_size)` [path relative to scan root, excludes Takeout/Google Photos] used only as an index lookup shortcut.
   2. **Content verification:** On every rescan, the scanner **always recomputes** the head+tail SHA-256 fingerprint and compares it with the stored value before deciding to skip. No early "continue" is allowed prior to this step.
   3. If fingerprint matches: skip full processing, update `scan_run_id` and `last_seen_timestamp`
   4. If fingerprint differs: full reprocessing (detects in-place edits, metadata changes, lossless rotations)
@@ -257,7 +257,7 @@ CREATE INDEX idx_errors_path ON processing_errors(relative_path);
 #### 1. Media Items
 
 - `media_item_id` (UUID5) - Primary key, deterministic UUID based on canonical tuple (relative_path, photoTakenTime, file_size, creationTime) - ensures same media item gets same ID on re-imports
-- `relative_path` (UNIQUE, normalized NFC, indexed) - Full path within Takeout
+- `relative_path` (UNIQUE, normalized NFC, indexed) - Path relative to scan root (e.g., "Photos from 2023/IMG_1234.jpg") [excludes Takeout/Google Photos prefix]
 - `album_id` (NOT NULL) - UUID5 of the album (every file is in a folder, every folder is an album)
 - `google_media_item_id` (UNIQUE) - Google Photos API media item ID (NULL for Takeout-only, populated during API sync)
 - `title` - From JSON metadata (precedence: JSON > filename)
@@ -282,14 +282,14 @@ CREATE INDEX idx_errors_path ON processing_errors(relative_path);
 
 **Lookup Strategy:**
 
-- `media_item_id`: UUID5 (deterministic), generated from canonical tuple (relative_path, photoTakenTime, file_size, creationTime) - same file always gets same ID
-- File lookup: Query by `relative_path` (UNIQUE, indexed) to check if file exists in database
+- `media_item_id`: UUID5 (deterministic), generated from canonical tuple (relative_path [relative to scan root], photoTakenTime, file_size, creationTime) - same file always gets same ID
+- File lookup: Query by `relative_path` [relative to scan root, excludes Takeout/Google Photos] (UNIQUE, indexed) to check if file exists in database
 - Re-import behavior: Same media item from repeated Takeout exports produces identical UUID5, enabling idempotent imports
 
 #### 2. Albums
 
-- `album_id` - UUID5(namespace, album_folder_path) for deterministic IDs
-- `album_folder_path` (UNIQUE, normalized NFC) - Path to album folder
+- `album_id` - UUID5(namespace, album_name) for deterministic IDs [album_name is just folder name, e.g., "Photos from 2023"]
+- `album_folder_path` (UNIQUE, normalized NFC) - Path relative to scan root (e.g., "Photos from 2023") [excludes Takeout/Google Photos prefix]
 - `google_album_id` (UNIQUE) - Google Photos API album ID (NULL for Takeout-only, populated during API sync)
 - `title`, `description`, `creation_timestamp`, `access_level`
 - `status` - CHECK('present', 'error', 'missing')
@@ -348,7 +348,7 @@ CREATE INDEX idx_errors_path ON processing_errors(relative_path);
 
 - `error_id` (INTEGER) - Primary key (autoincrement)
 - `scan_run_id` (UUID) - References Scan Runs
-- `relative_path` (TEXT) - Path to file that failed
+- `relative_path` (TEXT) - Path relative to scan root for the file that failed [excludes Takeout/Google Photos prefix]
 - `error_type` - CHECK('media_file', 'json_sidecar', 'album_metadata')
 - `error_category` - CHECK('permission_denied', 'corrupted', 'io_error', 'parse_error', 'unsupported_format')
 - `error_message` (TEXT) - Detailed error message
@@ -384,7 +384,7 @@ CREATE INDEX idx_errors_path ON processing_errors(relative_path);
 
 - Track file lifecycle with timestamps
 - Skip unchanged files (verified change detection):
-  1. Check `(relative_path, file_size)` in DB
+  1. Check `(relative_path [relative to scan root, excludes Takeout/Google Photos], file_size)` in DB
   2. If both match: compute content fingerprint (first 64KB + last 64KB)
   3. Compare fingerprint with stored value:
      - **Match:** Skip full processing (metadata extraction)

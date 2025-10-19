@@ -33,6 +33,7 @@ def writer_thread_main(
     batch_size: int,
     shutdown_event: Any,  # threading.Event
     progress_interval: int = 100,
+    progress_tracker: Optional[Any] = None,  # ProgressTracker
 ) -> None:
     """Main function for batch writer thread.
     
@@ -43,6 +44,7 @@ def writer_thread_main(
         batch_size: Number of records to batch per transaction
         shutdown_event: Event to signal shutdown
         progress_interval: Update progress every N files
+        progress_tracker: Optional progress tracker for detailed progress logging
     
     Returns:
         None (runs until shutdown_event is set and queue is empty)
@@ -101,9 +103,13 @@ def writer_thread_main(
                             scan_run_id=scan_run_id,
                             files_processed=total_written,
                         )
-                        logger.info(
-                            f"Progress: {total_written} files processed, {total_errors} errors"
-                        )
+                        # Use progress tracker if available (shows ETA and rate)
+                        if progress_tracker:
+                            progress_tracker.update(total_written)
+                        else:
+                            logger.info(
+                                f"Progress: {total_written} files processed, {total_errors} errors"
+                            )
                     
                     batch.clear()
                 

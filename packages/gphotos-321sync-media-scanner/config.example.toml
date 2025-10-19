@@ -5,7 +5,17 @@
 #   Mac:     ~/Library/Application Support/gphotos-321sync-media-scanner/config.toml
 
 [scanner]
-# REQUIRED: Target media path (extracted Takeout files)
+# REQUIRED: Target media path - MUST BE ABSOLUTE PATH
+# Point to the folder where you extracted Google Takeout
+# The scanner will automatically detect "Takeout/Google Photos/" subfolder
+# 
+# Structure should be:
+#   target_media_path/
+#   └── Takeout/
+#       └── Google Photos/    ← Albums are scanned from here
+#           ├── Photos from 2023/
+#           ├── My Album/
+#           └── ...
 target_media_path = "C:\\Users\\papav\\takeout_tests"
 
 # Optional: Custom database path (default: target_media_path/media.db)

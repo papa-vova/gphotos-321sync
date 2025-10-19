@@ -44,6 +44,9 @@ def scan_command(
 ) -> int:
     """Scan media directory and catalog files.
     
+    IMPORTANT: Automatically detects Google Takeout structure.
+    If "Takeout/Google Photos/" subfolder exists, albums are scanned from there.
+    
     Args:
         config: Configuration object
         target_media_path_override: Optional override for target media directory

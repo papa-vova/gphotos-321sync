@@ -31,12 +31,16 @@ class AlbumDAL:
     
     def generate_album_id(self, album_folder_path: str) -> str:
         """
-        Generate deterministic album ID from folder path.
+        Generate deterministic album ID from folder name.
         
-        Uses UUID5 with a namespace to ensure same path always generates same ID.
+        Uses UUID5 with a namespace to ensure same name always generates same ID.
+        
+        IMPORTANT: Pass ONLY the album folder name (e.g., "Photos from 2023"),
+        NOT the full path. This ensures consistent IDs regardless of where
+        the Takeout is extracted.
         
         Args:
-            album_folder_path: Normalized folder path
+            album_folder_path: Album folder name (NOT full path)
             
         Returns:
             Album ID (UUID5 string)

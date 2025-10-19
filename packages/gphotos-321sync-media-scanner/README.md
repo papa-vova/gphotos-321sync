@@ -2,6 +2,26 @@
 
 Scan and catalog media files from Google Photos Takeout.
 
+## ⚠️ IMPORTANT: Google Takeout Structure
+
+**Google Takeout places all albums in a specific subfolder structure:**
+
+```text
+target_media_path/               ← Point scanner here (ABSOLUTE path, e.g., C:\takeout_tests)
+└── Takeout/
+    └── Google Photos/           ← Albums are scanned from HERE
+        ├── Photos from 2023/
+        ├── Photos from 2024/
+        ├── My Album/
+        └── ...
+```
+
+**The scanner automatically detects this structure:**
+
+- If `Takeout/Google Photos/` exists, it scans albums from there
+- Otherwise, it scans from `target_media_path` directly (flat structure)
+- All paths stored in database are **relative to `target_media_path`**
+
 ## Installation
 
 ```bash
@@ -11,6 +31,8 @@ pip install gphotos-321sync-media-scanner
 ## Usage
 
 ### Command Line
+
+**Note**: `--target-media-path` must be an **absolute path** to your extraction folder.
 
 ```bash
 # Using default config file (recommended)
@@ -38,19 +60,26 @@ python -m gphotos_321sync.media_scanner --config /path/to/custom/config.toml
 
 ### Python API
 
+**Note**: All paths must be **absolute paths** (use `Path().resolve()` if needed).
+
 ```python
 from gphotos_321sync.media_scanner import ParallelScanner
 from pathlib import Path
 
+# Use absolute paths
+target_path = Path(r"C:\takeout_tests").resolve()  # Absolute path to extraction folder
+db_path = Path(r"C:\takeout_tests\media.db").resolve()  # Absolute path to database
+
 scanner = ParallelScanner(
-    db_path=Path("media.db"),
+    db_path=db_path,
     worker_processes=4,
     worker_threads=8,
     use_exiftool=False,
     use_ffprobe=False
 )
 
-results = scanner.scan(Path("/path/to/extracted/media"))
+# Scanner will automatically detect Takeout/Google Photos/ structure
+results = scanner.scan(target_path)
 print(f"Scan complete: {results}")
 ```
 
@@ -60,7 +89,9 @@ Create a `config.toml` file (see `config.example.toml`):
 
 ```toml
 [scanner]
-target_media_path = "/path/to/extracted/media"
+# ABSOLUTE path to your extraction folder (where Takeout/ is located)
+target_media_path = "C:\\takeout_tests"  # Windows
+# target_media_path = "/home/user/takeout_tests"  # Linux/Mac
 
 [logging]
 level = "INFO"

@@ -105,18 +105,29 @@ def extract_year_from_folder(folder_name: str) -> Optional[int]:
 def discover_albums(target_media_path: Path, album_dal: AlbumDAL, scan_run_id: str) -> Iterator[AlbumInfo]:
     """Discover and process albums from directory structure.
     
-    Discovers top-level folders only (Google Photos doesn't support nested albums):
+    IMPORTANT: Google Takeout Structure Detection
+    - Automatically detects "Takeout/Google Photos" subfolder
+    - If found, ONLY scans albums from within "Takeout/Google Photos/"
+    - Otherwise, scans albums from target_media_path directly
+    
+    Album Discovery:
     1. User albums: Folders with metadata.json
     2. Year-based albums: Folders named "Photos from YYYY"
     
+    Album ID Generation (Deterministic UUID5):
+    - Uses ONLY the album folder name (e.g., "Photos from 2023")
+    - Excludes target_media_path prefix
+    - Excludes "Takeout/Google Photos" prefix if present
+    - This ensures consistent IDs regardless of where Takeout is extracted
+    
     For each album:
-    - Generates UUID5 album_id from folder path
+    - Generates UUID5 album_id from album name only
     - Parses metadata.json if present (handles errors gracefully)
     - Inserts/updates album in database
     - Yields AlbumInfo for tracking
     
     Args:
-        target_media_path: Target media directory to scan
+        target_media_path: Root scan directory (e.g., C:\\takeout_tests)
         album_dal: Album data access layer for database operations
         scan_run_id: Current scan run ID
         
@@ -124,7 +135,7 @@ def discover_albums(target_media_path: Path, album_dal: AlbumDAL, scan_run_id: s
         AlbumInfo objects for each discovered album
         
     Note:
-        - Only top-level folders are discovered (no recursion)
+        - Google Photos doesn't support nested albums (only one level)
         - Every folder is treated as an album (album_id always generated)
         - Metadata parsing errors are logged and recorded in processing_errors
         - Albums are inserted into database immediately (needed before file processing)
@@ -143,25 +154,43 @@ def discover_albums(target_media_path: Path, album_dal: AlbumDAL, scan_run_id: s
     
     logger.info(f"Starting album discovery from: {target_media_path}")
     
+    # Detect Google Takeout structure: Takeout/Google Photos/
+    # This is CRITICAL - Google Takeout places all albums in this subfolder
+    # scan_root is where albums actually live (excludes Takeout/Google Photos prefix)
+    google_photos_path = target_media_path / "Takeout" / "Google Photos"
+    if google_photos_path.exists() and google_photos_path.is_dir():
+        logger.info(f"✓ Detected Google Takeout structure")
+        logger.info(f"  Scanning albums from: {google_photos_path}")
+        scan_root = google_photos_path
+    else:
+        logger.info(f"Using flat structure (no Takeout/Google Photos found)")
+        logger.info(f"  Scanning albums from: {target_media_path}")
+        scan_root = target_media_path
+    
     albums_discovered = 0
     user_albums = 0
     year_albums = 0
     errors = 0
     
-    # Walk directory to find top-level folders only (Google Photos doesn't support nested albums)
-    for folder_path in target_media_path.iterdir():
+    # Walk directory to find album folders (Google Photos doesn't support nested albums)
+    for folder_path in scan_root.iterdir():
         if not folder_path.is_dir():
             continue
         
-        # Calculate relative path for album_id generation
+        # Calculate relative path for database storage
+        # CRITICAL: Use scan_root, not target_media_path, to exclude "Takeout/Google Photos" prefix
+        # This makes paths portable (e.g., "Photos from 2023" instead of "Takeout/Google Photos/Photos from 2023")
         try:
-            album_folder_path = folder_path.relative_to(target_media_path)
+            album_folder_path = folder_path.relative_to(scan_root)
         except ValueError:
-            logger.warning(f"Folder is not relative to target media path: {folder_path}")
+            logger.warning(f"Folder is not relative to scan root: {folder_path}")
             continue
         
-        # Generate deterministic album_id from folder path
-        album_id = album_dal.generate_album_id(str(album_folder_path))
+        # Generate deterministic album_id from ALBUM NAME ONLY
+        # Exclude target_media_path and "Takeout/Google Photos" prefix
+        # This ensures consistent IDs regardless of extraction location
+        album_name = folder_path.name  # Just the folder name (e.g., "Photos from 2023")
+        album_id = album_dal.generate_album_id(album_name)
         
         # Check for metadata.json (user album)
         metadata_path = folder_path / "metadata.json"

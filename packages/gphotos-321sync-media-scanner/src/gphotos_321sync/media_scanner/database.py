@@ -91,10 +91,6 @@ class DatabaseConnection:
         cursor.execute("PRAGMA wal_autocheckpoint=1000")
         logger.debug("Set wal_autocheckpoint=1000")
         
-        # Enable foreign keys (even though we don't use them, good practice)
-        cursor.execute("PRAGMA foreign_keys=ON")
-        logger.debug("Set foreign_keys=ON")
-        
         cursor.close()
     
     @contextmanager
