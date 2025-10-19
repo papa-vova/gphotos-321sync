@@ -75,16 +75,30 @@ def process_file_cpu_work(
     
     try:
         # 1. Detect MIME type (reads magic bytes from file header)
-        mime_type = detect_mime_type(file_path)
-        result['mime_type'] = mime_type
+        try:
+            mime_type = detect_mime_type(file_path)
+            result['mime_type'] = mime_type
+        except Exception as e:
+            logger.debug(f"MIME type detection failed for {file_path}: {e}")
+            # Use a fallback - continue processing
+            mime_type = 'application/octet-stream'
+            result['mime_type'] = mime_type
         
         # 2. Calculate CRC32 (full file stream)
-        crc32_value = calculate_crc32(file_path)
-        result['crc32'] = crc32_value
+        try:
+            crc32_value = calculate_crc32(file_path)
+            result['crc32'] = crc32_value
+        except Exception as e:
+            logger.debug(f"CRC32 calculation failed for {file_path}: {e}")
+            # Not a critical error - continue processing
         
         # 3. Calculate content fingerprint (first 64KB + last 64KB)
-        fingerprint = compute_content_fingerprint(file_path, file_size)
-        result['content_fingerprint'] = fingerprint
+        try:
+            fingerprint = compute_content_fingerprint(file_path, file_size)
+            result['content_fingerprint'] = fingerprint
+        except Exception as e:
+            logger.debug(f"Content fingerprint calculation failed for {file_path}: {e}")
+            # Not a critical error - continue processing
         
         # 4. Extract EXIF metadata (if applicable)
         try:
@@ -95,19 +109,25 @@ def process_file_cpu_work(
             # Not a critical error - continue processing
         
         # 5. Extract resolution (width x height)
-        try:
-            width, height = extract_resolution(file_path)
-            result['width'] = width
-            result['height'] = height
-        except Exception as e:
-            logger.debug(f"Resolution extraction failed for {file_path}: {e}")
-            # Not a critical error - continue processing
+        # Only try to extract resolution for images, not videos
+        if not is_video_file(mime_type):
+            try:
+                width, height = extract_resolution(file_path)
+                result['width'] = width
+                result['height'] = height
+            except Exception as e:
+                logger.debug(f"Resolution extraction failed for {file_path}: {e}")
+                # Not a critical error - continue processing
         
         # 6. Extract video metadata (if video and ffprobe available)
         if is_video_file(mime_type) and use_ffprobe:
             try:
                 video_data = extract_video_metadata(file_path)
                 result['video_data'] = video_data
+                # Extract resolution from video metadata
+                if video_data and 'width' in video_data and 'height' in video_data:
+                    result['width'] = video_data['width']
+                    result['height'] = video_data['height']
             except Exception as e:
                 logger.debug(f"Video metadata extraction failed for {file_path}: {e}")
                 # Not a critical error - continue processing

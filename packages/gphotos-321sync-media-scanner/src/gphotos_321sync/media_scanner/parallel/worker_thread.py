@@ -166,7 +166,23 @@ def _process_file_work(
     
     # Wait for CPU work to complete
     # Worker thread blocks here, but other threads continue working
-    metadata_ext = cpu_future.get()
+    try:
+        metadata_ext = cpu_future.get(timeout=300)  # 5 minute timeout per file
+    except Exception as e:
+        # Handle process pool errors (crashes, timeouts, etc.)
+        logger.error(
+            f"Process pool error for {file_info.relative_path}: {e}",
+            exc_info=True
+        )
+        return {
+            "type": "error",
+            "file_path": str(file_info.file_path),
+            "relative_path": file_info.relative_path,
+            "error_type": "media_file",
+            "error_category": "process_pool_error",
+            "error_message": f"Worker process error: {str(e)}",
+            "scan_run_id": scan_run_id,
+        }
     
     # Check if CPU work resulted in an error
     if metadata_ext.get("error"):
@@ -277,7 +293,7 @@ def worker_thread_batch_main(
             # Drain results asynchronously
             for future, file_info, album_id in futures:
                 try:
-                    metadata_ext = future.get()
+                    metadata_ext = future.get(timeout=300)  # 5 minute timeout per file
                     
                     # Check for CPU errors
                     if metadata_ext.get("error"):
