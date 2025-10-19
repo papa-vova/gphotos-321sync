@@ -10,6 +10,10 @@ Usage:
 Example:
     python copy_test_data.py sample_files.txt /path/to/Takeout ./test_data
 
+Note:
+    - sample_file_list should contain RELATIVE paths (not absolute)
+    - Use sample_test_data.py with --source-root to generate proper relative paths
+
 IMPORTANT: This script is for local testing only. Do NOT commit the
 test data directory to the repository.
 """

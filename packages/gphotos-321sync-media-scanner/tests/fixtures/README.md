@@ -11,14 +11,14 @@ Creates a representative stratified sample from a file list.
 **Usage:**
 
 ```bash
-python sample_test_data.py <input_file_list> <output_sample_list> [--sample-rate 0.3]
+python sample_test_data.py <input_file_list> <output_sample_list> [--source-root /path/to/Takeout] [--sample-rate 0.3]
 ```
 
 **Example:**
 
 ```bash
-# Create a 30% sample from your file list
-python sample_test_data.py input_files.txt sample_files.txt --sample-rate 0.3
+# Create a 30% sample from your file list (converts absolute paths to relative)
+python sample_test_data.py input_files.txt sample_files.txt --source-root /path/to/Takeout --sample-rate 0.3
 ```
 
 **Features:**
@@ -60,10 +60,10 @@ python copy_test_data.py sample_files.txt /path/to/Takeout ./test_data --dry-run
    find /path/to/Takeout -type f > file_list.txt
    ```
 
-2. **Create sample**:
+2. **Create sample** (converts absolute paths to relative):
 
    ```bash
-   python sample_test_data.py file_list.txt sample_files.txt --sample-rate 0.3
+   python sample_test_data.py file_list.txt sample_files.txt --source-root /path/to/Takeout --sample-rate 0.3
    ```
 
 3. **Copy files**:

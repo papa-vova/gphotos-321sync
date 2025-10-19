@@ -21,18 +21,40 @@ from collections import defaultdict
 from typing import List, Dict, Set
 
 
-def parse_file_list(file_path: str) -> List[str]:
+def parse_file_list(file_path: str, source_root: Path = None) -> List[str]:
     """
-    Read file list from input file.
+    Read file list from input file and convert to relative paths.
     
     Args:
         file_path: Path to file containing list of files (one per line)
+        source_root: Optional source root to convert absolute paths to relative
         
     Returns:
-        List of file paths
+        List of file paths (relative if source_root provided, otherwise as-is)
     """
     with open(file_path, 'r', encoding='utf-8') as f:
-        return [line.strip() for line in f if line.strip()]
+        paths = [line.strip() for line in f if line.strip()]
+    
+    # Convert absolute paths to relative if source_root provided
+    if source_root:
+        source_root = source_root.resolve()
+        relative_paths = []
+        for path_str in paths:
+            path = Path(path_str)
+            # Try to make relative to source_root
+            try:
+                if path.is_absolute():
+                    relative_path = path.relative_to(source_root)
+                    relative_paths.append(str(relative_path))
+                else:
+                    # Already relative
+                    relative_paths.append(path_str)
+            except ValueError:
+                # Path not relative to source_root, keep as-is
+                relative_paths.append(path_str)
+        return relative_paths
+    
+    return paths
 
 
 def categorize_files(file_paths: List[str]) -> Dict[str, Dict[str, List[str]]]:
@@ -50,14 +72,14 @@ def categorize_files(file_paths: List[str]) -> Dict[str, Dict[str, List[str]]]:
     for file_path in file_paths:
         path = Path(file_path)
         
-        # Get album (parent directory)
-        album = str(path.parent)
+        # Get album (parent directory) - normalize to forward slashes
+        album = str(path.parent).replace('\\', '/')
         
         # Categorize by file type
         suffix = path.suffix.lower()
-        if suffix in ['.jpg', '.jpeg', '.png', '.heic', '.gif', '.bmp', '.webp']:
+        if suffix in ['.jpg', '.jpeg', '.png', '.heic', '.heif', '.gif', '.bmp', '.webp', '.tiff', '.tif']:
             file_type = 'image'
-        elif suffix in ['.mp4', '.mov', '.avi', '.mkv', '.webm']:
+        elif suffix in ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.m4v', '.3gp']:
             file_type = 'video'
         elif suffix == '.json':
             file_type = 'json'
@@ -69,6 +91,74 @@ def categorize_files(file_paths: List[str]) -> Dict[str, Dict[str, List[str]]]:
     return albums
 
 
+def _is_sidecar_for_media(json_path: Path, media_path: Path) -> bool:
+    """
+    Check if a JSON file is a sidecar for a media file.
+    
+    Matches the sidecar detection logic from discovery.py, including:
+    - Full pattern: media.jpg.supplemental-metadata.json
+    - Truncated patterns: media.jpg.supplemental-*.json (various truncations)
+    - Alternative pattern: media.json
+    - Edited variants: media-edited.jpg → media.jpg.supplemental-*.json
+    - Tilde duplicates: media~2.jpg → media.jpg.supplemental-*.json
+    
+    Args:
+        json_path: Path to JSON file
+        media_path: Path to media file
+        
+    Returns:
+        True if json_path is a sidecar for media_path
+    """
+    # Must be in same directory
+    if json_path.parent != media_path.parent:
+        return False
+    
+    # Skip album metadata
+    if json_path.name == 'metadata.json':
+        return False
+    
+    json_name = json_path.name
+    media_name = media_path.name
+    
+    # Pattern 1: .supplemental-* variants (most common)
+    if '.supplemental' in json_name:
+        # Extract media filename before .supplemental
+        if json_name.startswith(media_name + '.supplemental'):
+            return True
+        # Check for edited variants: media-edited.jpg → media.jpg.supplemental-*.json
+        if '-edited' in media_path.stem:
+            original_stem = media_path.stem.rsplit('-edited', 1)[0]
+            original_name = original_stem + media_path.suffix
+            if json_name.startswith(original_name + '.supplemental'):
+                return True
+        # Check for tilde duplicates: media~2.jpg → media.jpg.supplemental-*.json
+        if '~' in media_path.stem:
+            original_stem = media_path.stem.split('~')[0]
+            original_name = original_stem + media_path.suffix
+            if json_name.startswith(original_name + '.supplemental'):
+                return True
+    
+    # Pattern 2: Alternative .json pattern (for very long filenames)
+    elif json_name == media_path.stem + '.json':
+        return True
+    
+    # Pattern 3: Truncated alternative pattern (prefix matching)
+    # Example: very_long_filename.jpg → very_long_filen.json
+    elif json_path.suffix == '.json' and '.supplemental' not in json_name:
+        json_stem = json_path.stem
+        media_stem = media_path.stem
+        # Check prefix match (allowing up to 50 chars truncation)
+        if len(json_stem) >= 10 and len(json_stem) < len(media_stem):
+            if media_stem.startswith(json_stem) and len(media_stem) - len(json_stem) <= 50:
+                return True
+        # Check reverse: media might be truncated shorter
+        if len(media_stem) >= 10 and len(media_stem) < len(json_stem):
+            if json_stem.startswith(media_stem) and len(json_stem) - len(media_stem) <= 50:
+                return True
+    
+    return False
+
+
 def stratified_sample(
     albums: Dict[str, Dict[str, List[str]]],
     sample_rate: float = 0.3
@@ -78,8 +168,19 @@ def stratified_sample(
     
     Ensures representation from:
     - All albums (or at least 30% of albums if there are many)
-    - All file types within each album
-    - Maintains media + sidecar pairs
+    - All file types within each album (images, videos, other)
+    - Maintains media + sidecar pairs (all sidecar patterns)
+    
+    File type representativeness:
+    - Images: .jpg, .jpeg, .png, .heic, .heif, .gif, .bmp, .webp, .tiff, .tif
+    - Videos: .mp4, .mov, .avi, .mkv, .webm, .m4v, .3gp
+    - Other: All other extensions (e.g., .dng, .cr2, .nef for RAW files)
+    - Samples proportionally from each type within each album
+    
+    Sidecar pairing:
+    - Matches all Google Takeout patterns including truncated variants
+    - Handles -edited and ~N duplicate variants
+    - Always includes album metadata.json files
     
     Args:
         albums: Categorized files by album and type
@@ -105,8 +206,8 @@ def stratified_sample(
     for album in sampled_albums:
         file_types = albums[album]
         
-        # Sample media files (images and videos)
-        for media_type in ['image', 'video']:
+        # Sample media files (images, videos, and other formats like RAW)
+        for media_type in ['image', 'video', 'other']:
             if media_type in file_types:
                 media_files = file_types[media_type]
                 num_to_sample = max(1, int(len(media_files) * sample_rate))
@@ -117,17 +218,15 @@ def stratified_sample(
                 
                 # Add corresponding JSON sidecars if they exist
                 for media_file in sampled_media:
-                    # Check for various sidecar patterns
-                    sidecar_patterns = [
-                        f"{media_file}.json",
-                        f"{media_file}.supplemental-metadata.json",
-                        f"{media_file}.supplemental-me.json",
-                    ]
-                    
                     if 'json' in file_types:
-                        for sidecar in sidecar_patterns:
-                            if sidecar in file_types['json']:
-                                sampled_files.append(sidecar)
+                        media_path = Path(media_file)
+                        # Match all possible sidecar patterns from discovery.py
+                        # Including truncated variants due to Windows MAX_PATH
+                        for json_file in file_types['json']:
+                            json_path = Path(json_file)
+                            # Check if this JSON is a sidecar for this media file
+                            if _is_sidecar_for_media(json_path, media_path):
+                                sampled_files.append(json_file)
         
         # Always include album metadata.json if it exists
         if 'json' in file_types:
@@ -205,6 +304,10 @@ def main():
         help='Output file for sampled file list'
     )
     parser.add_argument(
+        '--source-root',
+        help='Source root directory to convert absolute paths to relative (e.g., /path/to/Takeout)'
+    )
+    parser.add_argument(
         '--sample-rate',
         type=float,
         default=0.3,
@@ -226,8 +329,13 @@ def main():
     # Set random seed for reproducibility
     random.seed(args.seed)
     
+    # Parse source root if provided
+    source_root = Path(args.source_root) if args.source_root else None
+    if source_root:
+        print(f"Converting absolute paths to relative (source root: {source_root})")
+    
     print(f"Reading file list from: {args.input_file}")
-    original_files = parse_file_list(args.input_file)
+    original_files = parse_file_list(args.input_file, source_root)
     
     print(f"Categorizing {len(original_files):,} files...")
     albums = categorize_files(original_files)
