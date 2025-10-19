@@ -176,7 +176,7 @@ def _write_batch(
     try:
         for result in batch:
             if result["type"] == "media_item":
-                # Insert media item
+                # Insert media item (no commit - we batch commit at the end)
                 record = result["record"]
                 media_dal.insert_media_item(record)
                 

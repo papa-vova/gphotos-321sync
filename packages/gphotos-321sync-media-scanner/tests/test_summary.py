@@ -88,6 +88,7 @@ def populated_db(test_db):
             file_size=1000 + i,
             scan_run_id=scan_run_id,
         ))
+    conn.commit()  # Tests must commit manually
     
     # Create missing files
     for i in range(3):

@@ -31,6 +31,10 @@ class MediaItemDAL:
         """
         Insert a new media item.
         
+        NOTE: Does NOT commit. Caller is responsible for committing.
+              Production: Writer thread commits batches.
+              Tests: Call db.commit() manually after inserts.
+        
         Args:
             item: MediaItemRecord with all media item data
                 
@@ -108,7 +112,7 @@ class MediaItemDAL:
             )
         )
         cursor.close()
-        self.db.commit()
+        # No commit - caller's responsibility (writer thread commits batches)
         
         logger.debug(f"Inserted media item: {media_item_id} ({relative_path})")
         return media_item_id

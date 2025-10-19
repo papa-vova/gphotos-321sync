@@ -130,6 +130,7 @@ class TestValidateScan:
             file_size=1000,
             scan_run_id=old_scan_run_id,
         ))
+        conn.commit()  # Tests must commit manually
         
         # Create new scan run (capture start time BEFORE creating scan)
         # Use UTC timezone-aware datetime
@@ -230,6 +231,7 @@ class TestValidateScan:
             file_size=1000,
             scan_run_id=scan_run_id,
         ))
+        conn.commit()  # Tests must commit manually
         
         # Error file
         error_item_id = str(uuid.uuid4())
@@ -286,6 +288,7 @@ class TestValidateScan:
             file_size=1000,
             scan_run_id=scan_run_id,
         ))
+        conn.commit()  # Tests must commit manually
         
         conn.close()
         
@@ -427,6 +430,7 @@ class TestCleanupOldScanData:
             file_size=1000,
             scan_run_id=old_scan_id,
         ))
+        conn.commit()  # Tests must commit manually
         
         scan_run_dal.complete_scan_run(old_scan_id, 'completed')
         

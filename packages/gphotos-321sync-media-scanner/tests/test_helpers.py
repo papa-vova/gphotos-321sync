@@ -1,4 +1,8 @@
-"""Test helper functions for creating test data."""
+"""Test helper functions for creating test data.
+
+IMPORTANT: Tests use auto_commit=True for convenience.
+Production code (writer thread) uses auto_commit=False for batch commits.
+"""
 
 from gphotos_321sync.media_scanner.metadata_coordinator import MediaItemRecord
 

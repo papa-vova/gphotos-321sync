@@ -147,6 +147,7 @@ def test_media_item_dal(migrated_db):
         scan_run_id=scan_run_id
     )
     returned_id = media_dal.insert_media_item(item_record)
+    migrated_db.commit()  # Tests must commit manually
     assert returned_id == media_item_id
     
     # Get media item by path

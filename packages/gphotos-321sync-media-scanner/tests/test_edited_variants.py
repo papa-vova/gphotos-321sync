@@ -160,6 +160,7 @@ class TestLinkEditedVariants:
             file_size=1100,
             scan_run_id=scan_run_id,
         ))
+        conn.commit()  # Tests must commit manually
         
         # Link variants
         edited_to_original = {
@@ -227,6 +228,8 @@ class TestLinkEditedVariants:
             
             edited_to_original[f"Photos/Test Album/IMG_{i}-edited.JPG"] = f"Photos/Test Album/IMG_{i}.JPG"
         
+        conn.commit()  # Tests must commit manually
+        
         # Link variants
         stats = link_edited_variants(conn, edited_to_original)
         
@@ -263,6 +266,7 @@ class TestLinkEditedVariants:
             file_size=1100,
             scan_run_id=scan_run_id,
         ))
+        conn.commit()  # Tests must commit manually
         
         # Try to link
         edited_to_original = {
@@ -304,6 +308,7 @@ class TestLinkEditedVariants:
             file_size=1000,
             scan_run_id=scan_run_id,
         ))
+        conn.commit()  # Tests must commit manually
         
         # Try to link
         edited_to_original = {
@@ -369,6 +374,7 @@ class TestDetectAndLinkEditedVariants:
             file_size=1500,
             scan_run_id=scan_run_id,
         ))
+        conn.commit()  # Tests must commit manually
         
         conn.close()
         
@@ -428,6 +434,7 @@ class TestDetectAndLinkEditedVariants:
             file_size=1500,
             scan_run_id=scan_run_id,
         ))
+        conn.commit()  # Tests must commit manually
         
         conn.close()
         
@@ -476,6 +483,7 @@ class TestDetectAndLinkEditedVariants:
                 scan_run_id=scan_run_id,
             ))
         
+        conn.commit()  # Tests must commit manually
         conn.close()
         
         # Run detection and linking

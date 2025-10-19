@@ -62,6 +62,7 @@ def populated_db(tmp_path, schema_dir):
             mime_type='image/jpeg',
             status='present'
         ))
+    db.commit()  # Tests must commit manually
     
     return db, scan_id, album_id
 
@@ -354,6 +355,7 @@ class TestDatabaseRecovery:
             mime_type='image/jpeg',
             status='present'
         ))
+        db.commit()  # Tests must commit manually
         
         # Verify insertion
         cursor = db.execute("SELECT COUNT(*) FROM media_items WHERE album_id = ?", (album_id,))
@@ -370,7 +372,6 @@ class TestCorruptionDetection:
         # Create database with a table but no schema_version
         conn = sqlite3.connect(db_path)
         conn.execute("CREATE TABLE dummy (id INTEGER PRIMARY KEY)")
-        conn.commit()
         conn.close()
         
         # Try to run migrations

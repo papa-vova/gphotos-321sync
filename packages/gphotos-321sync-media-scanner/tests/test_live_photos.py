@@ -196,6 +196,7 @@ class TestLinkLivePhotoPairs:
             file_size=2000,
             scan_run_id=scan_run_id,
         ))
+        conn.commit()  # Tests must commit manually
         
         # Create pair
         pairs = [
@@ -276,6 +277,8 @@ class TestLinkLivePhotoPairs:
                 FileInfo(relative_path=f"Photos/Test Album/IMG_{i}.MOV", media_item_id=video_id),
             ))
         
+        conn.commit()  # Tests must commit manually
+        
         # Link pairs
         stats = link_live_photo_pairs(conn, pairs)
         
@@ -318,6 +321,7 @@ class TestLinkLivePhotoPairs:
             file_size=2000,
             scan_run_id=scan_run_id,
         ))
+        conn.commit()  # Tests must commit manually
         
         # Create pair without media_item_id
         pairs = [
@@ -382,6 +386,7 @@ class TestDetectAndLinkLivePhotos:
             file_size=1500,
             scan_run_id=scan_run_id,
         ))
+        conn.commit()  # Tests must commit manually
         
         conn.close()
         
@@ -445,6 +450,7 @@ class TestDetectAndLinkLivePhotos:
             file_size=1500,
             scan_run_id=scan_run_id,
         ))
+        conn.commit()  # Tests must commit manually
         
         conn.close()
         
