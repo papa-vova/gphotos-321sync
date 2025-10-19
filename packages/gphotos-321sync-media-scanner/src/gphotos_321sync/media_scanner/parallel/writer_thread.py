@@ -170,8 +170,8 @@ def _write_batch(
     if not batch:
         return
     
-    # Begin transaction
-    conn.execute("BEGIN")
+    # Note: No explicit BEGIN - SQLite starts implicit transaction on first write
+    # We just commit at the end to batch all writes together
     
     try:
         for result in batch:
