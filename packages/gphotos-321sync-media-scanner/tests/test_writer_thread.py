@@ -14,6 +14,7 @@ from gphotos_321sync.media_scanner.parallel.writer_thread import (
 from gphotos_321sync.media_scanner.database import DatabaseConnection
 from gphotos_321sync.media_scanner.migrations import MigrationRunner
 from gphotos_321sync.media_scanner.dal.scan_runs import ScanRunDAL
+from tests.test_helpers import create_media_item_record
 
 
 @pytest.fixture
@@ -73,15 +74,15 @@ class TestWriterThread:
         for i in range(3):
             results_queue.put({
                 "type": "media_item",
-                "record": {
-                    "media_item_id": str(uuid.uuid4()),
-                    "relative_path": f"Photos/test{i}.jpg",
-                    "album_id": "album-123",
-                    "file_size": 1000 + i,
-                    "mime_type": "image/jpeg",
-                    "scan_run_id": scan_run_id,
-                    "status": "present",
-                }
+                "record": create_media_item_record(
+                    media_item_id=str(uuid.uuid4()),
+                    relative_path=f"Photos/test{i}.jpg",
+                    album_id="album-123",
+                    file_size=1000 + i,
+                    mime_type="image/jpeg",
+                    scan_run_id=scan_run_id,
+                    status="present",
+                )
             })
         
         # Add sentinel
@@ -146,15 +147,15 @@ class TestWriterThread:
         for i in range(10):
             results_queue.put({
                 "type": "media_item",
-                "record": {
-                    "media_item_id": str(uuid.uuid4()),
-                    "relative_path": f"Photos/test{i}.jpg",
-                    "album_id": "album-123",
-                    "file_size": 1000 + i,
-                    "mime_type": "image/jpeg",
-                    "scan_run_id": scan_run_id,
-                    "status": "present",
-                }
+                "record": create_media_item_record(
+                    media_item_id=str(uuid.uuid4()),
+                    relative_path=f"Photos/test{i}.jpg",
+                    album_id="album-123",
+                    file_size=1000 + i,
+                    mime_type="image/jpeg",
+                    scan_run_id=scan_run_id,
+                    status="present",
+                )
             })
         
         results_queue.put(None)
@@ -183,15 +184,15 @@ class TestWriterThread:
         # Add mix of items and errors
         results_queue.put({
             "type": "media_item",
-            "record": {
-                "media_item_id": str(uuid.uuid4()),
-                "relative_path": "Photos/good1.jpg",
-                "album_id": "album-123",
-                "file_size": 1000,
-                "mime_type": "image/jpeg",
-                "scan_run_id": scan_run_id,
-                "status": "present",
-            }
+            "record": create_media_item_record(
+                media_item_id=str(uuid.uuid4()),
+                relative_path="Photos/good1.jpg",
+                album_id="album-123",
+                file_size=1000,
+                mime_type="image/jpeg",
+                scan_run_id=scan_run_id,
+                status="present",
+            )
         })
         
         results_queue.put({
@@ -205,15 +206,15 @@ class TestWriterThread:
         
         results_queue.put({
             "type": "media_item",
-            "record": {
-                "media_item_id": str(uuid.uuid4()),
-                "relative_path": "Photos/good2.jpg",
-                "album_id": "album-123",
-                "file_size": 2000,
-                "mime_type": "image/jpeg",
-                "scan_run_id": scan_run_id,
-                "status": "present",
-            }
+            "record": create_media_item_record(
+                media_item_id=str(uuid.uuid4()),
+                relative_path="Photos/good2.jpg",
+                album_id="album-123",
+                file_size=2000,
+                mime_type="image/jpeg",
+                scan_run_id=scan_run_id,
+                status="present",
+            )
         })
         
         results_queue.put(None)
@@ -302,27 +303,27 @@ class TestWriteBatch:
         batch = [
             {
                 "type": "media_item",
-                "record": {
-                    "media_item_id": str(uuid.uuid4()),
-                    "relative_path": "Photos/test1.jpg",
-                    "album_id": "album-123",
-                    "file_size": 1000,
-                    "mime_type": "image/jpeg",
-                    "scan_run_id": scan_run_id,
-                    "status": "present",
-                }
+                "record": create_media_item_record(
+                    media_item_id=str(uuid.uuid4()),
+                    relative_path="Photos/test1.jpg",
+                    album_id="album-123",
+                    file_size=1000,
+                    mime_type="image/jpeg",
+                    scan_run_id=scan_run_id,
+                    status="present",
+                )
             },
             {
                 "type": "media_item",
-                "record": {
-                    "media_item_id": str(uuid.uuid4()),
-                    "relative_path": "Photos/test2.jpg",
-                    "album_id": "album-123",
-                    "file_size": 2000,
-                    "mime_type": "image/jpeg",
-                    "scan_run_id": scan_run_id,
-                    "status": "present",
-                }
+                "record": create_media_item_record(
+                    media_item_id=str(uuid.uuid4()),
+                    relative_path="Photos/test2.jpg",
+                    album_id="album-123",
+                    file_size=2000,
+                    mime_type="image/jpeg",
+                    scan_run_id=scan_run_id,
+                    status="present",
+                )
             },
         ]
         

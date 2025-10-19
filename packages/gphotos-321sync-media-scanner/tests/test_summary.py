@@ -14,6 +14,7 @@ from gphotos_321sync.media_scanner.dal.scan_runs import ScanRunDAL
 from gphotos_321sync.media_scanner.dal.media_items import MediaItemDAL
 from gphotos_321sync.media_scanner.dal.albums import AlbumDAL
 from gphotos_321sync.media_scanner.dal.processing_errors import ProcessingErrorDAL
+from tests.test_helpers import create_media_item_record
 
 
 @pytest.fixture
@@ -80,13 +81,13 @@ def populated_db(test_db):
     
     # Create media items with various statuses
     for i in range(75):
-        media_dal.insert_media_item({
-            'media_item_id': str(uuid.uuid4()),
-            'relative_path': f"Photos/Album {i % 5}/photo{i}.jpg",
-            'album_id': album_ids[i % 5],
-            'file_size': 1000 + i,
-            'scan_run_id': scan_run_id,
-        })
+        media_dal.insert_media_item(create_media_item_record(
+            media_item_id=str(uuid.uuid4()),
+            relative_path=f"Photos/Album {i % 5}/photo{i}.jpg",
+            album_id=album_ids[i % 5],
+            file_size=1000 + i,
+            scan_run_id=scan_run_id,
+        ))
     
     # Create missing files
     for i in range(3):

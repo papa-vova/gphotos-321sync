@@ -3,10 +3,12 @@
 import pytest
 import tempfile
 from pathlib import Path
+import uuid
 
 from gphotos_321sync.media_scanner.database import DatabaseConnection
 from gphotos_321sync.media_scanner.migrations import MigrationRunner
 from gphotos_321sync.media_scanner.dal import ScanRunDAL, AlbumDAL, MediaItemDAL, ProcessingErrorDAL
+from tests.test_helpers import create_media_item_record
 
 
 @pytest.fixture
@@ -135,17 +137,16 @@ def test_media_item_dal(migrated_db):
     })
     
     # Insert media item
-    import uuid
     media_item_id = str(uuid.uuid4())  # Generate test UUID
-    item_data = {
-        'media_item_id': media_item_id,
-        'relative_path': 'Photos from 2023/IMG_001.jpg',
-        'album_id': album_id,
-        'file_size': 1024000,
-        'mime_type': 'image/jpeg',
-        'scan_run_id': scan_run_id
-    }
-    returned_id = media_dal.insert_media_item(item_data)
+    item_record = create_media_item_record(
+        media_item_id=media_item_id,
+        relative_path='Photos from 2023/IMG_001.jpg',
+        album_id=album_id,
+        file_size=1024000,
+        mime_type='image/jpeg',
+        scan_run_id=scan_run_id
+    )
+    returned_id = media_dal.insert_media_item(item_record)
     assert returned_id == media_item_id
     
     # Get media item by path

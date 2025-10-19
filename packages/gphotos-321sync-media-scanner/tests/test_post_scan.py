@@ -15,6 +15,7 @@ from gphotos_321sync.media_scanner.dal.scan_runs import ScanRunDAL
 from gphotos_321sync.media_scanner.dal.media_items import MediaItemDAL
 from gphotos_321sync.media_scanner.dal.albums import AlbumDAL
 from gphotos_321sync.media_scanner.dal.processing_errors import ProcessingErrorDAL
+from tests.test_helpers import create_media_item_record
 
 
 @pytest.fixture
@@ -122,13 +123,13 @@ class TestValidateScan:
         
         # Create media item with old scan_run_id
         media_item_id = str(uuid.uuid4())
-        media_dal.insert_media_item({
-            'media_item_id': media_item_id,
-            'relative_path': "Photos/Test Album/old.jpg",
-            'album_id': album_id,
-            'file_size': 1000,
-            'scan_run_id': old_scan_run_id,
-        })
+        media_dal.insert_media_item(create_media_item_record(
+            media_item_id=media_item_id,
+            relative_path="Photos/Test Album/old.jpg",
+            album_id=album_id,
+            file_size=1000,
+            scan_run_id=old_scan_run_id,
+        ))
         
         # Create new scan run (capture start time BEFORE creating scan)
         # Use UTC timezone-aware datetime
@@ -222,13 +223,13 @@ class TestValidateScan:
         
         # Create various files
         # Present file
-        media_dal.insert_media_item({
-            'media_item_id': str(uuid.uuid4()),
-            'relative_path': "Photos/Test Album/present.jpg",
-            'album_id': album_id,
-            'file_size': 1000,
-            'scan_run_id': scan_run_id,
-        })
+        media_dal.insert_media_item(create_media_item_record(
+            media_item_id=str(uuid.uuid4()),
+            relative_path="Photos/Test Album/present.jpg",
+            album_id=album_id,
+            file_size=1000,
+            scan_run_id=scan_run_id,
+        ))
         
         # Error file
         error_item_id = str(uuid.uuid4())
@@ -278,13 +279,13 @@ class TestValidateScan:
         })
         
         # Create valid media item
-        media_dal.insert_media_item({
-            'media_item_id': str(uuid.uuid4()),
-            'relative_path': "Photos/Test Album/valid.jpg",
-            'album_id': album_id,
-            'file_size': 1000,
-            'scan_run_id': scan_run_id,
-        })
+        media_dal.insert_media_item(create_media_item_record(
+            media_item_id=str(uuid.uuid4()),
+            relative_path="Photos/Test Album/valid.jpg",
+            album_id=album_id,
+            file_size=1000,
+            scan_run_id=scan_run_id,
+        ))
         
         conn.close()
         
@@ -419,13 +420,13 @@ class TestCleanupOldScanData:
         })
         
         # Create media item
-        media_dal.insert_media_item({
-            'media_item_id': str(uuid.uuid4()),
-            'relative_path': "Photos/Test Album/test.jpg",
-            'album_id': album_id,
-            'file_size': 1000,
-            'scan_run_id': old_scan_id,
-        })
+        media_dal.insert_media_item(create_media_item_record(
+            media_item_id=str(uuid.uuid4()),
+            relative_path="Photos/Test Album/test.jpg",
+            album_id=album_id,
+            file_size=1000,
+            scan_run_id=old_scan_id,
+        ))
         
         scan_run_dal.complete_scan_run(old_scan_id, 'completed')
         

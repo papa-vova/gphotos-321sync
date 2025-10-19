@@ -10,6 +10,7 @@ from pathlib import Path
 from gphotos_321sync.media_scanner.database import DatabaseConnection
 from gphotos_321sync.media_scanner.migrations import MigrationRunner
 from gphotos_321sync.media_scanner.dal import ScanRunDAL, AlbumDAL, MediaItemDAL
+from tests.test_helpers import create_media_item_record
 
 
 @pytest.fixture
@@ -52,15 +53,15 @@ def populated_db(tmp_path, schema_dir):
     
     # Create media items
     for i in range(5):
-        media_dal.insert_media_item({
-            'media_item_id': f'media-{i}',
-            'scan_run_id': scan_id,
-            'album_id': album_id,
-            'relative_path': f'Photos/Test Album/photo{i}.jpg',
-            'file_size': 1024 * (i + 1),
-            'mime_type': 'image/jpeg',
-            'status': 'present'
-        })
+        media_dal.insert_media_item(create_media_item_record(
+            media_item_id=f'media-{i}',
+            scan_run_id=scan_id,
+            album_id=album_id,
+            relative_path=f'Photos/Test Album/photo{i}.jpg',
+            file_size=1024 * (i + 1),
+            mime_type='image/jpeg',
+            status='present'
+        ))
     
     return db, scan_id, album_id
 
@@ -344,15 +345,15 @@ class TestDatabaseRecovery:
         
         # Insert new media item
         media_dal = MediaItemDAL(db)
-        media_dal.insert_media_item({
-            'media_item_id': 'new-media-item',
-            'scan_run_id': scan_id,
-            'album_id': album_id,
-            'relative_path': 'Photos/Test Album/new_photo.jpg',
-            'file_size': 2048,
-            'mime_type': 'image/jpeg',
-            'status': 'present'
-        })
+        media_dal.insert_media_item(create_media_item_record(
+            media_item_id='new-media-item',
+            scan_run_id=scan_id,
+            album_id=album_id,
+            relative_path='Photos/Test Album/new_photo.jpg',
+            file_size=2048,
+            mime_type='image/jpeg',
+            status='present'
+        ))
         
         # Verify insertion
         cursor = db.execute("SELECT COUNT(*) FROM media_items WHERE album_id = ?", (album_id,))

@@ -6,6 +6,7 @@ from typing import Optional, Dict, Any, List
 from datetime import datetime
 
 from ..database import DatabaseConnection
+from ..metadata_coordinator import MediaItemRecord
 
 logger = logging.getLogger(__name__)
 
@@ -26,19 +27,18 @@ class MediaItemDAL:
         """
         self.db = db
     
-    def insert_media_item(self, item: Dict[str, Any]) -> str:
+    def insert_media_item(self, item: MediaItemRecord) -> str:
         """
         Insert a new media item.
         
         Args:
-            item: Dictionary with media item data
-                Required: media_item_id, relative_path, album_id, file_size, scan_run_id
-                Optional: All other fields
+            item: MediaItemRecord with all media item data
                 
         Returns:
-            media_item_id (UUID5 string from item dict)
+            media_item_id (UUID5 string from item)
         """
-        media_item_id = item['media_item_id']
+        media_item_id = item.media_item_id
+        relative_path = item.relative_path
         
         cursor = self.db.execute(
             """
@@ -67,50 +67,50 @@ class MediaItemDAL:
             """,
             (
                 media_item_id,
-                item['relative_path'],
-                item['album_id'],
-                item.get('title'),
-                item.get('mime_type'),
-                item['file_size'],
-                item.get('crc32'),
-                item.get('content_fingerprint'),
-                item.get('width'),
-                item.get('height'),
-                item.get('duration_seconds'),
-                item.get('frame_rate'),
-                item.get('capture_timestamp'),
-                item['scan_run_id'],
-                item.get('status', 'present'),
-                item.get('original_media_item_id'),
-                item.get('live_photo_pair_id'),
-                item.get('exif_datetime_original'),
-                item.get('exif_datetime_digitized'),
-                item.get('exif_gps_latitude'),
-                item.get('exif_gps_longitude'),
-                item.get('exif_gps_altitude'),
-                item.get('exif_camera_make'),
-                item.get('exif_camera_model'),
-                item.get('exif_lens_make'),
-                item.get('exif_lens_model'),
-                item.get('exif_focal_length'),
-                item.get('exif_f_number'),
-                item.get('exif_exposure_time'),
-                item.get('exif_iso'),
-                item.get('exif_orientation'),
-                item.get('exif_flash'),
-                item.get('exif_white_balance'),
-                item.get('google_description'),
-                item.get('google_geo_data_latitude'),
-                item.get('google_geo_data_longitude'),
-                item.get('google_geo_data_altitude'),
-                item.get('google_geo_data_latitude_span'),
-                item.get('google_geo_data_longitude_span'),
+                relative_path,
+                item.album_id,
+                item.title,
+                item.mime_type,
+                item.file_size,
+                item.crc32,
+                item.content_fingerprint,
+                item.width,
+                item.height,
+                item.duration_seconds,
+                item.frame_rate,
+                item.capture_timestamp,
+                item.scan_run_id,
+                item.status,
+                None,  # original_media_item_id (not in MediaItemRecord yet)
+                None,  # live_photo_pair_id (not in MediaItemRecord yet)
+                item.exif_datetime_original,
+                item.exif_datetime_digitized,
+                item.exif_gps_latitude,
+                item.exif_gps_longitude,
+                item.exif_gps_altitude,
+                item.exif_camera_make,
+                item.exif_camera_model,
+                item.exif_lens_make,
+                item.exif_lens_model,
+                item.exif_focal_length,
+                item.exif_f_number,
+                item.exif_exposure_time,
+                item.exif_iso,
+                item.exif_orientation,
+                None,  # exif_flash (not in MediaItemRecord yet)
+                None,  # exif_white_balance (not in MediaItemRecord yet)
+                item.google_description,
+                item.google_geo_latitude,
+                item.google_geo_longitude,
+                item.google_geo_altitude,
+                None,  # google_geo_data_latitude_span (not in MediaItemRecord yet)
+                None,  # google_geo_data_longitude_span (not in MediaItemRecord yet)
             )
         )
         cursor.close()
         self.db.commit()
         
-        logger.debug(f"Inserted media item: {media_item_id} ({item['relative_path']})")
+        logger.debug(f"Inserted media item: {media_item_id} ({relative_path})")
         return media_item_id
     
     def update_media_item(self, media_item_id: str, **fields):

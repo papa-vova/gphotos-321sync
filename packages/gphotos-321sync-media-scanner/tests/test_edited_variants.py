@@ -15,6 +15,7 @@ from gphotos_321sync.media_scanner.migrations import MigrationRunner
 from gphotos_321sync.media_scanner.dal.scan_runs import ScanRunDAL
 from gphotos_321sync.media_scanner.dal.media_items import MediaItemDAL
 from gphotos_321sync.media_scanner.dal.albums import AlbumDAL
+from tests.test_helpers import create_media_item_record
 
 
 @pytest.fixture
@@ -144,21 +145,21 @@ class TestLinkEditedVariants:
         original_id = str(uuid.uuid4())
         edited_id = str(uuid.uuid4())
         
-        media_dal.insert_media_item({
-            'media_item_id': original_id,
-            'relative_path': "Photos/Test Album/IMG_1234.JPG",
-            'album_id': album_id,
-            'file_size': 1000,
-            'scan_run_id': scan_run_id,
-        })
+        media_dal.insert_media_item(create_media_item_record(
+            media_item_id=original_id,
+            relative_path="Photos/Test Album/IMG_1234.JPG",
+            album_id=album_id,
+            file_size=1000,
+            scan_run_id=scan_run_id,
+        ))
         
-        media_dal.insert_media_item({
-            'media_item_id': edited_id,
-            'relative_path': "Photos/Test Album/IMG_1234-edited.JPG",
-            'album_id': album_id,
-            'file_size': 1100,
-            'scan_run_id': scan_run_id,
-        })
+        media_dal.insert_media_item(create_media_item_record(
+            media_item_id=edited_id,
+            relative_path="Photos/Test Album/IMG_1234-edited.JPG",
+            album_id=album_id,
+            file_size=1100,
+            scan_run_id=scan_run_id,
+        ))
         
         # Link variants
         edited_to_original = {
@@ -208,21 +209,21 @@ class TestLinkEditedVariants:
             original_id = str(uuid.uuid4())
             edited_id = str(uuid.uuid4())
             
-            media_dal.insert_media_item({
-                'media_item_id': original_id,
-                'relative_path': f"Photos/Test Album/IMG_{i}.JPG",
-                'album_id': album_id,
-                'file_size': 1000,
-                'scan_run_id': scan_run_id,
-            })
+            media_dal.insert_media_item(create_media_item_record(
+                media_item_id=original_id,
+                relative_path=f"Photos/Test Album/IMG_{i}.JPG",
+                album_id=album_id,
+                file_size=1000,
+                scan_run_id=scan_run_id,
+            ))
             
-            media_dal.insert_media_item({
-                'media_item_id': edited_id,
-                'relative_path': f"Photos/Test Album/IMG_{i}-edited.JPG",
-                'album_id': album_id,
-                'file_size': 1100,
-                'scan_run_id': scan_run_id,
-            })
+            media_dal.insert_media_item(create_media_item_record(
+                media_item_id=edited_id,
+                relative_path=f"Photos/Test Album/IMG_{i}-edited.JPG",
+                album_id=album_id,
+                file_size=1100,
+                scan_run_id=scan_run_id,
+            ))
             
             edited_to_original[f"Photos/Test Album/IMG_{i}-edited.JPG"] = f"Photos/Test Album/IMG_{i}.JPG"
         
@@ -255,13 +256,13 @@ class TestLinkEditedVariants:
         
         # Create only edited variant (no original)
         edited_id = str(uuid.uuid4())
-        media_dal.insert_media_item({
-            'media_item_id': edited_id,
-            'relative_path': "Photos/Test Album/IMG_1234-edited.JPG",
-            'album_id': album_id,
-            'file_size': 1100,
-            'scan_run_id': scan_run_id,
-        })
+        media_dal.insert_media_item(create_media_item_record(
+            media_item_id=edited_id,
+            relative_path="Photos/Test Album/IMG_1234-edited.JPG",
+            album_id=album_id,
+            file_size=1100,
+            scan_run_id=scan_run_id,
+        ))
         
         # Try to link
         edited_to_original = {
@@ -296,13 +297,13 @@ class TestLinkEditedVariants:
         
         # Create only original (no edited variant)
         original_id = str(uuid.uuid4())
-        media_dal.insert_media_item({
-            'media_item_id': original_id,
-            'relative_path': "Photos/Test Album/IMG_1234.JPG",
-            'album_id': album_id,
-            'file_size': 1000,
-            'scan_run_id': scan_run_id,
-        })
+        media_dal.insert_media_item(create_media_item_record(
+            media_item_id=original_id,
+            relative_path="Photos/Test Album/IMG_1234.JPG",
+            album_id=album_id,
+            file_size=1000,
+            scan_run_id=scan_run_id,
+        ))
         
         # Try to link
         edited_to_original = {
@@ -344,30 +345,30 @@ class TestDetectAndLinkEditedVariants:
         original_id = str(uuid.uuid4())
         edited_id = str(uuid.uuid4())
         
-        media_dal.insert_media_item({
-            'media_item_id': original_id,
-            'relative_path': "Photos/Test Album/IMG_1234.JPG",
-            'album_id': album_id,
-            'file_size': 1000,
-            'scan_run_id': scan_run_id,
-        })
+        media_dal.insert_media_item(create_media_item_record(
+            media_item_id=original_id,
+            relative_path="Photos/Test Album/IMG_1234.JPG",
+            album_id=album_id,
+            file_size=1000,
+            scan_run_id=scan_run_id,
+        ))
         
-        media_dal.insert_media_item({
-            'media_item_id': edited_id,
-            'relative_path': "Photos/Test Album/IMG_1234-edited.JPG",
-            'album_id': album_id,
-            'file_size': 1100,
-            'scan_run_id': scan_run_id,
-        })
+        media_dal.insert_media_item(create_media_item_record(
+            media_item_id=edited_id,
+            relative_path="Photos/Test Album/IMG_1234-edited.JPG",
+            album_id=album_id,
+            file_size=1100,
+            scan_run_id=scan_run_id,
+        ))
         
         # Create unrelated file
-        media_dal.insert_media_item({
-            'media_item_id': str(uuid.uuid4()),
-            'relative_path': "Photos/Test Album/IMG_5678.JPG",
-            'album_id': album_id,
-            'file_size': 1500,
-            'scan_run_id': scan_run_id,
-        })
+        media_dal.insert_media_item(create_media_item_record(
+            media_item_id=str(uuid.uuid4()),
+            relative_path="Photos/Test Album/IMG_5678.JPG",
+            album_id=album_id,
+            file_size=1500,
+            scan_run_id=scan_run_id,
+        ))
         
         conn.close()
         
@@ -412,21 +413,21 @@ class TestDetectAndLinkEditedVariants:
         })
         
         # Create only regular files
-        media_dal.insert_media_item({
-            'media_item_id': str(uuid.uuid4()),
-            'relative_path': "Photos/Test Album/IMG_1234.JPG",
-            'album_id': album_id,
-            'file_size': 1000,
-            'scan_run_id': scan_run_id,
-        })
+        media_dal.insert_media_item(create_media_item_record(
+            media_item_id=str(uuid.uuid4()),
+            relative_path="Photos/Test Album/IMG_1234.JPG",
+            album_id=album_id,
+            file_size=1000,
+            scan_run_id=scan_run_id,
+        ))
         
-        media_dal.insert_media_item({
-            'media_item_id': str(uuid.uuid4()),
-            'relative_path': "Photos/Test Album/IMG_5678.JPG",
-            'album_id': album_id,
-            'file_size': 1500,
-            'scan_run_id': scan_run_id,
-        })
+        media_dal.insert_media_item(create_media_item_record(
+            media_item_id=str(uuid.uuid4()),
+            relative_path="Photos/Test Album/IMG_5678.JPG",
+            album_id=album_id,
+            file_size=1500,
+            scan_run_id=scan_run_id,
+        ))
         
         conn.close()
         
@@ -459,21 +460,21 @@ class TestDetectAndLinkEditedVariants:
             })
             
             # Create original and edited in each album
-            media_dal.insert_media_item({
-                'media_item_id': str(uuid.uuid4()),
-                'relative_path': f"Photos/Album {album_num}/IMG_1234.JPG",
-                'album_id': album_id,
-                'file_size': 1000,
-                'scan_run_id': scan_run_id,
-            })
+            media_dal.insert_media_item(create_media_item_record(
+                media_item_id=str(uuid.uuid4()),
+                relative_path=f"Photos/Album {album_num}/IMG_1234.JPG",
+                album_id=album_id,
+                file_size=1000,
+                scan_run_id=scan_run_id,
+            ))
             
-            media_dal.insert_media_item({
-                'media_item_id': str(uuid.uuid4()),
-                'relative_path': f"Photos/Album {album_num}/IMG_1234-edited.JPG",
-                'album_id': album_id,
-                'file_size': 1100,
-                'scan_run_id': scan_run_id,
-            })
+            media_dal.insert_media_item(create_media_item_record(
+                media_item_id=str(uuid.uuid4()),
+                relative_path=f"Photos/Album {album_num}/IMG_1234-edited.JPG",
+                album_id=album_id,
+                file_size=1100,
+                scan_run_id=scan_run_id,
+            ))
         
         conn.close()
         
