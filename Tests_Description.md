@@ -4,11 +4,11 @@ Comprehensive documentation of all test suites in the gphotos-321sync project.
 
 ## Summary
 
-**Total: 330 tests** (12 + 42 + 276)
+**Total: 340 tests** (12 + 42 + 286)
 
 - **gphotos-321sync-common:** 12 tests
 - **gphotos-321sync-takeout-extractor:** 42 tests
-- **gphotos-321sync-media-scanner:** 276 tests
+- **gphotos-321sync-media-scanner:** 286 tests
 
 ---
 
@@ -264,14 +264,14 @@ Tests for album discovery and metadata parsing (16 tests).
 
 ### test_discovery.py
 
-Tests for file discovery functionality (13 tests).
+Tests for file discovery functionality (16 tests).
 
-**Rationale**: Ensures all media files are discovered correctly, JSON sidecars are paired with their media files, and hidden/system files are filtered out to avoid processing unwanted files.
+**Rationale**: Ensures all media files are discovered correctly, JSON sidecars are paired with their media files (including Windows MAX_PATH truncated variants), and hidden/system files are filtered out to avoid processing unwanted files.
 
 | # | Test | Input | Output | Conditions/Assumptions | Logic |
 |---|------|-------|--------|----------------------|-------|
 | 1 | `test_discover_files_basic` | Directory: "Photos/" with IMG_001.jpg, IMG_002.jpg | List of 2 FileInfo objects | Media files present | Discovers all non-hidden, non-system files |
-| 2 | `test_discover_files_sidecar_pairing` | photo1.jpg + photo1.jpg.supplemental-metadata.json, video1.mp4 + video1.mp4.supplemental-metadata.json, photo2.png (no sidecar) | FileInfo with json_sidecar_path set for files with sidecars, None for others | Google Takeout sidecar patterns | Tests sidecar pairing. App supports Google Takeout patterns: 1) `filename.ext.supplemental-metadata.json` (standard), 2) `filename.ext.supplemental-me.json` (truncated), 3) `filename.ext.supplemental-metadat.json` (truncated), 4) `filename.ext.supplemental-metad.json` (truncated), 5) `filename.ext.json` (legacy). Test covers: files with sidecars (photo1.jpg, video1.mp4, photo4.heic) and files without (photo2.png, photo3.jpg, video2.mov). |
+| 2 | `test_discover_files_sidecar_pairing` | photo1.jpg + photo1.jpg.supplemental-metadata.json, video1.mp4 + video1.mp4.supplemental-metadata.json, photo2.png (no sidecar) | FileInfo with json_sidecar_path set for files with sidecars, None for others | Google Takeout sidecar patterns | Tests sidecar pairing. App supports Google Takeout patterns: 1) `filename.ext.supplemental-metadata.json` (standard), 2) `filename.ext.supplemental-me.json` (truncated), 3) `filename.ext.supplemental-metadat.json` (truncated), 4) `filename.ext.supplemental-metad.json` (truncated), 5) `filename.ext.json` (alternative). Test covers: files with sidecars (photo1.jpg, video1.mp4, photo4.heic) and files without (photo2.png, photo3.jpg, video2.mov). |
 | 3 | `test_discover_files_relative_paths` | Root: "/media", File: "/media/Photos/2023/img.jpg" | FileInfo with relative_path="Photos/2023/img.jpg" | Files at various depths | Calculates correct relative paths from root |
 | 4 | `test_discover_files_album_folder` | File: "Photos/Vacation/img.jpg" | FileInfo with album_folder_path="Photos/Vacation" | Files in subdirectories | Identifies immediate parent folder as album |
 | 5 | `test_discover_files_excludes_json` | Directory with photo1.jpg.json, video1.mp4.json, metadata.json | discover_files() returns only media files, no .json files | JSON files present | Tests that JSON files are excluded from results (they're paired as sidecars or album metadata, not scanned as media files). Verifies no FileInfo has .json extension. |
@@ -283,6 +283,9 @@ Tests for file discovery functionality (13 tests).
 | 11 | `test_discover_files_wrong_extension` | File: "image.txt" (actually JPEG) | File discovered | Extension doesn't match content | Tests that discover_files() doesn't filter by extension - it discovers ALL files regardless of extension. MIME type detection happens LATER in the pipeline (during metadata extraction). This ensures misnamed files (e.g., JPEG with .txt extension) are still discovered and processed. |
 | 12 | `test_discover_files_file_size` | Files with various sizes | FileInfo with correct file_size in bytes | Files exist | Captures file size from filesystem metadata |
 | 13 | `test_discover_files_large_tree` | 10 albums × 5 files = 50 files | All 50 files discovered with sidecars paired | Large file set | Tests scalability of discovery algorithm |
+| 14 | `test_discover_files_truncated_sidecar_patterns` | photo1.jpg + photo1.jpg.supplemen.json, photo2.jpg + photo2.jpg.suppl.json, photo3.jpg + photo3.jpg.supplemental-metadat.json, photo4.jpg + photo4.jpg.supplemental-metad.json, photo5.jpg + photo5.jpg.supplemental-me.json | All 5 photos paired with their truncated sidecars | Windows MAX_PATH truncation (Windows-only issue) | Tests that app handles full spectrum of Windows path truncation variants. When full path exceeds 260 chars, Windows truncates the filename. App must match all variants from `.supplemental-metadata.json` (27 chars) down to `.json` (5 chars). Tests intermediate truncations: `.supplemen.json`, `.suppl.json`, `.supplemental-metadat.json`, `.supplemental-metad.json`, `.supplemental-me.json`. |
+| 15 | `test_discover_files_tilde_duplicates` | IMG20240221145914.jpg + IMG20240221145914.jpg.supplemental-metadata.json, IMG20240221145914~2.jpg (no own sidecar), IMG20240221145914~3.jpg (no own sidecar), VID20240523214231~2.mp4 + VID20240523214231~2.mp4.supplemental-metadata.json | Tilde duplicates without own sidecars fall back to original's sidecar; tilde duplicates with own sidecars use their own | Google Takeout tilde suffix pattern (~2, ~3) | Tests handling of tilde suffix duplicates (alternative to parenthesis duplicates). When Google Takeout creates duplicates, it may use `filename~2.ext` instead of `filename(1).ext`. App tries exact match first, then falls back to original file's sidecar if duplicate has no own sidecar. |
+| 16 | `test_discover_files_alternative_json_pattern` | Screenshot_2024-01-14-14-13-33-16_948cd9899890cbd5c2798760b2b95377.jpg + Screenshot_2024-01-14-14-13-33-16_948cd9899890.json, original_0eb58adf-59c4-46d2-9420-73d42f7c8e88_FB_IMG_1713377637724.jpg + original_0eb58adf-59c4-46d2-9420-73d42f7c8e88_.json | Both files paired with .json sidecars (without .supplemental-metadata) | Very long filenames or UUID patterns | Tests alternative `.json` pattern (without `.supplemental-metadata` prefix). Used when media filename is extremely long or contains patterns like UUIDs. Google Takeout uses this pattern to avoid exceeding Windows MAX_PATH even for the sidecar filename. |
 
 ### test_file_processor.py
 
@@ -317,7 +320,9 @@ Tests for content fingerprinting utilities (3 tests).
 
 ### test_json_parser.py
 
-Tests for JSON sidecar parser (10 tests).
+Tests for JSON sidecar parser (17 tests).
+
+**Rationale**: Ensures Google Takeout JSON metadata is correctly parsed, including new fields (imageViews, appSource), origin types (fromSharedAlbum), and timezone-aware timestamp handling.
 
 | # | Test | Input | Output | Conditions/Assumptions | Logic |
 |---|------|-------|--------|----------------------|-------|
@@ -331,6 +336,13 @@ Tests for JSON sidecar parser (10 tests).
 | 8 | `test_parse_missing_file` | Non-existent file | FileNotFoundError raised | File doesn't exist | Validates error handling |
 | 9 | `test_parse_empty_people_array` | JSON with empty people | Empty list | No people | Handles empty people array |
 | 10 | `test_parse_partial_geo_data` | JSON with lat/lon only | geoData with lat/lon, no altitude | Partial geo data | Handles partial geo data |
+| 11 | `test_parse_image_views` | JSON with imageViews="42" | result['imageViews']=="42" (string type) | imageViews field present | Tests imageViews extraction. **Important**: Google stores this as STRING, not number. App must preserve string type for accurate data representation. |
+| 12 | `test_parse_app_source` | JSON with appSource.androidPackageName="com.whatsapp" | result['appSource']={"androidPackageName": "com.whatsapp"} | appSource field present | Tests appSource extraction (Android package name). Used to identify which app uploaded the photo (WhatsApp, Chrome, etc.). Only present for certain apps. |
+| 13 | `test_parse_from_shared_album` | JSON with googlePhotosOrigin.fromSharedAlbum={} | result['googlePhotosOrigin']['fromSharedAlbum']=={} | Photo from shared album | Tests fromSharedAlbum origin type. googlePhotosOrigin has exactly ONE property: mobileUpload, fromSharedAlbum, or composition. Empty object {} indicates photo came from shared album. |
+| 14 | `test_parse_mobile_upload_without_device_folder` | JSON with googlePhotosOrigin.mobileUpload.deviceType="ANDROID_PHONE" (no deviceFolder) | result['googlePhotosOrigin']['mobileUpload']['deviceType']=="ANDROID_PHONE", deviceFolder absent | deviceFolder may be completely absent | Tests that deviceFolder is optional. Modern (2024+) exports often omit deviceFolder entirely (not just empty). App must handle absence gracefully. |
+| 15 | `test_parse_timezone_aware_timestamp` | JSON with photoTakenTime.timestamp="1609459200" | result['photoTakenTime']=="2021-01-01T00:00:00+00:00" (with timezone) | Unix timestamp | Tests timezone-aware datetime parsing. App uses datetime.fromtimestamp(timestamp, tz=timezone.utc) to ensure all timestamps are UTC-aware. Prevents DST bugs and cross-timezone issues. |
+| 16 | `test_parse_complete_takeout_json` | Real-world JSON with all fields: title, description, imageViews, creationTime, photoTakenTime, geoData, people, url, googlePhotosOrigin.mobileUpload, appSource | All fields correctly parsed | Complete real-world export | Integration test with actual Google Takeout JSON structure. Tests: imageViews="6", appSource.androidPackageName="com.whatsapp", googlePhotosOrigin.mobileUpload.deviceFolder.localFolderName="WhatsApp Images", people=["John Doe"]. Validates end-to-end parsing of modern (2024) Takeout format. |
+| 17 | `test_parse_timezone_aware_timestamp` | JSON with photoTakenTime.timestamp="1609459200" | Timestamp contains '+00:00' or 'Z', starts with '2021-01-01T00:00:00' | Timezone-aware parsing | Verifies parsed timestamps are timezone-aware (UTC) using datetime.fromtimestamp(timestamp, tz=timezone.utc). Critical for preventing DST bugs. |
 
 ### test_mime_detector.py
 

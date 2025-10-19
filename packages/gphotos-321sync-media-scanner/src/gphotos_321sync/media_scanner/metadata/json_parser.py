@@ -79,6 +79,14 @@ def parse_json_sidecar(json_path: Path) -> Dict[str, Any]:
     if 'googlePhotosOrigin' in data:
         metadata['googlePhotosOrigin'] = data['googlePhotosOrigin']
     
+    # Extract image views (note: string, not int)
+    if 'imageViews' in data:
+        metadata['imageViews'] = data['imageViews']
+    
+    # Extract app source (Android package name)
+    if 'appSource' in data:
+        metadata['appSource'] = data['appSource']
+    
     return metadata
 
 
@@ -95,7 +103,8 @@ def _parse_photo_taken_time(photo_taken_time: Dict[str, Any]) -> Optional[str]:
     if 'timestamp' in photo_taken_time:
         # Unix timestamp (seconds since epoch)
         timestamp = int(photo_taken_time['timestamp'])
-        dt = datetime.fromtimestamp(timestamp)
+        # Use timezone-aware datetime (UTC)
+        dt = datetime.fromtimestamp(timestamp, tz=timezone.utc)
         return dt.isoformat()
     elif 'formatted' in photo_taken_time:
         # Try to parse formatted string
@@ -117,7 +126,8 @@ def _parse_timestamp(timestamp_data: Dict[str, Any]) -> Optional[str]:
     if isinstance(timestamp_data, dict):
         if 'timestamp' in timestamp_data:
             timestamp = int(timestamp_data['timestamp'])
-            dt = datetime.fromtimestamp(timestamp)
+            # Use timezone-aware datetime (UTC)
+            dt = datetime.fromtimestamp(timestamp, tz=timezone.utc)
             return dt.isoformat()
         elif 'formatted' in timestamp_data:
             return _parse_formatted_timestamp(timestamp_data['formatted'])

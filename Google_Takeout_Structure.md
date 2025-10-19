@@ -94,9 +94,12 @@ Every photo/video has an associated JSON file with the pattern:
 
 Due to Windows path length limits (260 characters), you may see truncated filenames:
 
-- `.supplemental-me.json`
-- `.supplemental-metadat.json`
-- `.supplemental-metad.json`
+- `.supplemental-metadata.json` (full)
+- `.supplemental-metadat.json` (truncated)
+- `.supplemental-metad.json` (truncated)
+- `.supplemental-me.json` (truncated)
+- `.supplemen.json` (truncated)
+- `.suppl.json` (truncated)
 
 **Purpose:** Same as above, but filename was truncated to fit Windows path limits.
 
@@ -153,6 +156,14 @@ image(1).png
 image(2).png
 ```
 
+**Alternative duplicate pattern (tilde suffix):**
+
+```text
+IMG20240221145914.jpg
+IMG20240221145914~2.jpg
+IMG20240221145914~3.jpg
+```
+
 **Purpose:** Handles filename conflicts when multiple files have the same name.
 
 **Important:** Each duplicate has its own metadata file:
@@ -160,6 +171,8 @@ image(2).png
 - `image.png.supplemental-metadata.json`
 - `image(1).png.supplemental-metadata.json`
 - `image(2).png.supplemental-metadata.json`
+- `IMG20240221145914.jpg.supplemental-metadata.json`
+- `IMG20240221145914~2.jpg.supplemental-metadata.json`
 
 ## File Naming Patterns
 
@@ -395,14 +408,25 @@ image(2).png
 | Field | Type | Purpose | Notes |
 |-------|------|---------|-------|
 | `googlePhotosOrigin.mobileUpload.deviceType` | string | Device type | `ANDROID_PHONE`, `IOS_PHONE`, etc. |
-| `googlePhotosOrigin.mobileUpload.deviceFolder` | object | Device folder info | May contain camera make/model |
-| `googlePhotosOrigin.mobileUpload.deviceFolder.localFolderName` | string | Original device folder | Often empty |
+| `googlePhotosOrigin.mobileUpload.deviceFolder` | object | Device folder info | **May be absent entirely** |
+| `googlePhotosOrigin.mobileUpload.deviceFolder.localFolderName` | string | Original device folder | Often empty `""`, or `"WhatsApp Images"`, `"Camera"` |
+| `googlePhotosOrigin.fromSharedAlbum` | object | Photo from shared album | Empty object `{}` |
+| `googlePhotosOrigin.composition.type` | string | Google Photos creation type | `AUTO` or `MANUAL` for collages/animations |
+| `appSource.androidPackageName` | string | Source Android app | e.g., `com.whatsapp`, `com.android.chrome` |
 
 **Purpose:** Track where photos came from:
 
 - Identify device type
 - Organize by device
 - Understand upload source
+- Identify photos from shared albums
+- Track which app uploaded the photo
+
+**Important notes:**
+
+- `googlePhotosOrigin` always has exactly **one** property: `mobileUpload`, `fromSharedAlbum`, or `composition`
+- `deviceFolder` may be completely absent (not just empty)
+- `appSource` is only present for certain apps (WhatsApp, Chrome, etc.)
 
 ### Organization & Status
 
@@ -424,11 +448,16 @@ image(2).png
 
 | Field | Type | Purpose | Notes |
 |-------|------|---------|-------|
+| `imageViews` | string | View count in Google Photos | **Note: string, not number!** Always present |
 | `textAnnotations` | array | Detected text in image | Google Vision API results; rarely present |
 | `locations` | array | Reverse-geocoded location names | Place names; rarely present |
 | `albums` | array | Album membership | Usually handled via folder structure |
+| `photoLastModifiedTime` | object | File modification timestamp | **Rarely present in modern exports** |
+| `modificationTime` | object | Last edit timestamp | **Rarely present in modern exports** |
 
 **Purpose:** Additional metadata that may be useful but is rarely present.
+
+**Important:** Many fields documented in older exports may not be present in modern (2024+) exports. Always check for field existence before accessing.
 
 ## What's NOT Included in Exports
 
@@ -465,7 +494,14 @@ When building a sync tool, you need to match media files to their JSON metadata 
 For a media file `photo.jpg`, look for:
 
 1. `photo.jpg.supplemental-metadata.json` (most common)
-2. `photo.json` (less common)
+2. `photo.jpg.supplemental-metadat.json` (truncated)
+3. `photo.jpg.supplemental-metad.json` (truncated)
+4. `photo.jpg.supplemental-me.json` (truncated)
+5. `photo.jpg.supplemen.json` (truncated)
+6. `photo.jpg.suppl.json` (truncated)
+7. `photo.json` (alternative pattern for long filenames)
+
+**Note:** Pattern #7 (`.json` without `.supplemental-metadata`) is used when the full filename is very long or contains special patterns like UUIDs.
 
 ### Edited Files
 
@@ -487,6 +523,15 @@ For files with numeric suffixes like `photo(1).jpg`, look for:
 2. `photo(1).json`
 3. `photo.jpg(1).json` ← **Special case:** Google's inconsistent naming
 
+### Tilde Suffix Duplicates
+
+For files with tilde suffixes like `photo~2.jpg`, look for:
+
+1. `photo~2.jpg.supplemental-metadata.json` (exact match)
+2. `photo.jpg.supplemental-metadata.json` (original file's sidecar)
+
+**Rationale:** Google may create separate metadata for tilde duplicates or reuse the original's metadata.
+
 ### Trailing Character Edge Cases
 
 Handle these filename variations:
@@ -499,12 +544,15 @@ Handle these filename variations:
 
 Due to Windows path length limits, metadata filenames may be truncated:
 
-- `.supplemental-metadata.json` (full)
-- `.supplemental-me.json` (truncated)
-- `.supplemental-metadat.json` (truncated)
-- `.supplemental-metad.json` (truncated)
+- `.supplemental-metadata.json` (full, 27 chars)
+- `.supplemental-metadat.json` (truncated, 25 chars)
+- `.supplemental-metad.json` (truncated, 22 chars)
+- `.supplemental-me.json` (truncated, 18 chars)
+- `.supplemen.json` (truncated, 15 chars)
+- `.suppl.json` (truncated, 11 chars)
+- `.json` (alternative pattern, 5 chars)
 
-**Matching strategy:** Try all variants when looking for metadata files.
+**Matching strategy:** Try all variants when looking for metadata files. Start with the full pattern and work down to shorter variants.
 
 ## Statistics (from example export)
 

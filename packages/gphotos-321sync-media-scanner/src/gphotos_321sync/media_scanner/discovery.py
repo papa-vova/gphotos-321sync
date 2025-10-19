@@ -73,12 +73,28 @@ def discover_files(target_media_path: Path) -> Iterator[FileInfo]:
         if json_path.name == "metadata.json":
             continue  # Skip album metadata files
         
-        # Google Takeout sidecar patterns:
-        # 1. IMG_1234.jpg.supplemental-metadata.json (standard)
-        # 2. IMG_1234.jpg.supplemental-me.json (truncated)
-        # 3. IMG_1234.jpg.supplemental-metadat.json (truncated)
-        # 4. IMG_1234.jpg.supplemental-metad.json (truncated)
-        # 5. IMG_1234.jpg.json (legacy)
+        # Google Takeout sidecar patterns (Windows MAX_PATH truncation):
+        # Full: IMG_1234.jpg.supplemental-metadata.json (27 chars)
+        # Truncated variants due to Windows 260-char path limit:
+        #   - .supplemental-metadat.json (25 chars)
+        #   - .supplemental-metada.json (24 chars)
+        #   - .supplemental-metad.json (22 chars)
+        #   - .supplemental-meta.json (21 chars)
+        #   - .supplemental-met.json (20 chars)
+        #   - .supplemental-me.json (18 chars)
+        #   - .supplemental-m.json (17 chars)
+        #   - .supplemental-.json (16 chars)
+        #   - .supplementa.json (15 chars)
+        #   - .supplemen.json (15 chars)
+        #   - .suppleme.json (14 chars)
+        #   - .supplem.json (13 chars)
+        #   - .supple.json (12 chars)
+        #   - .suppl.json (11 chars)
+        #   - .supp.json (10 chars)
+        #   - .sup.json (9 chars)
+        #   - .su.json (8 chars)
+        #   - .s.json (7 chars)
+        #   - .json (5 chars) - alternative pattern for very long filenames
         
         parent_dir = json_path.parent
         filename = json_path.name
@@ -86,13 +102,66 @@ def discover_files(target_media_path: Path) -> Iterator[FileInfo]:
         # Try to extract media filename from sidecar filename
         media_filename = None
         
-        # Pattern 1-4: .supplemental-*.json variants
-        if '.supplemental-' in filename:
-            # Split on .supplemental- and take everything before it
+        # Pattern matching optimization: Use filename length to predict truncation level
+        # This reduces checks from ~16 to 1-3 in most cases
+        filename_len = len(filename)
+        
+        # Pattern 1: Full .supplemental-metadata.json or .supplemental-* variants (MOST COMMON)
+        # Length-based heuristic: if filename is long enough, try full pattern first
+        if filename_len > 30 and '.supplemental-metadata' in filename:
+            # Full pattern: photo.jpg.supplemental-metadata.json (27 chars + base)
+            media_filename = filename.split('.supplemental-metadata')[0]
+        elif filename_len > 28 and '.supplemental-metadat' in filename:
+            # Truncated: .supplemental-metadat.json (25 chars)
+            media_filename = filename.split('.supplemental-metadat')[0]
+        elif filename_len > 25 and '.supplemental-metad' in filename:
+            # Truncated: .supplemental-metad.json (22 chars)
+            media_filename = filename.split('.supplemental-metad')[0]
+        elif filename_len > 24 and '.supplemental-meta' in filename:
+            # Truncated: .supplemental-meta.json (21 chars)
+            media_filename = filename.split('.supplemental-meta')[0]
+        elif filename_len > 21 and '.supplemental-me' in filename:
+            # Truncated: .supplemental-me.json (18 chars)
+            media_filename = filename.split('.supplemental-me')[0]
+        elif '.supplemental-' in filename:
+            # Any other .supplemental-* variant (catch remaining truncations)
             media_filename = filename.split('.supplemental-')[0]
-        # Pattern 5: .json (legacy)
+        
+        # Pattern 2: .supplemen* variants (less common, more heavily truncated)
+        elif filename_len > 18 and '.supplemen' in filename:
+            # Truncated: .supplemen.json (15 chars)
+            media_filename = filename.split('.supplemen')[0]
+        elif filename_len > 17 and '.suppleme' in filename:
+            # Truncated: .suppleme.json (14 chars)
+            media_filename = filename.split('.suppleme')[0]
+        elif filename_len > 16 and '.supplem' in filename:
+            # Truncated: .supplem.json (13 chars)
+            media_filename = filename.split('.supplem')[0]
+        elif filename_len > 15 and '.supple' in filename:
+            # Truncated: .supple.json (12 chars)
+            media_filename = filename.split('.supple')[0]
+        elif filename_len > 14 and '.suppl' in filename:
+            # Truncated: .suppl.json (11 chars)
+            media_filename = filename.split('.suppl')[0]
+        elif filename_len > 13 and '.supp' in filename:
+            # Truncated: .supp.json (10 chars)
+            media_filename = filename.split('.supp')[0]
+        
+        # Pattern 3: Very heavily truncated (rare)
+        elif filename_len > 12 and '.sup.' in filename and filename.endswith('.json'):
+            # Truncated: .sup.json (9 chars) - need .json check to avoid false positives
+            media_filename = filename.split('.sup.')[0]
+        elif filename_len > 11 and '.su.' in filename and filename.endswith('.json'):
+            # Truncated: .su.json (8 chars)
+            media_filename = filename.split('.su.')[0]
+        elif filename_len > 10 and '.s.' in filename and filename.endswith('.json'):
+            # Truncated: .s.json (7 chars)
+            media_filename = filename.split('.s.')[0]
+        
+        # Pattern 4: Alternative .json pattern (for very long filenames, rare)
         elif filename.endswith('.json'):
-            # Remove .json extension
+            # Alternative pattern: photo.json (without .supplemental prefix)
+            # Used when media filename is extremely long
             media_filename = filename[:-5]
         
         if media_filename:
@@ -138,13 +207,67 @@ def discover_files(target_media_path: Path) -> Iterator[FileInfo]:
         # Check for JSON sidecar
         # For edited files (e.g., IMG_1234-edited.jpg), look for original's sidecar
         # (e.g., IMG_1234.jpg.supplemental-metadata.json)
+        # For tilde duplicates (e.g., IMG~2.jpg), try exact match first, then original
         sidecar_lookup_path = file_path
+        
         if '-edited' in file_path.stem:
             # Strip -edited suffix to find original's sidecar
             original_stem = file_path.stem.rsplit('-edited', 1)[0]
             sidecar_lookup_path = file_path.parent / f"{original_stem}{file_path.suffix}"
         
         json_sidecar_path = json_sidecars.get(sidecar_lookup_path)
+        
+        # If not found and filename has tilde suffix (e.g., IMG~2.jpg), try original
+        if not json_sidecar_path and '~' in file_path.stem:
+            # Strip ~N suffix to find original's sidecar
+            original_stem = file_path.stem.split('~')[0]
+            original_lookup_path = file_path.parent / f"{original_stem}{file_path.suffix}"
+            json_sidecar_path = json_sidecars.get(original_lookup_path)
+        
+        # If still not found, try prefix matching for alternative .json pattern
+        # This handles cases where the sidecar filename itself is truncated
+        # Example: photo_very_long_name.jpg → photo_very_long.json (truncated)
+        if not json_sidecar_path:
+            # Look for any .json file in same directory that is a prefix of the media filename
+            media_stem = file_path.stem
+            media_stem_len = len(media_stem)
+            
+            for candidate_path, candidate_sidecar in json_sidecars.items():
+                # Check if in same directory
+                if candidate_path.parent != file_path.parent:
+                    continue
+                # Check if sidecar is .json (not .supplemental-*.json)
+                if not candidate_sidecar.name.endswith('.json'):
+                    continue
+                if '.supplemental' in candidate_sidecar.name:
+                    continue
+                
+                # Length-based optimization: skip if lengths don't make sense
+                candidate_stem = candidate_sidecar.stem  # Remove .json
+                candidate_len = len(candidate_stem)
+                
+                # Skip if candidate is longer than media (can't be truncated version)
+                if candidate_len >= media_stem_len:
+                    continue
+                # Skip if candidate is too short (likely different file)
+                # Allow up to 50 characters of truncation
+                if candidate_len < media_stem_len - 50:
+                    continue
+                # Require minimum length to avoid false positives
+                if candidate_len < 10:
+                    continue
+                
+                # Check if sidecar stem is a prefix of media stem
+                # OR if media stem is a prefix of sidecar stem (both truncated from same base)
+                if media_stem.startswith(candidate_stem):
+                    json_sidecar_path = candidate_sidecar
+                    break
+                # Also check reverse: media might be truncated shorter than sidecar
+                # Example: Screenshot_...aa.json vs Screenshot_...aaf.jpg
+                if candidate_stem.startswith(media_stem):
+                    json_sidecar_path = candidate_sidecar
+                    break
+        
         if json_sidecar_path:
             files_with_sidecars += 1
         

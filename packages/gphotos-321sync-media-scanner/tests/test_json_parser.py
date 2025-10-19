@@ -173,3 +173,141 @@ def test_parse_partial_geo_data(temp_json_file):
     assert result['geoData']['latitude'] == 51.5074
     assert result['geoData']['longitude'] == -0.1278
     assert 'altitude' not in result['geoData']
+
+
+def test_parse_image_views(temp_json_file):
+    """Test parsing imageViews field (note: string, not int)."""
+    data = {
+        "title": "IMG_001.jpg",
+        "imageViews": "42"
+    }
+    
+    temp_json_file.write_text(json.dumps(data), encoding='utf-8')
+    result = parse_json_sidecar(temp_json_file)
+    
+    assert result['imageViews'] == "42"
+    assert isinstance(result['imageViews'], str)
+
+
+def test_parse_app_source(temp_json_file):
+    """Test parsing appSource field (Android package name)."""
+    data = {
+        "title": "IMG-20240102-WA0001.jpg",
+        "appSource": {
+            "androidPackageName": "com.whatsapp"
+        }
+    }
+    
+    temp_json_file.write_text(json.dumps(data), encoding='utf-8')
+    result = parse_json_sidecar(temp_json_file)
+    
+    assert result['appSource'] == {"androidPackageName": "com.whatsapp"}
+    assert result['appSource']['androidPackageName'] == "com.whatsapp"
+
+
+def test_parse_from_shared_album(temp_json_file):
+    """Test parsing googlePhotosOrigin.fromSharedAlbum."""
+    data = {
+        "title": "VID20240523214231.mp4",
+        "googlePhotosOrigin": {
+            "fromSharedAlbum": {}
+        }
+    }
+    
+    temp_json_file.write_text(json.dumps(data), encoding='utf-8')
+    result = parse_json_sidecar(temp_json_file)
+    
+    assert 'googlePhotosOrigin' in result
+    assert 'fromSharedAlbum' in result['googlePhotosOrigin']
+    assert result['googlePhotosOrigin']['fromSharedAlbum'] == {}
+
+
+def test_parse_mobile_upload_without_device_folder(temp_json_file):
+    """Test parsing mobileUpload without deviceFolder (can be absent)."""
+    data = {
+        "title": "IMG_001.jpg",
+        "googlePhotosOrigin": {
+            "mobileUpload": {
+                "deviceType": "ANDROID_PHONE"
+            }
+        }
+    }
+    
+    temp_json_file.write_text(json.dumps(data), encoding='utf-8')
+    result = parse_json_sidecar(temp_json_file)
+    
+    assert 'googlePhotosOrigin' in result
+    assert result['googlePhotosOrigin']['mobileUpload']['deviceType'] == "ANDROID_PHONE"
+    assert 'deviceFolder' not in result['googlePhotosOrigin']['mobileUpload']
+
+
+def test_parse_timezone_aware_timestamp(temp_json_file):
+    """Test that parsed timestamps are timezone-aware (UTC)."""
+    data = {
+        "photoTakenTime": {
+            "timestamp": "1609459200"
+        }
+    }
+    
+    temp_json_file.write_text(json.dumps(data), encoding='utf-8')
+    result = parse_json_sidecar(temp_json_file)
+    
+    # Check that timestamp is ISO format with timezone
+    assert result['photoTakenTime'] is not None
+    assert '+00:00' in result['photoTakenTime'] or 'Z' in result['photoTakenTime']
+    # Should be 2021-01-01T00:00:00+00:00
+    assert result['photoTakenTime'].startswith('2021-01-01T00:00:00')
+
+
+def test_parse_complete_takeout_json(temp_json_file):
+    """Test parsing a complete real-world Takeout JSON file."""
+    data = {
+        "title": "IMG-20240102-WA0001.jpg",
+        "description": "",
+        "imageViews": "6",
+        "creationTime": {
+            "timestamp": "1704190061",
+            "formatted": "Jan 2, 2024, 10:07:41 AM UTC"
+        },
+        "photoTakenTime": {
+            "timestamp": "1704190032",
+            "formatted": "Jan 2, 2024, 10:07:12 AM UTC"
+        },
+        "geoData": {
+            "latitude": 0.0,
+            "longitude": 0.0,
+            "altitude": 0.0,
+            "latitudeSpan": 0.0,
+            "longitudeSpan": 0.0
+        },
+        "people": [
+            {"name": "John Doe"}
+        ],
+        "url": "https://photos.google.com/photo/AF1QipOC0L0cFrWJpJZ2bcsN4vx5sTzpwncFfhTiAJWS",
+        "googlePhotosOrigin": {
+            "mobileUpload": {
+                "deviceFolder": {
+                    "localFolderName": "WhatsApp Images"
+                },
+                "deviceType": "ANDROID_PHONE"
+            }
+        },
+        "appSource": {
+            "androidPackageName": "com.whatsapp"
+        }
+    }
+    
+    temp_json_file.write_text(json.dumps(data), encoding='utf-8')
+    result = parse_json_sidecar(temp_json_file)
+    
+    # Verify all fields are parsed
+    assert result['title'] == "IMG-20240102-WA0001.jpg"
+    assert result['description'] == ""
+    assert result['imageViews'] == "6"
+    assert result['photoTakenTime'] is not None
+    assert result['geoData']['latitude'] == 0.0
+    assert result['people'] == ["John Doe"]
+    assert result['url'] == "https://photos.google.com/photo/AF1QipOC0L0cFrWJpJZ2bcsN4vx5sTzpwncFfhTiAJWS"
+    assert result['googlePhotosOrigin']['mobileUpload']['deviceType'] == "ANDROID_PHONE"
+    assert result['googlePhotosOrigin']['mobileUpload']['deviceFolder']['localFolderName'] == "WhatsApp Images"
+    assert result['appSource']['androidPackageName'] == "com.whatsapp"

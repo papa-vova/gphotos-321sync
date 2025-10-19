@@ -210,3 +210,104 @@ def test_discover_files_large_tree(tmp_path):
     # Should find 30 sidecars (10 albums × 3 sidecars, for even-numbered photos)
     files_with_sidecars = sum(1 for f in files if f.json_sidecar_path is not None)
     assert files_with_sidecars == 30
+
+
+def test_discover_files_truncated_sidecar_patterns(tmp_path):
+    """Test discovery of truncated sidecar filename patterns."""
+    album = tmp_path / "Album"
+    album.mkdir()
+    
+    # Create media files with various truncated sidecar patterns
+    (album / "photo1.jpg").write_text("fake jpeg")
+    (album / "photo1.jpg.supplemen.json").write_text('{"title": "Photo 1"}')
+    
+    (album / "photo2.jpg").write_text("fake jpeg")
+    (album / "photo2.jpg.suppl.json").write_text('{"title": "Photo 2"}')
+    
+    (album / "photo3.jpg").write_text("fake jpeg")
+    (album / "photo3.jpg.supplemental-metadat.json").write_text('{"title": "Photo 3"}')
+    
+    (album / "photo4.jpg").write_text("fake jpeg")
+    (album / "photo4.jpg.supplemental-metad.json").write_text('{"title": "Photo 4"}')
+    
+    (album / "photo5.jpg").write_text("fake jpeg")
+    (album / "photo5.jpg.supplemental-me.json").write_text('{"title": "Photo 5"}')
+    
+    files = {f.file_path.name: f for f in discover_files(tmp_path)}
+    
+    # All photos should be paired with their truncated sidecars
+    assert files["photo1.jpg"].json_sidecar_path is not None
+    assert files["photo1.jpg"].json_sidecar_path.name == "photo1.jpg.supplemen.json"
+    
+    assert files["photo2.jpg"].json_sidecar_path is not None
+    assert files["photo2.jpg"].json_sidecar_path.name == "photo2.jpg.suppl.json"
+    
+    assert files["photo3.jpg"].json_sidecar_path is not None
+    assert files["photo3.jpg"].json_sidecar_path.name == "photo3.jpg.supplemental-metadat.json"
+    
+    assert files["photo4.jpg"].json_sidecar_path is not None
+    assert files["photo4.jpg"].json_sidecar_path.name == "photo4.jpg.supplemental-metad.json"
+    
+    assert files["photo5.jpg"].json_sidecar_path is not None
+    assert files["photo5.jpg"].json_sidecar_path.name == "photo5.jpg.supplemental-me.json"
+
+
+def test_discover_files_tilde_duplicates(tmp_path):
+    """Test discovery of files with tilde suffix duplicates."""
+    album = tmp_path / "Album"
+    album.mkdir()
+    
+    # Create original file with sidecar
+    (album / "IMG20240221145914.jpg").write_text("fake jpeg")
+    (album / "IMG20240221145914.jpg.supplemental-metadata.json").write_text('{"title": "Original"}')
+    
+    # Create tilde duplicates (may or may not have their own sidecars)
+    (album / "IMG20240221145914~2.jpg").write_text("fake jpeg duplicate")
+    (album / "IMG20240221145914~3.jpg").write_text("fake jpeg duplicate")
+    
+    # Create another file with tilde duplicate that has its own sidecar
+    (album / "VID20240523214231.mp4").write_text("fake video")
+    (album / "VID20240523214231.mp4.supplemental-metadata.json").write_text('{"title": "Video Original"}')
+    (album / "VID20240523214231~2.mp4").write_text("fake video duplicate")
+    (album / "VID20240523214231~2.mp4.supplemental-metadata.json").write_text('{"title": "Video Duplicate"}')
+    
+    files = {f.file_path.name: f for f in discover_files(tmp_path)}
+    
+    # Original should have sidecar
+    assert files["IMG20240221145914.jpg"].json_sidecar_path is not None
+    assert files["IMG20240221145914.jpg"].json_sidecar_path.name == "IMG20240221145914.jpg.supplemental-metadata.json"
+    
+    # Tilde duplicates should fall back to original's sidecar
+    assert files["IMG20240221145914~2.jpg"].json_sidecar_path is not None
+    assert files["IMG20240221145914~2.jpg"].json_sidecar_path.name == "IMG20240221145914.jpg.supplemental-metadata.json"
+    
+    assert files["IMG20240221145914~3.jpg"].json_sidecar_path is not None
+    assert files["IMG20240221145914~3.jpg"].json_sidecar_path.name == "IMG20240221145914.jpg.supplemental-metadata.json"
+    
+    # Video duplicate with its own sidecar should use that
+    assert files["VID20240523214231~2.mp4"].json_sidecar_path is not None
+    assert files["VID20240523214231~2.mp4"].json_sidecar_path.name == "VID20240523214231~2.mp4.supplemental-metadata.json"
+
+
+def test_discover_files_alternative_json_pattern(tmp_path):
+    """Test discovery of .json pattern with truncated sidecar filenames."""
+    album = tmp_path / "Album"
+    album.mkdir()
+    
+    # Create files with alternative .json pattern (used for long filenames)
+    # When full path exceeds MAX_PATH, Windows truncates the sidecar filename itself
+    # Pattern: photo_with_very_long_name.jpg → photo_with_very_long.json (truncated)
+    (album / "Screenshot_2024-01-14-14-13-33-16_948cd9899890cbd5c2798760b2b95377.jpg").write_text("fake screenshot")
+    (album / "Screenshot_2024-01-14-14-13-33-16_948cd9899890.json").write_text('{"title": "Screenshot"}')
+    
+    (album / "original_0eb58adf-59c4-46d2-9420-73d42f7c8e88_FB_IMG_1713377637724.jpg").write_text("fake image")
+    (album / "original_0eb58adf-59c4-46d2-9420-73d42f7c8e88_.json").write_text('{"title": "FB Image"}')
+    
+    files = {f.file_path.name: f for f in discover_files(tmp_path)}
+    
+    # Files should be paired with truncated .json sidecars (prefix match)
+    assert files["Screenshot_2024-01-14-14-13-33-16_948cd9899890cbd5c2798760b2b95377.jpg"].json_sidecar_path is not None
+    assert files["Screenshot_2024-01-14-14-13-33-16_948cd9899890cbd5c2798760b2b95377.jpg"].json_sidecar_path.name == "Screenshot_2024-01-14-14-13-33-16_948cd9899890.json"
+    
+    assert files["original_0eb58adf-59c4-46d2-9420-73d42f7c8e88_FB_IMG_1713377637724.jpg"].json_sidecar_path is not None
+    assert files["original_0eb58adf-59c4-46d2-9420-73d42f7c8e88_FB_IMG_1713377637724.jpg"].json_sidecar_path.name == "original_0eb58adf-59c4-46d2-9420-73d42f7c8e88_.json"
