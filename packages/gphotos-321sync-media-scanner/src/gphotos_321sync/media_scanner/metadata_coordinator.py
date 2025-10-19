@@ -269,7 +269,7 @@ def _generate_media_item_id(
     
     Args:
         relative_path: Normalized relative path within Takeout
-        json_metadata: Parsed JSON sidecar metadata
+        json_metadata: Parsed JSON sidecar metadata (can be None or empty dict)
         file_size: File size in bytes
         
     Returns:
@@ -277,6 +277,10 @@ def _generate_media_item_id(
     """
     # Normalize path (forward slashes, strip leading/trailing)
     normalized_path = normalize_path(relative_path)
+    
+    # Handle None json_metadata (parsing failed)
+    if json_metadata is None:
+        json_metadata = {}
     
     # Extract timestamps from JSON metadata
     # Handle both dict format (real JSON) and string format (test fixtures)
