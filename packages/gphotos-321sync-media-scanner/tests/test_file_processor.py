@@ -22,7 +22,7 @@ def test_image(tmp_path):
 def test_text_file(tmp_path):
     """Create a test text file."""
     text_path = tmp_path / "test.txt"
-    text_path.write_text("This is a test file for CRC32 calculation.")
+    text_path.write_text("This is a test file for CRC32 calculation.", encoding='utf-8')
     return text_path
 
 
@@ -31,8 +31,8 @@ def test_calculate_crc32_different_files(tmp_path):
     file1 = tmp_path / "file1.txt"
     file2 = tmp_path / "file2.txt"
     
-    file1.write_text("Content A")
-    file2.write_text("Content B")
+    file1.write_text("Content A", encoding='utf-8')
+    file2.write_text("Content B", encoding='utf-8')
     
     crc1 = calculate_crc32(file1)
     crc2 = calculate_crc32(file2)
@@ -163,7 +163,7 @@ def test_process_file_cpu_work_error_handling(tmp_path):
 def test_process_file_cpu_work_small_file(tmp_path):
     """Test processing small file (<128KB)."""
     small_file = tmp_path / "small.txt"
-    small_file.write_text("Small file content")
+    small_file.write_text("Small file content", encoding='utf-8')
     
     file_size = small_file.stat().st_size
     result = process_file_cpu_work(small_file, file_size)
@@ -190,7 +190,7 @@ def test_process_file_cpu_work_large_file(tmp_path):
 def test_process_file_cpu_work_empty_file(tmp_path):
     """Test processing empty file."""
     empty_file = tmp_path / "empty.txt"
-    empty_file.write_text("")
+    empty_file.write_text("", encoding='utf-8')
     
     file_size = empty_file.stat().st_size
     result = process_file_cpu_work(empty_file, file_size)

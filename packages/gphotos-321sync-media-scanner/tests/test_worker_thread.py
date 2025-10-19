@@ -44,7 +44,7 @@ def shutdown_event():
 def sample_file_info(tmp_path):
     """Create sample FileInfo."""
     file_path = tmp_path / "test.jpg"
-    file_path.write_text("test content")
+    file_path.write_text("test content", encoding='utf-8')
     
     return FileInfo(
         file_path=file_path,
@@ -259,7 +259,7 @@ class TestWorkerThreadMain:
         files = []
         for i in range(3):
             file_path = tmp_path / f"test{i}.jpg"
-            file_path.write_text(f"content {i}")
+            file_path.write_text(f"content {i}", encoding='utf-8')
             file_info = FileInfo(
                 file_path=file_path,
                 relative_path=f"Photos/test{i}.jpg",
@@ -347,7 +347,7 @@ class TestWorkerThreadBatchMain:
         batch_size = 5
         for i in range(batch_size):
             file_path = tmp_path / f"test{i}.jpg"
-            file_path.write_text(f"content {i}")
+            file_path.write_text(f"content {i}", encoding='utf-8')
             file_info = FileInfo(
                 file_path=file_path,
                 relative_path=f"Photos/test{i}.jpg",
@@ -397,7 +397,7 @@ class TestWorkerThreadBatchMain:
         # Create files
         for i in range(3):
             file_path = tmp_path / f"test{i}.jpg"
-            file_path.write_text(f"content {i}")
+            file_path.write_text(f"content {i}", encoding='utf-8')
             file_info = FileInfo(
                 file_path=file_path,
                 relative_path=f"Photos/test{i}.jpg",
@@ -462,7 +462,7 @@ class TestWorkerThreadBatchMain:
         # Add only 2 items with batch size of 10
         for i in range(2):
             file_path = tmp_path / f"test{i}.jpg"
-            file_path.write_text(f"content {i}")
+            file_path.write_text(f"content {i}", encoding='utf-8')
             file_info = FileInfo(
                 file_path=file_path,
                 relative_path=f"Photos/test{i}.jpg",

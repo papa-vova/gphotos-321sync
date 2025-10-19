@@ -354,6 +354,7 @@ def extract_exif_with_exiftool(file_path: Path) -> Dict[str, Any]:
             ],
             capture_output=True,
             text=True,
+            encoding='utf-8',  # Explicitly use UTF-8 to handle non-ASCII paths
             check=True,
             timeout=30
         )

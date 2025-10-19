@@ -16,7 +16,7 @@ from gphotos_321sync.media_scanner.discovery import FileInfo
 def test_file_info(tmp_path):
     """Create test FileInfo."""
     file_path = tmp_path / "test.jpg"
-    file_path.write_text("fake image")
+    file_path.write_text("fake image", encoding='utf-8')
     
     return FileInfo(
         file_path=file_path,
@@ -106,7 +106,7 @@ def test_coordinate_metadata_with_json_sidecar(tmp_path, test_metadata_ext):
     """Test coordination with JSON sidecar."""
     # Create file with JSON sidecar
     file_path = tmp_path / "test.jpg"
-    file_path.write_text("fake image")
+    file_path.write_text("fake image", encoding='utf-8')
     
     json_path = tmp_path / "test.jpg.json"
     json_data = {
@@ -119,7 +119,7 @@ def test_coordinate_metadata_with_json_sidecar(tmp_path, test_metadata_ext):
             "altitude": 5.0
         }
     }
-    json_path.write_text(json.dumps(json_data))
+    json_path.write_text(json.dumps(json_data), encoding='utf-8')
     
     file_info = FileInfo(
         file_path=file_path,
@@ -147,10 +147,10 @@ def test_coordinate_metadata_json_parse_error(tmp_path, test_metadata_ext):
     """Test handling of invalid JSON sidecar."""
     # Create file with invalid JSON sidecar
     file_path = tmp_path / "test.jpg"
-    file_path.write_text("fake image")
+    file_path.write_text("fake image", encoding='utf-8')
     
     json_path = tmp_path / "test.jpg.json"
-    json_path.write_text("invalid json{")
+    json_path.write_text("invalid json{", encoding='utf-8')
     
     file_info = FileInfo(
         file_path=file_path,

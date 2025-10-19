@@ -39,7 +39,7 @@ def test_parse_complete_json(temp_json_file):
         ]
     }
     
-    temp_json_file.write_text(json.dumps(data), encoding='utf-8')
+    temp_json_file.write_text(json.dumps(data, ensure_ascii=False), encoding='utf-8')
     
     result = parse_json_sidecar(temp_json_file)
     
@@ -57,7 +57,7 @@ def test_parse_minimal_json(temp_json_file):
         "title": "IMG_002.jpg"
     }
     
-    temp_json_file.write_text(json.dumps(data), encoding='utf-8')
+    temp_json_file.write_text(json.dumps(data, ensure_ascii=False), encoding='utf-8')
     
     result = parse_json_sidecar(temp_json_file)
     
@@ -76,7 +76,7 @@ def test_parse_timestamp_formats(temp_json_file):
         }
     }
     
-    temp_json_file.write_text(json.dumps(data), encoding='utf-8')
+    temp_json_file.write_text(json.dumps(data, ensure_ascii=False), encoding='utf-8')
     result = parse_json_sidecar(temp_json_file)
     
     assert result['photoTakenTime'] is not None
@@ -91,7 +91,7 @@ def test_parse_creation_time_fallback(temp_json_file):
         }
     }
     
-    temp_json_file.write_text(json.dumps(data), encoding='utf-8')
+    temp_json_file.write_text(json.dumps(data, ensure_ascii=False), encoding='utf-8')
     result = parse_json_sidecar(temp_json_file)
     
     assert result['creationTime'] is not None
@@ -106,7 +106,7 @@ def test_parse_geo_data_exif_fallback(temp_json_file):
         }
     }
     
-    temp_json_file.write_text(json.dumps(data), encoding='utf-8')
+    temp_json_file.write_text(json.dumps(data, ensure_ascii=False), encoding='utf-8')
     result = parse_json_sidecar(temp_json_file)
     
     assert result['geoData']['latitude'] == 40.7128
@@ -123,7 +123,7 @@ def test_parse_people_array(temp_json_file):
         ]
     }
     
-    temp_json_file.write_text(json.dumps(data), encoding='utf-8')
+    temp_json_file.write_text(json.dumps(data, ensure_ascii=False), encoding='utf-8')
     result = parse_json_sidecar(temp_json_file)
     
     assert len(result['people']) == 3
@@ -152,7 +152,7 @@ def test_parse_empty_people_array(temp_json_file):
         "people": []
     }
     
-    temp_json_file.write_text(json.dumps(data), encoding='utf-8')
+    temp_json_file.write_text(json.dumps(data, ensure_ascii=False), encoding='utf-8')
     result = parse_json_sidecar(temp_json_file)
     
     assert result['people'] == []
@@ -167,7 +167,7 @@ def test_parse_partial_geo_data(temp_json_file):
         }
     }
     
-    temp_json_file.write_text(json.dumps(data), encoding='utf-8')
+    temp_json_file.write_text(json.dumps(data, ensure_ascii=False), encoding='utf-8')
     result = parse_json_sidecar(temp_json_file)
     
     assert result['geoData']['latitude'] == 51.5074
@@ -182,7 +182,7 @@ def test_parse_image_views(temp_json_file):
         "imageViews": "42"
     }
     
-    temp_json_file.write_text(json.dumps(data), encoding='utf-8')
+    temp_json_file.write_text(json.dumps(data, ensure_ascii=False), encoding='utf-8')
     result = parse_json_sidecar(temp_json_file)
     
     assert result['imageViews'] == "42"
@@ -198,7 +198,7 @@ def test_parse_app_source(temp_json_file):
         }
     }
     
-    temp_json_file.write_text(json.dumps(data), encoding='utf-8')
+    temp_json_file.write_text(json.dumps(data, ensure_ascii=False), encoding='utf-8')
     result = parse_json_sidecar(temp_json_file)
     
     assert result['appSource'] == {"androidPackageName": "com.whatsapp"}
@@ -214,7 +214,7 @@ def test_parse_from_shared_album(temp_json_file):
         }
     }
     
-    temp_json_file.write_text(json.dumps(data), encoding='utf-8')
+    temp_json_file.write_text(json.dumps(data, ensure_ascii=False), encoding='utf-8')
     result = parse_json_sidecar(temp_json_file)
     
     assert 'googlePhotosOrigin' in result
@@ -233,7 +233,7 @@ def test_parse_mobile_upload_without_device_folder(temp_json_file):
         }
     }
     
-    temp_json_file.write_text(json.dumps(data), encoding='utf-8')
+    temp_json_file.write_text(json.dumps(data, ensure_ascii=False), encoding='utf-8')
     result = parse_json_sidecar(temp_json_file)
     
     assert 'googlePhotosOrigin' in result
@@ -249,7 +249,7 @@ def test_parse_timezone_aware_timestamp(temp_json_file):
         }
     }
     
-    temp_json_file.write_text(json.dumps(data), encoding='utf-8')
+    temp_json_file.write_text(json.dumps(data, ensure_ascii=False), encoding='utf-8')
     result = parse_json_sidecar(temp_json_file)
     
     # Check that timestamp is ISO format with timezone
@@ -297,7 +297,7 @@ def test_parse_complete_takeout_json(temp_json_file):
         }
     }
     
-    temp_json_file.write_text(json.dumps(data), encoding='utf-8')
+    temp_json_file.write_text(json.dumps(data, ensure_ascii=False), encoding='utf-8')
     result = parse_json_sidecar(temp_json_file)
     
     # Verify all fields are parsed
@@ -323,7 +323,7 @@ def test_parse_integer_timestamp(temp_json_file):
         }
     }
     
-    temp_json_file.write_text(json.dumps(data), encoding='utf-8')
+    temp_json_file.write_text(json.dumps(data, ensure_ascii=False), encoding='utf-8')
     result = parse_json_sidecar(temp_json_file)
     
     assert result['photoTakenTime'] is not None
@@ -338,7 +338,7 @@ def test_parse_direct_integer_timestamp(temp_json_file):
         "photoTakenTime": 1609459200  # Direct integer, no dict wrapper
     }
     
-    temp_json_file.write_text(json.dumps(data), encoding='utf-8')
+    temp_json_file.write_text(json.dumps(data, ensure_ascii=False), encoding='utf-8')
     result = parse_json_sidecar(temp_json_file)
     
     # Should handle gracefully and convert to ISO format
@@ -354,7 +354,7 @@ def test_parse_string_timestamp(temp_json_file):
         "photoTakenTime": "2021-01-01T00:00:00+00:00"  # Direct ISO string
     }
     
-    temp_json_file.write_text(json.dumps(data), encoding='utf-8')
+    temp_json_file.write_text(json.dumps(data, ensure_ascii=False), encoding='utf-8')
     result = parse_json_sidecar(temp_json_file)
     
     # Should return as-is
@@ -370,7 +370,7 @@ def test_parse_malformed_timestamp_dict(temp_json_file):
         }
     }
     
-    temp_json_file.write_text(json.dumps(data), encoding='utf-8')
+    temp_json_file.write_text(json.dumps(data, ensure_ascii=False), encoding='utf-8')
     result = parse_json_sidecar(temp_json_file)
     
     # Should handle gracefully and return None
@@ -386,7 +386,7 @@ def test_parse_invalid_timestamp_value(temp_json_file):
         }
     }
     
-    temp_json_file.write_text(json.dumps(data), encoding='utf-8')
+    temp_json_file.write_text(json.dumps(data, ensure_ascii=False), encoding='utf-8')
     result = parse_json_sidecar(temp_json_file)
     
     # Should handle gracefully and return None
@@ -400,7 +400,7 @@ def test_parse_null_timestamp(temp_json_file):
         "photoTakenTime": None
     }
     
-    temp_json_file.write_text(json.dumps(data), encoding='utf-8')
+    temp_json_file.write_text(json.dumps(data, ensure_ascii=False), encoding='utf-8')
     result = parse_json_sidecar(temp_json_file)
     
     # Should handle gracefully
@@ -418,7 +418,7 @@ def test_parse_malformed_people_array(temp_json_file):
         ]
     }
     
-    temp_json_file.write_text(json.dumps(data), encoding='utf-8')
+    temp_json_file.write_text(json.dumps(data, ensure_ascii=False), encoding='utf-8')
     result = parse_json_sidecar(temp_json_file)
     
     # Should extract valid names and skip invalid entries
@@ -439,7 +439,7 @@ def test_parse_malformed_geo_data(temp_json_file):
         }
     }
     
-    temp_json_file.write_text(json.dumps(data), encoding='utf-8')
+    temp_json_file.write_text(json.dumps(data, ensure_ascii=False), encoding='utf-8')
     result = parse_json_sidecar(temp_json_file)
     
     # Should handle gracefully - extract what's valid, skip invalid
@@ -462,7 +462,7 @@ def test_parse_mixed_timestamp_formats(temp_json_file):
         }
     }
     
-    temp_json_file.write_text(json.dumps(data), encoding='utf-8')
+    temp_json_file.write_text(json.dumps(data, ensure_ascii=False), encoding='utf-8')
     result = parse_json_sidecar(temp_json_file)
     
     # photoTakenTime should be parsed (takes precedence)
