@@ -8,6 +8,8 @@ from typing import Optional
 
 from .parallel_scanner import ParallelScanner
 from .config import MediaScannerConfig
+from .database import DatabaseConnection
+from .migrations import MigrationRunner
 from gphotos_321sync.common import setup_logging, ConfigLoader
 
 # Application name derived from package name
@@ -90,6 +92,21 @@ def scan_command(
         if not target_media_path.exists():
             logger.error(f"Target media directory does not exist: {target_media_path}")
             return 1
+        
+        # Initialize database schema if needed
+        logger.info("Checking database schema...")
+        db_conn = DatabaseConnection(database_path)
+        db_conn.connect()
+        
+        # Get schema directory (relative to this module)
+        schema_dir = Path(__file__).parent / "schema"
+        migration_runner = MigrationRunner(db_conn, schema_dir)
+        
+        # Apply any pending migrations
+        migration_runner.apply_migrations()
+        db_conn.close()
+        
+        logger.info("Database schema is up to date")
         
         # Create scanner and run
         scanner = ParallelScanner(
