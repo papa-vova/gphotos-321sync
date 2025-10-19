@@ -163,6 +163,11 @@ class ParallelScanner:
             # Phase 3: Parallel processing
             logger.info("Phase 3: Processing files in parallel...")
             
+            # CRITICAL: Close main connection before parallel processing
+            # Writer thread will open its own connection
+            conn.close()
+            logger.debug("Closed main connection before parallel processing")
+            
             # Initialize components
             self._initialize_components(total_files)
             
@@ -182,6 +187,11 @@ class ParallelScanner:
             
             # Final progress log
             self.progress_tracker.log_final_summary()
+            
+            # Reopen connection for final operations
+            conn = db_conn.connect()
+            scan_run_dal = ScanRunDAL(conn)
+            logger.debug("Reopened main connection for final operations")
             
             # Complete scan run
             scan_run_dal.complete_scan_run(scan_run_id, "completed")
