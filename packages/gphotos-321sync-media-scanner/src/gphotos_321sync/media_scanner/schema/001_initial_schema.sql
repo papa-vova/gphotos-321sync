@@ -69,6 +69,7 @@ CREATE TABLE IF NOT EXISTS media_items (
     file_size INTEGER NOT NULL CHECK(file_size >= 0),
     crc32 TEXT CHECK(crc32 IS NULL OR length(crc32) = 8),  -- 8 hex chars for CRC32
     content_fingerprint TEXT CHECK(content_fingerprint IS NULL OR length(content_fingerprint) = 64),  -- 64 hex chars for SHA-256
+    sidecar_fingerprint TEXT CHECK(sidecar_fingerprint IS NULL OR length(sidecar_fingerprint) = 64),  -- 64 hex chars for SHA-256 of JSON sidecar
     
     -- Dimensions
     width INTEGER CHECK(width IS NULL OR width >= 0),

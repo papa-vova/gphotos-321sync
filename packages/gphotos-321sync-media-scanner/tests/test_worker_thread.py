@@ -7,7 +7,9 @@ from queue import Queue
 from unittest.mock import MagicMock, Mock, patch
 import pytest
 
+from gphotos_321sync.media_scanner.database import DatabaseConnection
 from gphotos_321sync.media_scanner.discovery import FileInfo
+from gphotos_321sync.media_scanner.migrations import MigrationRunner
 from gphotos_321sync.media_scanner.parallel.worker_thread import (
     worker_thread_main,
     worker_thread_batch_main,
@@ -38,6 +40,20 @@ def results_queue():
 def shutdown_event():
     """Create a shutdown event."""
     return threading.Event()
+
+
+@pytest.fixture
+def test_db(tmp_path):
+    """Create a test database with schema."""
+    db_path = tmp_path / "test.db"
+    db = DatabaseConnection(db_path)
+    
+    # Apply migrations to create schema
+    schema_dir = Path(__file__).parent.parent / "src" / "gphotos_321sync" / "media_scanner" / "schema"
+    runner = MigrationRunner(db, schema_dir)
+    runner.apply_migrations()
+    
+    return db_path
 
 
 @pytest.fixture
@@ -142,6 +158,7 @@ class TestWorkerThreadMain:
         work_queue,
         results_queue,
         mock_process_pool,
+        test_db,
         shutdown_event,
     ):
         """Test worker thread processes a single item."""
@@ -175,6 +192,7 @@ class TestWorkerThreadMain:
                     work_queue,
                     results_queue,
                     mock_process_pool,
+                    str(test_db),
                     "scan-789",
                     False,
                     False,
@@ -199,6 +217,7 @@ class TestWorkerThreadMain:
         work_queue,
         results_queue,
         mock_process_pool,
+        test_db,
         shutdown_event,
     ):
         """Test worker thread handles processing errors."""
@@ -211,7 +230,7 @@ class TestWorkerThreadMain:
         # Run worker thread in actual thread
         thread = threading.Thread(
             target=worker_thread_main,
-            args=(1, work_queue, results_queue, mock_process_pool, "scan-789", False, False, shutdown_event),
+            args=(1, work_queue, results_queue, mock_process_pool, str(test_db), "scan-789", False, False, shutdown_event),
         )
         thread.start()
         thread.join(timeout=2.0)
@@ -228,6 +247,7 @@ class TestWorkerThreadMain:
         work_queue,
         results_queue,
         mock_process_pool,
+        test_db,
         shutdown_event,
     ):
         """Test worker thread respects shutdown event."""
@@ -237,7 +257,7 @@ class TestWorkerThreadMain:
         # Run worker thread in actual thread
         thread = threading.Thread(
             target=worker_thread_main,
-            args=(1, work_queue, results_queue, mock_process_pool, "scan-789", False, False, shutdown_event),
+            args=(1, work_queue, results_queue, mock_process_pool, str(test_db), "scan-789", False, False, shutdown_event),
         )
         thread.start()
         thread.join(timeout=2.0)
@@ -252,6 +272,7 @@ class TestWorkerThreadMain:
         work_queue,
         results_queue,
         mock_process_pool,
+        test_db,
         shutdown_event,
     ):
         """Test worker thread processes multiple items."""
@@ -286,7 +307,7 @@ class TestWorkerThreadMain:
             
             thread = threading.Thread(
                 target=worker_thread_main,
-                args=(1, work_queue, results_queue, mock_process_pool, "scan-789", False, False, shutdown_event),
+                args=(1, work_queue, results_queue, mock_process_pool, str(test_db), "scan-789", False, False, shutdown_event),
             )
             thread.start()
             thread.join(timeout=2.0)
@@ -304,6 +325,7 @@ class TestWorkerThreadMain:
         work_queue,
         results_queue,
         mock_process_pool,
+        test_db,
         shutdown_event,
     ):
         """Test that task_done is called for each work item."""
@@ -321,14 +343,18 @@ class TestWorkerThreadMain:
             
             thread = threading.Thread(
                 target=worker_thread_main,
-                args=(1, work_queue, results_queue, mock_process_pool, "scan-789", False, False, shutdown_event),
+                args=(1, work_queue, results_queue, mock_process_pool, str(test_db), "scan-789", False, False, shutdown_event),
             )
             thread.start()
             thread.join(timeout=2.0)
             assert not thread.is_alive()
         
-        # Verify queue is empty and all tasks marked done
-        assert work_queue.qsize() == 0
+        # Verify task was processed
+        # Note: Sentinel is put back in queue for other workers
+        # The test verifies the worker processed the work item by checking results
+        assert results_queue.qsize() == 1  # One result from processing the work item
+        result = results_queue.get()
+        assert result["type"] == "media_item"
 
 
 class TestWorkerThreadBatchMain:

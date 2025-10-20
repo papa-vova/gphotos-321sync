@@ -13,15 +13,20 @@ Architecture:
 - Results queue: MediaItemRecord or error dicts
 """
 
+import hashlib
 import logging
 from multiprocessing.pool import Pool
 from pathlib import Path
 from queue import Empty, Queue
 from typing import Any, Dict, Optional
 
+from gphotos_321sync.common import normalize_path
+from ..dal.media_items import MediaItemDAL
+from ..database import DatabaseConnection
 from ..discovery import FileInfo
 from ..errors import classify_error
 from ..file_processor import process_file_cpu_work
+from ..fingerprint import compute_content_fingerprint
 from ..metadata_coordinator import coordinate_metadata
 
 logger = logging.getLogger(__name__)
@@ -37,61 +42,138 @@ def worker_thread_main(
     work_queue: Queue,
     results_queue: Queue,
     process_pool: Pool,
+    db_path: str,
     scan_run_id: str,
     use_exiftool: bool,
     use_ffprobe: bool,
-    shutdown_event: Any,  # threading.Event
+    shutdown_event: Any,
 ) -> None:
-    """Main function for worker thread.
+    """Main function for worker thread with early-exit optimization.
+    
+    Checks if files are unchanged before processing:
+    1. Calculate quick fingerprints (content + sidecar)
+    2. Check if file exists in DB with matching fingerprints
+    3. If unchanged, skip all expensive processing (EXIF, video, JSON parsing)
+    4. If changed or new, do full processing
     
     Args:
         thread_id: Unique identifier for this worker thread
         work_queue: Queue of (FileInfo, album_id) tuples to process
         results_queue: Queue for results (MediaItemRecord or error dict)
         process_pool: Multiprocessing pool for CPU work
+        db_path: Path to database for checking existing files
         scan_run_id: Current scan run UUID
         use_exiftool: Whether to use exiftool for EXIF extraction
         use_ffprobe: Whether to use ffprobe for video metadata
         shutdown_event: Event to signal shutdown
-    
-    Returns:
-        None (runs until shutdown_event is set or queue is empty)
     """
     logger.info(f"Worker thread {thread_id} started")
     
+    # Open database connection for this thread
+    db_conn = DatabaseConnection(Path(db_path))
+    conn = db_conn.connect()
+    media_dal = MediaItemDAL(conn)
+    
     processed_count = 0
+    skipped_count = 0
     error_count = 0
     
+    shutdown_received = False
+    
     try:
-        while not shutdown_event.is_set():
+        while not shutdown_event.is_set() and not shutdown_received:
             try:
-                # Get work from queue with timeout to check shutdown event
+                # Get work item from queue
                 work_item = work_queue.get(timeout=0.1)
                 
-                # Check for sentinel value (shutdown signal)
+                # Check for sentinel
                 if work_item is None:
                     logger.debug(f"Worker thread {thread_id} received shutdown sentinel")
+                    work_queue.put(None)  # Put back for other workers
+                    work_queue.task_done()  # Mark sentinel as done
+                    shutdown_received = True
                     break
                 
                 file_info, album_id = work_item
                 
                 try:
-                    # Process the file
-                    result = _process_file_work(
-                        file_info=file_info,
-                        album_id=album_id,
-                        process_pool=process_pool,
-                        scan_run_id=scan_run_id,
-                        use_exiftool=use_exiftool,
-                        use_ffprobe=use_ffprobe,
+                    # EARLY EXIT OPTIMIZATION: Check if file is unchanged
+                    # Step 1: Calculate quick fingerprints
+                    normalized_path = normalize_path(file_info.relative_path)
+                    content_fingerprint = compute_content_fingerprint(
+                        file_info.file_path,
+                        file_info.file_size
                     )
                     
-                    # Put result in results queue
-                    results_queue.put(result)
-                    processed_count += 1
+                    # Step 2: Calculate sidecar fingerprint if present
+                    sidecar_fingerprint = None
+                    if file_info.json_sidecar_path:
+                        try:
+                            with open(file_info.json_sidecar_path, 'rb') as f:
+                                sidecar_fingerprint = hashlib.sha256(f.read()).hexdigest()
+                        except Exception as e:
+                            logger.warning(
+                                f"Failed to calculate sidecar fingerprint for {file_info.relative_path}: {e}"
+                            )
                     
+                    # Step 3: Check if file exists with matching fingerprints
+                    if media_dal.check_file_unchanged(
+                        normalized_path,
+                        content_fingerprint,
+                        sidecar_fingerprint
+                    ):
+                        # File is unchanged - skip all expensive processing!
+                        logger.debug(f"Skipping unchanged file: {file_info.relative_path}")
+                        skipped_count += 1
+                        work_queue.task_done()
+                        continue
+                    
+                    # File is new or changed - do full processing
+                    logger.debug(f"Processing changed/new file: {file_info.relative_path}")
+                    
+                    # Submit CPU work to process pool
+                    cpu_future = process_pool.apply_async(
+                        process_file_cpu_work,
+                        (
+                            file_info.file_path,
+                            file_info.file_size,
+                            use_exiftool,
+                            use_ffprobe,
+                        )
+                    )
+                    
+                    # Wait for CPU work to complete
+                    metadata_ext = cpu_future.get(timeout=300)
+                    
+                    # Check for CPU errors
+                    if metadata_ext.get("error"):
+                        error_result = {
+                            "type": "error",
+                            "file_path": str(file_info.file_path),
+                            "relative_path": file_info.relative_path,
+                            "error_type": "media_file",
+                            "error_category": metadata_ext["error_category"],
+                            "error_message": metadata_ext["error_message"],
+                            "scan_run_id": scan_run_id,
+                        }
+                        results_queue.put(error_result)
+                        error_count += 1
+                    else:
+                        # Coordinate metadata (parse JSON, aggregate)
+                        media_item_record = coordinate_metadata(
+                            file_info=file_info,
+                            metadata_ext=metadata_ext,
+                            album_id=album_id,
+                            scan_run_id=scan_run_id,
+                        )
+                        
+                        results_queue.put({
+                            "type": "media_item",
+                            "record": media_item_record,
+                        })
+                        processed_count += 1
+                        
                 except Exception as e:
-                    # Handle processing errors
                     error_result = {
                         "type": "error",
                         "file_path": str(file_info.file_path),
@@ -110,21 +192,21 @@ def worker_thread_main(
                     )
                 
                 finally:
-                    # Mark task as done
                     work_queue.task_done()
                     
             except Empty:
-                # Queue is empty, check shutdown event and continue
+                # Queue is empty, continue waiting
                 continue
-                
+    
     except Exception as e:
         logger.error(f"Worker thread {thread_id} crashed: {e}", exc_info=True)
         raise
     
     finally:
+        conn.close()
         logger.info(
             f"Worker thread {thread_id} shutting down "
-            f"(processed={processed_count}, errors={error_count})"
+            f"(processed={processed_count}, skipped={skipped_count}, errors={error_count})"
         )
 
 

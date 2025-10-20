@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Iterator, Optional
 from datetime import datetime, timezone
 
+from gphotos_321sync.common import normalize_path
 from .dal.albums import AlbumDAL
 from .errors import ParseError
 
@@ -225,10 +226,13 @@ def discover_albums(target_media_path: Path, album_dal: AlbumDAL, scan_run_id: s
             title = f"Photos from {year}"
             year_albums += 1
         
+        # Normalize album folder path for database storage (forward slashes, NFC)
+        normalized_album_path = normalize_path(str(album_folder_path))
+        
         # Insert/update album in database
         album_data = {
             'album_id': album_id,
-            'album_folder_path': str(album_folder_path),
+            'album_folder_path': normalized_album_path,
             'title': title,
             'description': description,
             'creation_timestamp': creation_timestamp,
@@ -238,7 +242,7 @@ def discover_albums(target_media_path: Path, album_dal: AlbumDAL, scan_run_id: s
         }
         
         # Check if album already exists
-        existing = album_dal.get_album_by_path(str(album_folder_path))
+        existing = album_dal.get_album_by_path(normalized_album_path)
         if existing:
             # Update existing album
             album_dal.update_album(

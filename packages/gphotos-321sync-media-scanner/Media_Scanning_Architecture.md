@@ -26,24 +26,28 @@ This document outlines the architecture for scanning and cataloging Google Photo
 ### 1. Resumability
 
 - Scanning can be interrupted and resumed without duplicate work
-- Change detection (two-tier approach):
+- Change detection (optimized three-tier approach):
   1. **Fast check:** `(relative_path, file_size)` [path relative to scan root, excludes Takeout/Google Photos] used only as an index lookup shortcut.
   2. **Content verification:** On every rescan, the scanner **always recomputes** the head+tail SHA-256 fingerprint and compares it with the stored value before deciding to skip. No early "continue" is allowed prior to this step.
-  3. If fingerprint matches: skip full processing, update `scan_run_id` and `last_seen_timestamp`
-  4. If fingerprint differs: full reprocessing (detects in-place edits, metadata changes, lossless rotations)
+  3. **Sidecar verification:** If a JSON sidecar exists, compute its SHA-256 fingerprint and compare with stored value. File is unchanged only if BOTH content and sidecar fingerprints match.
+  4. If both fingerprints match: skip all expensive processing (EXIF extraction, video metadata, JSON parsing)
+  5. If either fingerprint differs: full reprocessing (detects in-place edits, metadata changes, sidecar updates)
 
 ```python
-# Pseudocode
-row = db.get(path, size)
-if row:
-    fp_now = compute_head_tail_sha256(path, size)
-    if fp_now == row.content_fingerprint:
-        mark_seen(path)  # updates scan_run_id + timestamp
-        skip_metadata()
-    else:
-        reprocess(path)
+# Pseudocode (optimized rescan)
+normalized_path = normalize_path(relative_path)
+content_fp = compute_head_tail_sha256(file_path, file_size)
+sidecar_fp = compute_sha256(sidecar_path) if sidecar_exists else None
+
+if db.check_file_unchanged(normalized_path, content_fp, sidecar_fp):
+    # File and sidecar unchanged - skip ALL expensive work
+    skip_processing()
 else:
-    process_first_time(path)
+    # File or sidecar changed - do full processing
+    extract_exif()
+    extract_video_metadata()
+    parse_json_sidecar()
+    insert_or_update_db()
 ```
 
 - Tracks scan sessions in `scan_runs` table with statistics
@@ -265,7 +269,9 @@ CREATE INDEX idx_errors_path ON processing_errors(relative_path);
 - `file_size` - File size in bytes
 - `crc32` - CRC32 of full file (for fast duplicate candidate detection)
 - `content_fingerprint` - SHA-256 of (first 64KB + last 64KB) for change detection (always verified on rescans)
+- `sidecar_fingerprint` - SHA-256 of JSON sidecar file (NULL if no sidecar) for detecting sidecar changes without re-parsing
 - **Duplicate detection:** Query by `file_size + CRC32` for candidates; on collision, compute SHA-256 to confirm
+- **Rescan optimization:** Query by `(relative_path, content_fingerprint, sidecar_fingerprint)` to skip unchanged files
 - `width` - Image/video width in pixels
 - `height` - Image/video height in pixels
 - `duration_seconds` - Video duration (NULL for images)
@@ -649,8 +655,8 @@ for result in pool.imap_unordered(cpu_work, work_batch, chunksize=10):
 **Summary (after scan):**
 
 - New files added
-- Unchanged files (skipped via path+size heuristic)
-- Changed files (reprocessed)
+- Unchanged files (skipped via fingerprint match - early exit optimization)
+- Changed files (reprocessed due to content or sidecar changes)
 - Missing files (deleted from disk)
 - Error files (failed to process)
 - Inconsistent files (current scan_run_id but old timestamp)
@@ -667,6 +673,7 @@ for result in pool.imap_unordered(cpu_work, work_batch, chunksize=10):
   "media_files": 100000,
   "metadata_files": 25000,
   "files_processed": 45000,
+  "files_skipped": 42000,
   "progress_percent": 45.0,
   "files_per_sec": 12.3,
   "work_queue_depth": 234,
@@ -702,20 +709,3 @@ for result in pool.imap_unordered(cpu_work, work_batch, chunksize=10):
   }
 }
 ```
-
-## Next Steps
-
-- [ ] **Full Schema DDL** - CREATE TABLE statements with indexes
-- [ ] **Test Fixtures** - Edge cases (Live Photos, edited variants, missing EXIF)
-- [ ] **Migration Scripts** - Numbered SQL files (001_initial.sql, etc.)
-- [ ] **Implementation** - Worker threads, process pool, writer
-
----
-
-**Document History:**
-
-- 2025-10-12: Initial architecture
-- 2025-10-12: Added SQLite config, metadata extraction, edge cases, error handling, hardware profiles
-- 2025-10-13: Added processing_errors table, scan statistics, progress tracking, 4-status model (present/missing/error/inconsistent), post-scan validation logic
-- 2025-10-13: Design review responses: head+tail fingerprint, CRC32+SHA-256 duplicate resolution, verified change detection, WAL checkpointing, memory-aware queues, ffprobe overhead, tool availability checks, worker pool saturation, person_name uniqueness clarification
-- 2025-10-13: Album design clarification: album_id is NOT NULL (every file is in a folder, every folder is an album), added album status field, explicit album error handling, person_id is UUID4

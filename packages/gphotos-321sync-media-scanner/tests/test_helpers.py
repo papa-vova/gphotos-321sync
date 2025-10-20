@@ -35,6 +35,7 @@ def create_media_item_record(**kwargs) -> MediaItemRecord:
         'file_size': 0,
         'crc32': None,
         'content_fingerprint': None,
+        'sidecar_fingerprint': None,
         'width': None,
         'height': None,
         'duration_seconds': None,

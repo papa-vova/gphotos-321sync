@@ -54,7 +54,7 @@ class MediaItemDAL:
             """
             INSERT INTO media_items (
                 media_item_id, relative_path, album_id, title, mime_type,
-                file_size, crc32, content_fingerprint,
+                file_size, crc32, content_fingerprint, sidecar_fingerprint,
                 width, height, duration_seconds, frame_rate,
                 capture_timestamp, scan_run_id, status,
                 original_media_item_id, live_photo_pair_id,
@@ -70,7 +70,7 @@ class MediaItemDAL:
                 google_geo_data_longitude_span
             )
             VALUES (
-                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                 ?, ?, ?, ?, ?, ?
             )
@@ -84,6 +84,7 @@ class MediaItemDAL:
                 item.file_size,
                 item.crc32,
                 item.content_fingerprint,
+                item.sidecar_fingerprint,
                 item.width,
                 item.height,
                 item.duration_seconds,
@@ -173,6 +174,43 @@ class MediaItemDAL:
         if row:
             return dict(row)
         return None
+    
+    def check_file_unchanged(
+        self,
+        relative_path: str,
+        content_fingerprint: str,
+        sidecar_fingerprint: Optional[str]
+    ) -> bool:
+        """
+        Check if file exists with matching fingerprints (unchanged).
+        
+        This is used during rescans to skip processing of unchanged files.
+        A file is considered unchanged if:
+        - It exists in the database with the same path
+        - Content fingerprint matches
+        - Sidecar fingerprint matches (or both are None)
+        
+        Args:
+            relative_path: Normalized relative path to file
+            content_fingerprint: SHA-256 fingerprint of file content
+            sidecar_fingerprint: SHA-256 fingerprint of JSON sidecar (None if no sidecar)
+            
+        Returns:
+            True if file exists and is unchanged, False otherwise
+        """
+        cursor = self.db.execute(
+            """
+            SELECT 1 FROM media_items 
+            WHERE relative_path = ? 
+            AND content_fingerprint = ?
+            AND (sidecar_fingerprint = ? OR (sidecar_fingerprint IS NULL AND ? IS NULL))
+            """,
+            (relative_path, content_fingerprint, sidecar_fingerprint, sidecar_fingerprint)
+        )
+        row = cursor.fetchone()
+        cursor.close()
+        
+        return row is not None
     
     def get_media_item_by_id(self, media_item_id: str) -> Optional[Dict[str, Any]]:
         """

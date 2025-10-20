@@ -4,11 +4,11 @@ Comprehensive documentation of all test suites in the gphotos-321sync project.
 
 ## Summary
 
-**Total: 354 tests** (12 + 42 + 300)
+**Total: 353 tests** (12 + 42 + 299)
 
 - **gphotos-321sync-common:** 12 tests
 - **gphotos-321sync-takeout-extractor:** 42 tests
-- **gphotos-321sync-media-scanner:** 300 tests
+- **gphotos-321sync-media-scanner:** 299 tests
 
 ---
 
@@ -158,7 +158,7 @@ Tests for media scanner path utilities (6 tests).
 
 ### test_database.py
 
-Tests for database connection and DAL operations (8 tests).
+Tests for database connection and DAL operations (9 tests).
 
 | # | Test | Input | Output | Conditions/Assumptions | Logic |
 |---|------|-------|--------|----------------------|-------|
@@ -168,8 +168,9 @@ Tests for database connection and DAL operations (8 tests).
 | 4 | `test_scan_run_dal` | Call ScanRunDAL methods | create_scan_run() → get_scan_run() → update_scan_run() → complete_scan_run() all succeed | Tests scan_runs table operations | Tests CRUD operations on scan_runs table: create new scan, retrieve by ID, update fields (files_processed), mark as completed with end_timestamp |
 | 5 | `test_album_dal` | Call AlbumDAL methods with scan_run_id | insert_album() → get_album_by_path() → get_album_by_id() → update_album() all succeed | Tests albums table operations | Tests CRUD operations on albums table: insert album with path/title, retrieve by path or ID, update fields (description). Requires scan_run_id foreign key. |
 | 6 | `test_media_item_dal` | Call MediaItemDAL methods with album_id + scan_run_id | insert_media_item() → get_media_item_by_path() → update_media_item() all succeed | Tests media_items table operations | Tests CRUD operations on media_items table: insert item with UUID/path/size/mime_type, retrieve by path or ID, update metadata (width/height). Requires album_id and scan_run_id foreign keys. |
-| 7 | `test_processing_error_dal` | Call ProcessingErrorDAL methods with scan_run_id | insert_error() → get_errors_by_scan() → get_error_count() → get_error_summary() all succeed | Tests processing_errors table operations | Tests error tracking: insert error with type/category/message, retrieve all errors for scan, get total count, get summary grouped by category (e.g., {'corrupted': 1}) |
-| 8 | `test_transaction_rollback` | Start transaction, insert valid row, insert into invalid_table (fails), catch exception | get_scan_run() returns None (first insert was rolled back) | Tests SQLite transaction rollback | Tests that when transaction fails (invalid SQL), all operations in that transaction are rolled back and no data persists |
+| 7 | `test_check_file_unchanged` | Media items with content_fingerprint and sidecar_fingerprint | check_file_unchanged() returns True for matching fingerprints, False otherwise | Tests rescan optimization | Tests early-exit optimization: verifies that files with matching content AND sidecar fingerprints are detected as unchanged. Tests NULL sidecar handling and mismatch detection. |
+| 8 | `test_processing_error_dal` | Call ProcessingErrorDAL methods with scan_run_id | insert_error() → get_errors_by_scan() → get_error_count() → get_error_summary() all succeed | Tests processing_errors table operations | Tests error tracking: insert error with type/category/message, retrieve all errors for scan, get total count, get summary grouped by category (e.g., {'corrupted': 1}) |
+| 9 | `test_transaction_rollback` | Start transaction, insert valid row, insert into invalid_table (fails), catch exception | get_scan_run() returns None (first insert was rolled back) | Tests SQLite transaction rollback | Tests that when transaction fails (invalid SQL), all operations in that transaction are rolled back and no data persists |
 
 ### test_migrations.py
 
@@ -320,7 +321,7 @@ Tests for content fingerprinting utilities (3 tests).
 
 ### test_json_parser.py
 
-Tests for JSON sidecar parser (27 tests).
+Tests for JSON sidecar parser (25 tests).
 
 **Rationale**: Ensures Google Takeout JSON metadata is correctly parsed, including new fields (imageViews, appSource), origin types (fromSharedAlbum), timezone-aware timestamp handling, and robust error handling for malformed/unexpected data formats.
 
@@ -342,16 +343,15 @@ Tests for JSON sidecar parser (27 tests).
 | 14 | `test_parse_mobile_upload_without_device_folder` | JSON with googlePhotosOrigin.mobileUpload.deviceType="ANDROID_PHONE" (no deviceFolder) | result['googlePhotosOrigin']['mobileUpload']['deviceType']=="ANDROID_PHONE", deviceFolder absent | deviceFolder may be completely absent | Tests that deviceFolder is optional. Modern (2024+) exports often omit deviceFolder entirely (not just empty). App must handle absence gracefully. |
 | 15 | `test_parse_timezone_aware_timestamp` | JSON with photoTakenTime.timestamp="1609459200" | result['photoTakenTime']=="2021-01-01T00:00:00+00:00" (with timezone) | Unix timestamp | Tests timezone-aware datetime parsing. App uses datetime.fromtimestamp(timestamp, tz=timezone.utc) to ensure all timestamps are UTC-aware. Prevents DST bugs and cross-timezone issues. |
 | 16 | `test_parse_complete_takeout_json` | Real-world JSON with all fields: title, description, imageViews, creationTime, photoTakenTime, geoData, people, url, googlePhotosOrigin.mobileUpload, appSource | All fields correctly parsed | Complete real-world export | Integration test with actual Google Takeout JSON structure. Tests: imageViews="6", appSource.androidPackageName="com.whatsapp", googlePhotosOrigin.mobileUpload.deviceFolder.localFolderName="WhatsApp Images", people=["John Doe"]. Validates end-to-end parsing of modern (2024) Takeout format. |
-| 17 | `test_parse_timezone_aware_timestamp` | JSON with photoTakenTime.timestamp="1609459200" | Timestamp contains '+00:00' or 'Z', starts with '2021-01-01T00:00:00' | Timezone-aware parsing | Verifies parsed timestamps are timezone-aware (UTC) using datetime.fromtimestamp(timestamp, tz=timezone.utc). Critical for preventing DST bugs. |
-| 18 | `test_parse_integer_timestamp` | JSON with photoTakenTime.timestamp=1609459200 (INTEGER, not string) | result['photoTakenTime'] is ISO format starting with '2021-01-01T00:00:00' | Real Google Takeout data | Tests that parser handles integer timestamps in dict (Google sometimes exports timestamp as int, not string). Prevents TypeError: fromisoformat: argument must be str, not int. |
-| 19 | `test_parse_direct_integer_timestamp` | JSON with photoTakenTime=1609459200 (direct integer, no dict wrapper) | result['photoTakenTime'] is ISO format starting with '2021-01-01T00:00:00' | Edge case format | Tests parser handles timestamp as direct integer value (no dict). Rare but possible in malformed exports. |
-| 20 | `test_parse_string_timestamp` | JSON with photoTakenTime="2021-01-01T00:00:00+00:00" (direct ISO string) | result['photoTakenTime']=="2021-01-01T00:00:00+00:00" | Already formatted | Tests parser handles pre-formatted ISO strings (returns as-is). |
-| 21 | `test_parse_malformed_timestamp_dict` | JSON with photoTakenTime={"invalid_field": "value"} (missing timestamp and formatted) | result['photoTakenTime'] is None | Malformed data | Tests parser handles malformed timestamp dict gracefully (returns None instead of crashing). |
-| 22 | `test_parse_invalid_timestamp_value` | JSON with photoTakenTime.timestamp=-1 (negative, out of range) | result['photoTakenTime'] is None | Invalid timestamp | Tests parser handles invalid timestamp values (negative/out of range) gracefully. |
-| 23 | `test_parse_null_timestamp` | JSON with photoTakenTime=null | result.get('photoTakenTime') is None | Null value | Tests parser handles null timestamps gracefully. |
-| 24 | `test_parse_malformed_people_array` | JSON with people=[{"name": "Alice"}, {"invalid_field": "Bob"}, {"name": "Charlie"}] | result['people']==["Alice", "Charlie"] (Bob skipped) | Missing name field | Tests parser skips malformed people entries (missing 'name' field) and continues with valid ones. |
-| 25 | `test_parse_malformed_geo_data` | JSON with geoData={"latitude": "invalid", "longitude": -122.4194, "altitude": null} | result['geoData']=={'longitude': -122.4194} (invalid latitude skipped, null altitude skipped) | Non-numeric geo values | Tests parser handles non-numeric/null geo coordinates gracefully (skips invalid, keeps valid). |
-| 26 | `test_parse_mixed_timestamp_formats` | JSON with photoTakenTime=1609459200 (int), creationTime={"timestamp": "1609459300"} (string in dict) | Both timestamps parsed successfully to ISO format | Mixed formats in same file | Tests parser handles multiple timestamp formats in single JSON file. |
+| 17 | `test_parse_integer_timestamp` | JSON with photoTakenTime.timestamp=1609459200 (INTEGER, not string) | result['photoTakenTime'] is ISO format starting with '2021-01-01T00:00:00' | Real Google Takeout data | Tests that parser handles integer timestamps in dict (Google sometimes exports timestamp as int, not string). Prevents TypeError: fromisoformat: argument must be str, not int. |
+| 18 | `test_parse_direct_integer_timestamp` | JSON with photoTakenTime=1609459200 (direct integer, no dict wrapper) | result['photoTakenTime'] is ISO format starting with '2021-01-01T00:00:00' | Edge case format | Tests parser handles timestamp as direct integer value (no dict). Rare but possible in malformed exports. |
+| 19 | `test_parse_string_timestamp` | JSON with photoTakenTime="2021-01-01T00:00:00+00:00" (direct ISO string) | result['photoTakenTime']=="2021-01-01T00:00:00+00:00" | Already formatted | Tests parser handles pre-formatted ISO strings (returns as-is). |
+| 20 | `test_parse_malformed_timestamp_dict` | JSON with photoTakenTime={"invalid_field": "value"} (missing timestamp and formatted) | result['photoTakenTime'] is None | Malformed data | Tests parser handles malformed timestamp dict gracefully (returns None instead of crashing). |
+| 21 | `test_parse_invalid_timestamp_value` | JSON with photoTakenTime.timestamp=-1 (negative, out of range) | result['photoTakenTime'] is None | Invalid timestamp | Tests parser handles invalid timestamp values (negative/out of range) gracefully. |
+| 22 | `test_parse_null_timestamp` | JSON with photoTakenTime=null | result.get('photoTakenTime') is None | Null value | Tests parser handles null timestamps gracefully. |
+| 23 | `test_parse_malformed_people_array` | JSON with people=[{"name": "Alice"}, {"invalid_field": "Bob"}, {"name": "Charlie"}] | result['people']==["Alice", "Charlie"] (Bob skipped) | Missing name field | Tests parser skips malformed people entries (missing 'name' field) and continues with valid ones. |
+| 24 | `test_parse_malformed_geo_data` | JSON with geoData={"latitude": "invalid", "longitude": -122.4194, "altitude": null} | result['geoData']=={'longitude': -122.4194} (invalid latitude skipped, null altitude skipped) | Non-numeric geo values | Tests parser handles non-numeric/null geo coordinates gracefully (skips invalid, keeps valid). |
+| 25 | `test_parse_mixed_timestamp_formats` | JSON with photoTakenTime=1609459200 (int), creationTime={"timestamp": "1609459300"} (string in dict) | Both timestamps parsed successfully to ISO format | Mixed formats in same file | Tests parser handles multiple timestamp formats in single JSON file. |
 
 ### test_mime_detector.py
 
@@ -502,7 +502,7 @@ Tests for metadata coordination and MediaItemRecord creation (14 tests).
 | 1 | `test_coordinate_metadata_basic` | FileInfo (path, size, mtime), metadata_ext (MIME, CRC32), album_id, scan_run_id | MediaItemRecord with all basic fields populated | Valid inputs from all sources | Creates complete media item record by merging FileInfo + metadata_ext + IDs |
 | 2 | `test_coordinate_metadata_cpu_data` | FileInfo, metadata_ext with MIME/CRC32/fingerprint/width/height | Record with mime_type='image/jpeg', crc32='a1b2c3d4', fingerprint='fff...', width=1920, height=1080 | Metadata extraction completed successfully | Verifies metadata extraction results (MIME detection, checksums, dimensions) are correctly copied into record |
 | 3 | `test_coordinate_metadata_exif_data` | FileInfo, metadata_ext with exif_data dict (camera_make, camera_model, GPS, timestamps) | Record with exif_datetime_original, exif_camera_make='Canon', exif_gps_latitude=37.7749, etc. | EXIF extraction succeeded | Extracts specific EXIF fields from nested dict into flat record fields (datetime_original, camera_make, camera_model, lens_make, lens_model, focal_length, aperture, iso, GPS) |
-| 4 | `test_coordinate_metadata_with_json_sidecar` | FileInfo with json_sidecar_path pointing to valid .json file | Record with title, description, people tags, geo_data from JSON | JSON sidecar exists and is valid | Calls parse_google_photos_json() to extract Google Takeout metadata (title, description, photoTakenTime, geoData, people) and merges into record |
+| 4 | `test_coordinate_metadata_with_json_sidecar` | FileInfo with json_sidecar_path pointing to valid .json file | Record with title, description, people tags, geo_data from JSON, sidecar_fingerprint (SHA-256) | JSON sidecar exists and is valid | Calls parse_google_photos_json() to extract Google Takeout metadata (title, description, photoTakenTime, geoData, people), calculates sidecar fingerprint for change detection, and merges into record |
 | 5 | `test_coordinate_metadata_json_parse_error` | FileInfo with json_sidecar_path pointing to malformed JSON file | Record created WITHOUT JSON metadata, no exception raised | JSON file is corrupted/invalid | Catches JSONDecodeError, logs warning, continues without JSON data (graceful degradation) |
 | 6 | `test_coordinate_metadata_video_data` | FileInfo, metadata_ext with video_data dict (duration=120.5, frame_rate=30.0) | Record with duration_seconds=120.5, frame_rate=30.0 | Video metadata extraction succeeded (ffprobe) | Extracts video-specific fields (duration, frame_rate) from metadata_ext into record |
 | 7 | `test_coordinate_metadata_no_video_data` | FileInfo, metadata_ext with video_data=None (image file) | Record with duration_seconds=None, frame_rate=None | File is an image, not a video | Handles non-video files by setting video fields to None (no error) |

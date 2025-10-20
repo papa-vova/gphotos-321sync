@@ -162,6 +162,91 @@ def test_media_item_dal(migrated_db):
     assert item['height'] == 1080
 
 
+def test_check_file_unchanged(migrated_db):
+    """Test check_file_unchanged method for rescan optimization."""
+    media_dal = MediaItemDAL(migrated_db)
+    album_dal = AlbumDAL(migrated_db)
+    scan_run_dal = ScanRunDAL(migrated_db)
+    
+    scan_run_id = scan_run_dal.create_scan_run()
+    
+    # Create album
+    album_id = album_dal.insert_album({
+        'album_folder_path': 'Photos from 2023',
+        'scan_run_id': scan_run_id
+    })
+    
+    # Insert media item with fingerprints
+    media_item_id = str(uuid.uuid4())
+    item_record = create_media_item_record(
+        media_item_id=media_item_id,
+        relative_path='Photos from 2023/IMG_001.jpg',
+        album_id=album_id,
+        file_size=1024000,
+        mime_type='image/jpeg',
+        content_fingerprint='a' * 64,
+        sidecar_fingerprint='b' * 64,
+        scan_run_id=scan_run_id
+    )
+    media_dal.insert_media_item(item_record)
+    migrated_db.commit()
+    
+    # Test: File with matching fingerprints is unchanged
+    assert media_dal.check_file_unchanged(
+        'Photos from 2023/IMG_001.jpg',
+        'a' * 64,
+        'b' * 64
+    ) is True
+    
+    # Test: File with different content fingerprint is changed
+    assert media_dal.check_file_unchanged(
+        'Photos from 2023/IMG_001.jpg',
+        'c' * 64,
+        'b' * 64
+    ) is False
+    
+    # Test: File with different sidecar fingerprint is changed
+    assert media_dal.check_file_unchanged(
+        'Photos from 2023/IMG_001.jpg',
+        'a' * 64,
+        'd' * 64
+    ) is False
+    
+    # Test: Non-existent file is not unchanged
+    assert media_dal.check_file_unchanged(
+        'Photos from 2023/IMG_999.jpg',
+        'a' * 64,
+        'b' * 64
+    ) is False
+    
+    # Test: File without sidecar (None) matches correctly
+    item_record2 = create_media_item_record(
+        media_item_id=str(uuid.uuid4()),
+        relative_path='Photos from 2023/IMG_002.jpg',
+        album_id=album_id,
+        file_size=2048000,
+        mime_type='image/jpeg',
+        content_fingerprint='e' * 64,
+        sidecar_fingerprint=None,
+        scan_run_id=scan_run_id
+    )
+    media_dal.insert_media_item(item_record2)
+    migrated_db.commit()
+    
+    assert media_dal.check_file_unchanged(
+        'Photos from 2023/IMG_002.jpg',
+        'e' * 64,
+        None
+    ) is True
+    
+    # Test: File without sidecar doesn't match if sidecar is provided
+    assert media_dal.check_file_unchanged(
+        'Photos from 2023/IMG_002.jpg',
+        'e' * 64,
+        'f' * 64
+    ) is False
+
+
 def test_processing_error_dal(migrated_db):
     """Test processing error data access layer."""
     dal = ProcessingErrorDAL(migrated_db)

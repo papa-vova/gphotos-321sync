@@ -6,6 +6,7 @@ This module handles I/O-intensive operations that run in worker threads:
 - Creating database records
 """
 
+import hashlib
 import logging
 from dataclasses import dataclass
 from datetime import datetime
@@ -42,6 +43,7 @@ class MediaItemRecord:
     file_size: int
     crc32: Optional[str]
     content_fingerprint: Optional[str]
+    sidecar_fingerprint: Optional[str]  # SHA-256 of JSON sidecar (for change detection)
     
     # Dimensions
     width: Optional[int]
@@ -91,6 +93,7 @@ class MediaItemRecord:
             'file_size': self.file_size,
             'crc32': self.crc32,
             'content_fingerprint': self.content_fingerprint,
+            'sidecar_fingerprint': self.sidecar_fingerprint,
             'width': self.width,
             'height': self.height,
             'duration_seconds': self.duration_seconds,
@@ -146,7 +149,16 @@ def coordinate_metadata(
         Exception: Any errors during processing (caller should handle)
     """
     try:
-        # 1. Parse JSON sidecar if present (I/O operation)
+        # 1. Calculate sidecar fingerprint if present (for change detection)
+        sidecar_fingerprint = None
+        if file_info.json_sidecar_path:
+            try:
+                with open(file_info.json_sidecar_path, 'rb') as f:
+                    sidecar_fingerprint = hashlib.sha256(f.read()).hexdigest()
+            except Exception as e:
+                logger.warning(f"Failed to calculate sidecar fingerprint for {file_info.relative_path}: {e}")
+        
+        # 2. Parse JSON sidecar if present (I/O operation)
         json_metadata = {}
         if file_info.json_sidecar_path:
             try:
@@ -219,6 +231,7 @@ def coordinate_metadata(
             file_size=file_info.file_size,
             crc32=metadata_ext.get('crc32'),
             content_fingerprint=metadata_ext.get('content_fingerprint'),
+            sidecar_fingerprint=sidecar_fingerprint,
             width=metadata_ext.get('width'),
             height=metadata_ext.get('height'),
             duration_seconds=duration_seconds,

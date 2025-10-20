@@ -141,6 +141,10 @@ def test_coordinate_metadata_with_json_sidecar(tmp_path, test_metadata_ext):
     assert record.google_description == "Beach photo"
     assert record.google_geo_latitude == 40.7128
     assert record.google_geo_longitude == -74.0060
+    
+    # Sidecar fingerprint should be calculated
+    assert record.sidecar_fingerprint is not None
+    assert len(record.sidecar_fingerprint) == 64  # SHA-256 hex string
 
 
 def test_coordinate_metadata_json_parse_error(tmp_path, test_metadata_ext):

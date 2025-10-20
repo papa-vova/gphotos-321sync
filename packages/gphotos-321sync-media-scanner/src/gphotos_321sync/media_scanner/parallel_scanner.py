@@ -276,6 +276,7 @@ class ParallelScanner:
                     work_queue,
                     results_queue,
                     self.process_pool,
+                    str(self.db_path),  # Pass db_path for early-exit checks
                     scan_run_id,
                     self.use_exiftool,
                     self.use_ffprobe,
