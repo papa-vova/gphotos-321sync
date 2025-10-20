@@ -135,7 +135,7 @@ class TestLinkEditedVariants:
         # Create scan run and album
         scan_run_id = scan_run_dal.create_scan_run()
         album_id = str(uuid.uuid4())
-        album_dal.insert_album({
+        album_dal.upsert_album({
             'album_id': album_id,
             'album_folder_path': "Photos/Test Album",
             'scan_run_id': scan_run_id,
@@ -197,7 +197,7 @@ class TestLinkEditedVariants:
         # Create scan run and album
         scan_run_id = scan_run_dal.create_scan_run()
         album_id = str(uuid.uuid4())
-        album_dal.insert_album({
+        album_dal.upsert_album({
             'album_id': album_id,
             'album_folder_path': "Photos/Test Album",
             'scan_run_id': scan_run_id,
@@ -251,7 +251,7 @@ class TestLinkEditedVariants:
         # Create scan run and album
         scan_run_id = scan_run_dal.create_scan_run()
         album_id = str(uuid.uuid4())
-        album_dal.insert_album({
+        album_dal.upsert_album({
             'album_id': album_id,
             'album_folder_path': "Photos/Test Album",
             'scan_run_id': scan_run_id,
@@ -293,7 +293,7 @@ class TestLinkEditedVariants:
         # Create scan run and album
         scan_run_id = scan_run_dal.create_scan_run()
         album_id = str(uuid.uuid4())
-        album_dal.insert_album({
+        album_dal.upsert_album({
             'album_id': album_id,
             'album_folder_path': "Photos/Test Album",
             'scan_run_id': scan_run_id,
@@ -340,7 +340,7 @@ class TestDetectAndLinkEditedVariants:
         # Create scan run and album
         scan_run_id = scan_run_dal.create_scan_run()
         album_id = str(uuid.uuid4())
-        album_dal.insert_album({
+        album_dal.upsert_album({
             'album_id': album_id,
             'album_folder_path': "Photos/Test Album",
             'scan_run_id': scan_run_id,
@@ -412,7 +412,7 @@ class TestDetectAndLinkEditedVariants:
         # Create scan run and album
         scan_run_id = scan_run_dal.create_scan_run()
         album_id = str(uuid.uuid4())
-        album_dal.insert_album({
+        album_dal.upsert_album({
             'album_id': album_id,
             'album_folder_path': "Photos/Test Album",
             'scan_run_id': scan_run_id,
@@ -460,7 +460,7 @@ class TestDetectAndLinkEditedVariants:
         # Create two albums with edited variants
         for album_num in range(2):
             album_id = str(uuid.uuid4())
-            album_dal.insert_album({
+            album_dal.upsert_album({
                 'album_id': album_id,
                 'album_folder_path': f"Photos/Album {album_num}",
                 'scan_run_id': scan_run_id,

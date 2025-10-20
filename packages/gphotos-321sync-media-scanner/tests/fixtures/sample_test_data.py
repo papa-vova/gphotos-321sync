@@ -16,9 +16,12 @@ Example:
 
 import argparse
 import random
+import logging
 from pathlib import Path
 from collections import defaultdict
 from typing import List, Dict, Set
+
+logger = logging.getLogger(__name__)
 
 
 def parse_file_list(file_path: str, source_root: Path = None) -> List[str]:
@@ -250,44 +253,44 @@ def write_sample_list(file_paths: List[str], output_path: str):
             f.write(f"{file_path}\n")
 
 
-def print_statistics(
+def log_statistics(
     original_files: List[str],
     sampled_files: List[str],
     albums: Dict[str, Dict[str, List[str]]]
 ):
     """
-    Print sampling statistics.
+    Log sampling statistics.
     
     Args:
         original_files: Original file list
         sampled_files: Sampled file list
         albums: Categorized albums
     """
-    print("\n" + "=" * 70)
-    print("SAMPLING STATISTICS")
-    print("=" * 70)
+    logger.info("=" * 70)
+    logger.info("SAMPLING STATISTICS")
+    logger.info("=" * 70)
     
-    print(f"\nOriginal files:     {len(original_files):>8,}")
-    print(f"Sampled files:      {len(sampled_files):>8,}")
-    print(f"Sample rate:        {len(sampled_files)/len(original_files)*100:>7.1f}%")
+    logger.info(f"Original files:     {len(original_files):>8,}")
+    logger.info(f"Sampled files:      {len(sampled_files):>8,}")
+    logger.info(f"Sample rate:        {len(sampled_files)/len(original_files)*100:>7.1f}%")
     
-    print(f"\nOriginal albums:    {len(albums):>8,}")
+    logger.info(f"Original albums:    {len(albums):>8,}")
     sampled_albums = len(set(Path(f).parent for f in sampled_files))
-    print(f"Sampled albums:     {sampled_albums:>8,}")
-    print(f"Album coverage:     {sampled_albums/len(albums)*100:>7.1f}%")
+    logger.info(f"Sampled albums:     {sampled_albums:>8,}")
+    logger.info(f"Album coverage:     {sampled_albums/len(albums)*100:>7.1f}%")
     
     # Count file types in sample
     image_count = sum(1 for f in sampled_files if Path(f).suffix.lower() in ['.jpg', '.jpeg', '.png', '.heic'])
     video_count = sum(1 for f in sampled_files if Path(f).suffix.lower() in ['.mp4', '.mov'])
     json_count = sum(1 for f in sampled_files if Path(f).suffix.lower() == '.json')
     
-    print(f"\nSample composition:")
-    print(f"  Images:           {image_count:>8,}")
-    print(f"  Videos:           {video_count:>8,}")
-    print(f"  JSON sidecars:    {json_count:>8,}")
-    print(f"  Other:            {len(sampled_files) - image_count - video_count - json_count:>8,}")
+    logger.info("Sample composition:")
+    logger.info(f"  Images:           {image_count:>8,}")
+    logger.info(f"  Videos:           {video_count:>8,}")
+    logger.info(f"  JSON sidecars:    {json_count:>8,}")
+    logger.info(f"  Other:            {len(sampled_files) - image_count - video_count - json_count:>8,}")
     
-    print("\n" + "=" * 70)
+    logger.info("=" * 70)
 
 
 def main():
@@ -329,27 +332,30 @@ def main():
     # Set random seed for reproducibility
     random.seed(args.seed)
     
+    # Configure logging
+    logging.basicConfig(level=logging.INFO, format='%(message)s')
+    
     # Parse source root if provided
     source_root = Path(args.source_root) if args.source_root else None
     if source_root:
-        print(f"Converting absolute paths to relative (source root: {source_root})")
+        logger.info(f"Converting absolute paths to relative (source root: {source_root})")
     
-    print(f"Reading file list from: {args.input_file}")
+    logger.info(f"Reading file list from: {args.input_file}")
     original_files = parse_file_list(args.input_file, source_root)
     
-    print(f"Categorizing {len(original_files):,} files...")
+    logger.info(f"Categorizing {len(original_files):,} files...")
     albums = categorize_files(original_files)
     
-    print(f"Creating stratified sample (rate: {args.sample_rate:.1%})...")
+    logger.info(f"Creating stratified sample (rate: {args.sample_rate:.1%})...")
     sampled_files = stratified_sample(albums, args.sample_rate)
     
-    print(f"Writing sample to: {args.output_file}")
+    logger.info(f"Writing sample to: {args.output_file}")
     write_sample_list(sampled_files, args.output_file)
     
-    print_statistics(original_files, sampled_files, albums)
+    log_statistics(original_files, sampled_files, albums)
     
-    print(f"\n✅ Sample created successfully!")
-    print(f"   Use this file list to copy files for testing.")
+    logger.info("✅ Sample created successfully!")
+    logger.info("   Use this file list to copy files for testing.")
 
 
 if __name__ == '__main__':

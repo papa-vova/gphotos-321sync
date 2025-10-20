@@ -55,7 +55,7 @@ class TestValidateScan:
         
         # Create album
         album_id = str(uuid.uuid4())
-        album_dal.insert_album({
+        album_dal.upsert_album({
             'album_id': album_id,
             'album_folder_path': "Photos/Test Album",
             'scan_run_id': old_scan_run_id,
@@ -115,7 +115,7 @@ class TestValidateScan:
         
         # Create album
         album_id = str(uuid.uuid4())
-        album_dal.insert_album({
+        album_dal.upsert_album({
             'album_id': album_id,
             'album_folder_path': "Photos/Test Album",
             'scan_run_id': old_scan_run_id,
@@ -170,7 +170,7 @@ class TestValidateScan:
         
         # Create album with old scan_run_id
         album_folder_path = "Photos/Old Album"
-        album_id = album_dal.insert_album({
+        album_id = album_dal.upsert_album({
             'album_folder_path': album_folder_path,
             'scan_run_id': old_scan_run_id,
         })
@@ -216,7 +216,7 @@ class TestValidateScan:
         
         # Create album
         album_id = str(uuid.uuid4())
-        album_dal.insert_album({
+        album_dal.upsert_album({
             'album_id': album_id,
             'album_folder_path': "Photos/Test Album",
             'scan_run_id': scan_run_id,
@@ -274,7 +274,7 @@ class TestValidateScan:
         
         # Create album
         album_id = str(uuid.uuid4())
-        album_dal.insert_album({
+        album_dal.upsert_album({
             'album_id': album_id,
             'album_folder_path': "Photos/Test Album",
             'scan_run_id': scan_run_id,
@@ -416,7 +416,7 @@ class TestCleanupOldScanData:
         
         # Create album
         album_id = str(uuid.uuid4())
-        album_dal.insert_album({
+        album_dal.upsert_album({
             'album_id': album_id,
             'album_folder_path': "Photos/Test Album",
             'scan_run_id': old_scan_id,

@@ -73,7 +73,7 @@ def populated_db(test_db):
     for i in range(5):
         album_id = str(uuid.uuid4())
         album_ids.append(album_id)
-        album_dal.insert_album({
+        album_dal.upsert_album({
             'album_id': album_id,
             'album_folder_path': f"Photos/Album {i}",
             'scan_run_id': scan_run_id,

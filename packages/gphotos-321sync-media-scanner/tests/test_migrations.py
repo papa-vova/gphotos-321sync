@@ -45,7 +45,7 @@ def populated_db(tmp_path, schema_dir):
     scan_id = scan_dal.create_scan_run()
     
     # Create album
-    album_id = album_dal.insert_album({
+    album_id = album_dal.upsert_album({
         'scan_run_id': scan_id,
         'title': 'Test Album',
         'album_folder_path': 'Photos/Test Album'

@@ -47,20 +47,21 @@ class AlbumDAL:
         """
         return str(uuid.uuid5(ALBUM_NAMESPACE, album_folder_path))
     
-    def insert_album(self, album: Dict[str, Any]) -> str:
+    def upsert_album(self, album: Dict[str, Any]) -> str:
         """
-        Insert a new album or update if exists.
+        Insert a new album or update if exists (upsert operation).
         
         Args:
             album: Dictionary with album data
                 Required: album_folder_path, scan_run_id
-                Optional: title, description, creation_timestamp, access_level, status
+                Optional: album_id, title, description, creation_timestamp, access_level, status
                 
         Returns:
             album_id (UUID5 string)
         """
         album_folder_path = album['album_folder_path']
-        album_id = self.generate_album_id(album_folder_path)
+        # Use provided album_id if present, otherwise generate from path
+        album_id = album.get('album_id') or self.generate_album_id(album_folder_path)
         
         # Check if album already exists
         existing = self.get_album_by_path(album_folder_path)
@@ -78,32 +79,69 @@ class AlbumDAL:
                 last_seen_timestamp=datetime.now(timezone.utc).isoformat(),
                 scan_run_id=album['scan_run_id']
             )
-            logger.debug(f"Updated existing album: {album_id} ({album_folder_path})")
+            self.db.commit()
+            logger.debug(f"Updated existing album: {album_id} ({album.get('title', album_folder_path)})")
         else:
             # Insert new album
-            cursor = self.db.execute(
-                """
-                INSERT INTO albums (
-                    album_id, album_folder_path, title, description,
-                    creation_timestamp, access_level, status, scan_run_id
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    album_id,
-                    album_folder_path,
-                    album.get('title'),
-                    album.get('description'),
-                    album.get('creation_timestamp'),
-                    album.get('access_level'),
-                    album.get('status', 'present'),
-                    album['scan_run_id']
-                )
+            self._insert_album_internal(
+                album_id,
+                album_folder_path,
+                album.get('title'),
+                album.get('description'),
+                album.get('creation_timestamp'),
+                album.get('access_level'),
+                album.get('status', 'present'),
+                album['scan_run_id']
             )
-            cursor.close()
-            logger.debug(f"Inserted new album: {album_id} ({album_folder_path})")
+            self.db.commit()
+            logger.debug(f"Inserted new album: {album_id} ({album.get('title', album_folder_path)})")
         
         return album_id
+    
+    def _insert_album_internal(
+        self,
+        album_id: str,
+        album_folder_path: str,
+        title: Optional[str],
+        description: Optional[str],
+        creation_timestamp: Optional[datetime],
+        access_level: Optional[str],
+        status: str,
+        scan_run_id: str
+    ) -> None:
+        """
+        Internal method to insert a new album (does not check for existence).
+        
+        Args:
+            album_id: Album ID (UUID5)
+            album_folder_path: Normalized folder path
+            title: Album title
+            description: Album description
+            creation_timestamp: Creation timestamp
+            access_level: Access level
+            status: Album status
+            scan_run_id: Scan run ID
+        """
+        cursor = self.db.execute(
+            """
+            INSERT INTO albums (
+                album_id, album_folder_path, title, description,
+                creation_timestamp, access_level, status, scan_run_id
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                album_id,
+                album_folder_path,
+                title,
+                description,
+                creation_timestamp,
+                access_level,
+                status,
+                scan_run_id
+            )
+        )
+        cursor.close()
     
     def get_album_by_path(self, album_folder_path: str) -> Optional[Dict[str, Any]]:
         """

@@ -4,11 +4,11 @@ Comprehensive documentation of all test suites in the gphotos-321sync project.
 
 ## Summary
 
-**Total: 353 tests** (12 + 42 + 299)
+**Total: 360 tests** (12 + 42 + 306)
 
 - **gphotos-321sync-common:** 12 tests
 - **gphotos-321sync-takeout-extractor:** 42 tests
-- **gphotos-321sync-media-scanner:** 299 tests
+- **gphotos-321sync-media-scanner:** 306 tests
 
 ---
 
@@ -640,3 +640,19 @@ Tests for writer thread database operations (7 tests).
 | 5 | `test_shutdown_event` | Shutdown event set | Thread exits quickly | Shutdown requested | Respects shutdown event |
 | 6 | `test_empty_queue` | Empty results queue | No items written | Writer thread running | Handles empty queue |
 | 7 | `test_write_batch_empty` | Empty batch | No error raised | Batch write function | Handles empty batch |
+
+### test_parallel_scanner_integration.py
+
+**NEW** End-to-end integration tests for rescan scenarios (7 tests).
+
+**Purpose**: Tests full ParallelScanner workflow including rescans. These tests catch bugs that unit tests miss (queue race conditions, album upsert logging, end-to-end behavior).
+
+| # | Test | Input | Output | Conditions/Assumptions | Logic |
+|---|------|-------|--------|----------------------|-------|
+| 1 | `test_fixture_creates_structure` | Test fixture setup | Takeout directory structure created with 2 albums, 3 files | Fixture validation | Verifies test fixture creates expected directory structure before testing scanner - ensures test setup is correct |
+| 2 | `test_initial_scan_creates_albums_and_items` | Minimal Takeout (2 albums, 3 files) | 2 albums created, 3 items processed, fingerprints computed | Initial scan | Verifies end-to-end initial scan workflow |
+| 3 | `test_rescan_with_no_changes_skips_all_files` | Rescan same Takeout (no changes) | 0 files processed, all skipped via fingerprints, albums updated not duplicated | Rescan optimization | Tests fingerprint-based skip optimization works correctly |
+| 4 | `test_rescan_detects_modified_file` | Modify 1 file between scans | Modified file detected and reprocessed | File content changed | Verifies changed files are detected via fingerprint mismatch |
+| 5 | `test_rescan_detects_new_file` | Add new file after initial scan | New file discovered and processed | New file added | Verifies new files are discovered on rescan |
+| 6 | `test_rescan_with_multiple_threads_no_crash` | Rescan with 16 threads on 3 files | Scan completes without ValueError | **Tests queue sentinel fix** | Specifically tests the queue sentinel handling bug fix - many threads, few files triggers race condition |
+| 7 | `test_album_upsert_logs_correctly` | Rescan, capture logs | Logs show "Updated existing album", NOT "Inserted new album" | **Tests album upsert fix** | Specifically tests the album upsert logging bug fix - verifies correct log messages on rescan |

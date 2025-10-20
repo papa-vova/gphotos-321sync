@@ -171,7 +171,7 @@ class TestLinkLivePhotoPairs:
         # Create scan run and album
         scan_run_id = scan_run_dal.create_scan_run()
         album_id = str(uuid.uuid4())
-        album_dal.insert_album({
+        album_dal.upsert_album({
             'album_id': album_id,
             'album_folder_path': "Photos/Test Album",
             'scan_run_id': scan_run_id,
@@ -244,7 +244,7 @@ class TestLinkLivePhotoPairs:
         # Create scan run and album
         scan_run_id = scan_run_dal.create_scan_run()
         album_id = str(uuid.uuid4())
-        album_dal.insert_album({
+        album_dal.upsert_album({
             'album_id': album_id,
             'album_folder_path': "Photos/Test Album",
             'scan_run_id': scan_run_id,
@@ -299,7 +299,7 @@ class TestLinkLivePhotoPairs:
         # Create scan run and album
         scan_run_id = scan_run_dal.create_scan_run()
         album_id = str(uuid.uuid4())
-        album_dal.insert_album({
+        album_dal.upsert_album({
             'album_id': album_id,
             'album_folder_path': "Photos/Test Album",
             'scan_run_id': scan_run_id,
@@ -355,7 +355,7 @@ class TestDetectAndLinkLivePhotos:
         # Create scan run and album
         scan_run_id = scan_run_dal.create_scan_run()
         album_id = str(uuid.uuid4())
-        album_dal.insert_album({
+        album_dal.upsert_album({
             'album_id': album_id,
             'album_folder_path': "Photos/Test Album",
             'scan_run_id': scan_run_id,
@@ -428,7 +428,7 @@ class TestDetectAndLinkLivePhotos:
         # Create scan run and album
         scan_run_id = scan_run_dal.create_scan_run()
         album_id = str(uuid.uuid4())
-        album_dal.insert_album({
+        album_dal.upsert_album({
             'album_id': album_id,
             'album_folder_path': "Photos/Test Album",
             'scan_run_id': scan_run_id,

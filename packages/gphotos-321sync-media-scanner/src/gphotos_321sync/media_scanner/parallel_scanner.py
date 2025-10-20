@@ -141,7 +141,9 @@ class ParallelScanner:
             album_count = 0
             album_map = {}  # album_folder_path -> album_id
             
+            logger.debug(f"Calling discover_albums for path: {target_media_path}")
             for album_info in discover_albums(target_media_path, album_dal, scan_run_id):
+                logger.debug(f"Got album from generator: {album_info.album_folder_path}")
                 album_map[str(album_info.album_folder_path)] = album_info.album_id
                 album_count += 1
             
@@ -216,13 +218,27 @@ class ParallelScanner:
             # Log phase timing breakdown
             total_duration = scan_run.get("duration_seconds", 0)
             logger.info(f"Scan completed: {scan_run_id}")
-            logger.info(
-                f"Phase timing breakdown:\n"
-                f"  Phase 1 (Album Discovery):  {phase_timings['album_discovery']:>7.1f}s ({phase_timings['album_discovery']/total_duration*100:>5.1f}%)\n"
-                f"  Phase 2 (File Discovery):   {phase_timings['file_discovery']:>7.1f}s ({phase_timings['file_discovery']/total_duration*100:>5.1f}%)\n"
-                f"  Phase 3 (File Processing):  {phase_timings['file_processing']:>7.1f}s ({phase_timings['file_processing']/total_duration*100:>5.1f}%)\n"
-                f"  Total:                      {total_duration:>7.1f}s"
-            )
+            
+            # Build timing breakdown (avoid division by zero for very fast scans)
+            if total_duration > 0:
+                phase1_pct = phase_timings['album_discovery'] / total_duration * 100
+                phase2_pct = phase_timings['file_discovery'] / total_duration * 100
+                phase3_pct = phase_timings['file_processing'] / total_duration * 100
+                logger.info(
+                    f"Phase timing breakdown:\n"
+                    f"  Phase 1 (Album Discovery):  {phase_timings['album_discovery']:>7.1f}s ({phase1_pct:>5.1f}%)\n"
+                    f"  Phase 2 (File Discovery):   {phase_timings['file_discovery']:>7.1f}s ({phase2_pct:>5.1f}%)\n"
+                    f"  Phase 3 (File Processing):  {phase_timings['file_processing']:>7.1f}s ({phase3_pct:>5.1f}%)\n"
+                    f"  Total:                      {total_duration:>7.1f}s"
+                )
+            else:
+                logger.info(
+                    f"Phase timing breakdown:\n"
+                    f"  Phase 1 (Album Discovery):  {phase_timings['album_discovery']:>7.1f}s\n"
+                    f"  Phase 2 (File Discovery):   {phase_timings['file_discovery']:>7.1f}s\n"
+                    f"  Phase 3 (File Processing):  {phase_timings['file_processing']:>7.1f}s\n"
+                    f"  Total:                      <0.1s (very fast scan)"
+                )
             
             return {
                 "scan_run_id": scan_run_id,

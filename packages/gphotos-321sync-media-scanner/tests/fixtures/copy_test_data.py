@@ -20,9 +20,11 @@ test data directory to the repository.
 
 import argparse
 import shutil
+import logging
 from pathlib import Path
-from typing import List
+from typing import List, Tuple
 
+logger = logging.getLogger(__name__)
 
 def parse_file_list(file_path: str) -> List[str]:
     """
@@ -43,7 +45,7 @@ def copy_files(
     source_root: Path,
     dest_root: Path,
     dry_run: bool = False
-) -> tuple[int, int]:
+) -> Tuple[int, int]:
     """
     Copy files from source to destination, preserving directory structure.
     
@@ -65,7 +67,7 @@ def copy_files(
         
         # Check if source exists
         if not source_file.exists():
-            print(f"⚠️  Source not found: {relative_path}")
+            logger.warning(f"Source not found: {relative_path}")
             files_skipped += 1
             continue
         
@@ -75,7 +77,7 @@ def copy_files(
             continue
         
         if dry_run:
-            print(f"Would copy: {relative_path}")
+            logger.info(f"Would copy: {relative_path}")
         else:
             # Create destination directory
             dest_file.parent.mkdir(parents=True, exist_ok=True)
@@ -85,7 +87,7 @@ def copy_files(
             files_copied += 1
             
             if files_copied % 10 == 0:
-                print(f"Copied {files_copied} files...")
+                logger.info(f"Copied {files_copied} files...")
     
     return files_copied, files_skipped
 
@@ -119,47 +121,50 @@ def main():
     source_root = Path(args.source_root).resolve()
     dest_root = Path(args.dest_root).resolve()
     
+    # Configure logging
+    logging.basicConfig(level=logging.INFO, format='%(message)s')
+    
     # Validate source exists
     if not source_root.exists():
-        print(f"❌ Error: Source directory does not exist: {source_root}")
+        logger.error(f"Source directory does not exist: {source_root}")
         return 1
     
     # Read file list
-    print(f"Reading file list from: {args.sample_file}")
+    logger.info(f"Reading file list from: {args.sample_file}")
     file_list = parse_file_list(args.sample_file)
-    print(f"Found {len(file_list):,} files to copy")
+    logger.info(f"Found {len(file_list):,} files to copy")
     
     # Confirm before copying
     if not args.dry_run:
-        print(f"\nSource: {source_root}")
-        print(f"Dest:   {dest_root}")
+        logger.info(f"Source: {source_root}")
+        logger.info(f"Dest:   {dest_root}")
         response = input("\nProceed with copy? [y/N]: ")
         if response.lower() != 'y':
-            print("Cancelled.")
+            logger.info("Cancelled.")
             return 0
     
     # Copy files
-    print(f"\n{'DRY RUN: ' if args.dry_run else ''}Copying files...")
+    logger.info(f"{'DRY RUN: ' if args.dry_run else ''}Copying files...")
     files_copied, files_skipped = copy_files(
         file_list,
         source_root,
         dest_root,
-        dry_run=args.dry_run
+        args.dry_run
     )
     
-    # Print summary
-    print("\n" + "=" * 70)
-    print("COPY SUMMARY")
-    print("=" * 70)
-    print(f"Files copied:       {files_copied:>8,}")
-    print(f"Files skipped:      {files_skipped:>8,}")
-    print(f"Total:              {len(file_list):>8,}")
-    print("=" * 70)
+    # Log summary
+    logger.info("=" * 70)
+    logger.info("COPY SUMMARY")
+    logger.info("=" * 70)
+    logger.info(f"Files copied:       {files_copied:>8,}")
+    logger.info(f"Files skipped:      {files_skipped:>8,}")
+    logger.info(f"Total:              {len(file_list):>8,}")
+    logger.info("=" * 70)
     
     if not args.dry_run:
-        print(f"\n✅ Files copied to: {dest_root}")
-        print("\n⚠️  IMPORTANT: Do NOT commit this test data to the repository!")
-        print("   Add the test data directory to .gitignore")
+        logger.info(f"\n✅ Files copied to: {dest_root}")
+        logger.info("\n⚠️  IMPORTANT: Do NOT commit this test data to the repository!")
+        logger.info("   Add the test data directory to .gitignore")
     
     return 0
 

@@ -104,7 +104,7 @@ def test_album_dal(migrated_db):
         'title': 'Photos from 2023',
         'scan_run_id': scan_run_id
     }
-    album_id = dal.insert_album(album_data)
+    album_id = dal.upsert_album(album_data)
     assert album_id is not None
     
     # Get album by path
@@ -131,7 +131,7 @@ def test_media_item_dal(migrated_db):
     scan_run_id = scan_run_dal.create_scan_run()
     
     # Create album first
-    album_id = album_dal.insert_album({
+    album_id = album_dal.upsert_album({
         'album_folder_path': 'Photos from 2023',
         'scan_run_id': scan_run_id
     })
@@ -171,7 +171,7 @@ def test_check_file_unchanged(migrated_db):
     scan_run_id = scan_run_dal.create_scan_run()
     
     # Create album
-    album_id = album_dal.insert_album({
+    album_id = album_dal.upsert_album({
         'album_folder_path': 'Photos from 2023',
         'scan_run_id': scan_run_id
     })

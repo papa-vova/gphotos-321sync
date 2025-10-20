@@ -89,12 +89,14 @@ def worker_thread_main(
                 # Check for sentinel
                 if work_item is None:
                     logger.debug(f"Worker thread {thread_id} received shutdown sentinel")
-                    work_queue.put(None)  # Put back for other workers
                     work_queue.task_done()  # Mark sentinel as done
                     shutdown_received = True
-                    break
+                    break  # Exit - task_done already called, don't call again
                 
                 file_info, album_id = work_item
+                
+                # Flag to track if task_done was called
+                task_done_called = False
                 
                 try:
                     # EARLY EXIT OPTIMIZATION: Check if file is unchanged
@@ -122,10 +124,19 @@ def worker_thread_main(
                         content_fingerprint,
                         sidecar_fingerprint
                     ):
-                        # File is unchanged - skip all expensive processing!
+                        # File is unchanged - skip expensive processing but update scan_run_id
                         logger.debug(f"Skipping unchanged file: {file_info.relative_path}")
+                        
+                        # Update scan_run_id and last_seen_timestamp to prevent being marked missing
+                        from datetime import datetime, timezone
+                        media_dal.update_file_seen(
+                            normalized_path,
+                            scan_run_id,
+                            datetime.now(timezone.utc).isoformat()
+                        )
+                        
                         skipped_count += 1
-                        work_queue.task_done()
+                        # Don't call task_done() here - it's in finally block
                         continue
                     
                     # File is new or changed - do full processing
@@ -192,7 +203,9 @@ def worker_thread_main(
                     )
                 
                 finally:
-                    work_queue.task_done()
+                    if not task_done_called:
+                        work_queue.task_done()
+                        task_done_called = True
                     
             except Empty:
                 # Queue is empty, continue waiting
@@ -341,8 +354,9 @@ def worker_thread_batch_main(
                     # Check for sentinel
                     if work_item is None:
                         logger.debug(f"Worker thread {thread_id} received shutdown sentinel")
-                        # Put sentinel back for other workers
-                        work_queue.put(None)
+                        # Don't put sentinel back - this causes race condition where
+                        # task_done() is called more times than items were queued.
+                        # The main thread puts enough sentinels for all workers.
                         shutdown_received = True
                         break
                     

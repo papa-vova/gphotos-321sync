@@ -153,7 +153,9 @@ def discover_albums(target_media_path: Path, album_dal: AlbumDAL, scan_run_id: s
             f"Please provide a valid directory path."
         )
     
-    logger.info(f"Starting album discovery from: {target_media_path}")
+    logger.debug(f"Starting album discovery from: {target_media_path}")
+    logger.debug(f"target_media_path type = {type(target_media_path)}")
+    logger.debug(f"target_media_path value = {target_media_path}")
     
     # Detect Google Takeout structure: Takeout/Google Photos/
     # This is CRITICAL - Google Takeout places all albums in this subfolder
@@ -174,7 +176,10 @@ def discover_albums(target_media_path: Path, album_dal: AlbumDAL, scan_run_id: s
     errors = 0
     
     # Walk directory to find album folders (Google Photos doesn't support nested albums)
-    for folder_path in scan_root.iterdir():
+    logger.debug(f"Scanning for albums in: {scan_root}")
+    folder_list = list(scan_root.iterdir())
+    logger.debug(f"Found {len(folder_list)} items in scan directory")
+    for folder_path in folder_list:
         if not folder_path.is_dir():
             continue
         
@@ -229,7 +234,8 @@ def discover_albums(target_media_path: Path, album_dal: AlbumDAL, scan_run_id: s
         # Normalize album folder path for database storage (forward slashes, NFC)
         normalized_album_path = normalize_path(str(album_folder_path))
         
-        # Insert/update album in database
+        # Upsert album in database (insert if new, update if exists)
+        # The DAL handles the existence check and appropriate logging
         album_data = {
             'album_id': album_id,
             'album_folder_path': normalized_album_path,
@@ -240,25 +246,7 @@ def discover_albums(target_media_path: Path, album_dal: AlbumDAL, scan_run_id: s
             'status': status,
             'scan_run_id': scan_run_id,
         }
-        
-        # Check if album already exists
-        existing = album_dal.get_album_by_path(normalized_album_path)
-        if existing:
-            # Update existing album
-            album_dal.update_album(
-                album_id=album_id,
-                title=title,
-                description=description,
-                creation_timestamp=creation_timestamp,
-                access_level=access_level,
-                status=status,
-                scan_run_id=scan_run_id,
-                # Use UTC timezone-aware datetime
-                last_seen_timestamp=datetime.now(timezone.utc)
-            )
-        else:
-            # Insert new album
-            album_dal.insert_album(album_data)
+        album_dal.upsert_album(album_data)
         
         albums_discovered += 1
         

@@ -39,7 +39,7 @@ dev = [
 ]
 
 [project.scripts]
-gphotos_321sync.media_scanner = "gphotos_321sync.media_scanner.cli:main"
+gphotos-321sync-media-scanner = "gphotos_321sync.media_scanner.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

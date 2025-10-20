@@ -212,6 +212,36 @@ class MediaItemDAL:
         
         return row is not None
     
+    def update_file_seen(
+        self,
+        relative_path: str,
+        scan_run_id: str,
+        last_seen_timestamp: str
+    ) -> None:
+        """
+        Update scan_run_id and last_seen_timestamp for an unchanged file.
+        
+        This is called during rescans when a file is skipped (unchanged) to update
+        its scan_run_id and last_seen_timestamp, preventing it from being marked as missing.
+        
+        Args:
+            relative_path: Normalized relative path to file
+            scan_run_id: Current scan run ID
+            last_seen_timestamp: Current timestamp (ISO format)
+        """
+        cursor = self.db.execute(
+            """
+            UPDATE media_items
+            SET scan_run_id = ?,
+                last_seen_timestamp = ?,
+                status = 'present'
+            WHERE relative_path = ?
+            """,
+            (scan_run_id, last_seen_timestamp, relative_path)
+        )
+        cursor.close()
+        self.db.commit()
+    
     def get_media_item_by_id(self, media_item_id: str) -> Optional[Dict[str, Any]]:
         """
         Get media item by ID.
