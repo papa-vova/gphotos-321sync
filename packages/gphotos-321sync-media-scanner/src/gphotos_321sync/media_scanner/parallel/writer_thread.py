@@ -80,7 +80,7 @@ def writer_thread_main(
                     # Flush remaining batch
                     if batch:
                         _write_batch(batch, media_dal, error_dal, conn)
-                        total_written += len([r for r in batch if r["type"] == "media_item"])
+                        total_written += len([r for r in batch if r["type"] in ("media_item", "file_seen")])
                         total_errors += len([r for r in batch if r["type"] == "error"])
                         batch.clear()
                     break
@@ -94,8 +94,9 @@ def writer_thread_main(
                     
                     # Update counters
                     media_items = len([r for r in batch if r["type"] == "media_item"])
+                    file_seen = len([r for r in batch if r["type"] == "file_seen"])
                     errors = len([r for r in batch if r["type"] == "error"])
-                    total_written += media_items
+                    total_written += media_items + file_seen  # Count both new and skipped files
                     total_errors += errors
                     
                     # Update progress
@@ -121,7 +122,7 @@ def writer_thread_main(
                 # Queue is empty, check if we should flush partial batch
                 if batch and shutdown_event.is_set():
                     _write_batch(batch, media_dal, error_dal, conn)
-                    total_written += len([r for r in batch if r["type"] == "media_item"])
+                    total_written += len([r for r in batch if r["type"] in ("media_item", "file_seen")])
                     total_errors += len([r for r in batch if r["type"] == "error"])
                     batch.clear()
                 continue
@@ -129,7 +130,7 @@ def writer_thread_main(
         # Flush any remaining items
         if batch:
             _write_batch(batch, media_dal, error_dal, conn)
-            total_written += len([r for r in batch if r["type"] == "media_item"])
+            total_written += len([r for r in batch if r["type"] in ("media_item", "file_seen")])
             total_errors += len([r for r in batch if r["type"] == "error"])
         
         # Final progress update
@@ -160,7 +161,7 @@ def _write_batch(
     """Write a batch of results to database.
     
     Args:
-        batch: List of result dicts (media items or errors)
+        batch: List of result dicts (media items, errors, or file_seen updates)
         media_dal: MediaItemDAL instance
         error_dal: ProcessingErrorDAL instance
         conn: Database connection
@@ -175,6 +176,9 @@ def _write_batch(
     # We just commit at the end to batch all writes together
     
     try:
+        # Collect file_seen updates for batch processing
+        file_seen_updates = []
+        
         for result in batch:
             if result["type"] == "media_item":
                 # Insert media item (no commit - we batch commit at the end)
@@ -192,6 +196,14 @@ def _write_batch(
                         # Other integrity errors should still fail
                         raise
                 
+            elif result["type"] == "file_seen":
+                # Collect for batch update
+                file_seen_updates.append((
+                    result["relative_path"],
+                    result["scan_run_id"],
+                    result["last_seen_timestamp"]
+                ))
+                
             elif result["type"] == "error":
                 # Insert error record
                 error_dal.insert_error(
@@ -204,6 +216,11 @@ def _write_batch(
             else:
                 logger.warning(f"Unknown result type: {result['type']}")
         
+        # Batch update file_seen records
+        if file_seen_updates:
+            rows_updated = media_dal.batch_update_files_seen(file_seen_updates)
+            logger.debug(f"Batch updated {rows_updated} unchanged files")
+        
         # Commit transaction
         conn.commit()
         
@@ -211,9 +228,10 @@ def _write_batch(
         # Rollback on error
         conn.rollback()
         logger.error(f"Failed to write batch of {len(batch)} items: {e}", exc_info=True)
-        # Log first item for debugging
+        # Log first item for debugging (without full object dump)
         if batch:
-            logger.error(f"First item in failed batch: {batch[0]}")
+            first_item = batch[0]
+            logger.error(f"First item in failed batch: type={first_item.get('type')}, path={first_item.get('relative_path', 'N/A')}")
         raise
 
 
@@ -264,7 +282,7 @@ def writer_thread_with_retry(
                         _write_batch_with_retry(
                             batch, media_dal, error_dal, conn, max_retries
                         )
-                        total_written += len([r for r in batch if r["type"] == "media_item"])
+                        total_written += len([r for r in batch if r["type"] in ("media_item", "file_seen")])
                         total_errors += len([r for r in batch if r["type"] == "error"])
                     break
                 
@@ -275,7 +293,7 @@ def writer_thread_with_retry(
                         batch, media_dal, error_dal, conn, max_retries
                     )
                     
-                    media_items = len([r for r in batch if r["type"] == "media_item"])
+                    media_items = len([r for r in batch if r["type"] in ("media_item", "file_seen")])
                     errors = len([r for r in batch if r["type"] == "error"])
                     total_written += media_items
                     total_errors += errors
@@ -298,7 +316,7 @@ def writer_thread_with_retry(
                     _write_batch_with_retry(
                         batch, media_dal, error_dal, conn, max_retries
                     )
-                    total_written += len([r for r in batch if r["type"] == "media_item"])
+                    total_written += len([r for r in batch if r["type"] in ("media_item", "file_seen")])
                     total_errors += len([r for r in batch if r["type"] == "error"])
                     batch.clear()
                 continue
@@ -307,7 +325,7 @@ def writer_thread_with_retry(
             _write_batch_with_retry(
                 batch, media_dal, error_dal, conn, max_retries
             )
-            total_written += len([r for r in batch if r["type"] == "media_item"])
+            total_written += len([r for r in batch if r["type"] in ("media_item", "file_seen")])
             total_errors += len([r for r in batch if r["type"] == "error"])
         
         scan_run_dal.update_scan_run(

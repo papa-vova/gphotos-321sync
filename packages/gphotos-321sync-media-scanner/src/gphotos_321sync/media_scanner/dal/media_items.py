@@ -212,24 +212,26 @@ class MediaItemDAL:
         
         return row is not None
     
-    def update_file_seen(
+    def batch_update_files_seen(
         self,
-        relative_path: str,
-        scan_run_id: str,
-        last_seen_timestamp: str
-    ) -> None:
+        file_updates: list[tuple[str, str, str]]
+    ) -> int:
         """
-        Update scan_run_id and last_seen_timestamp for an unchanged file.
+        Batch update scan_run_id and last_seen_timestamp for multiple unchanged files.
         
-        This is called during rescans when a file is skipped (unchanged) to update
-        its scan_run_id and last_seen_timestamp, preventing it from being marked as missing.
+        This is used during rescans to efficiently update many files at once.
         
         Args:
-            relative_path: Normalized relative path to file
-            scan_run_id: Current scan run ID
-            last_seen_timestamp: Current timestamp (ISO format)
+            file_updates: List of (relative_path, scan_run_id, last_seen_timestamp) tuples
+            
+        Returns:
+            Number of files updated
         """
-        cursor = self.db.execute(
+        if not file_updates:
+            return 0
+        
+        # Use executemany for batch update
+        cursor = self.db.executemany(
             """
             UPDATE media_items
             SET scan_run_id = ?,
@@ -237,10 +239,14 @@ class MediaItemDAL:
                 status = 'present'
             WHERE relative_path = ?
             """,
-            (scan_run_id, last_seen_timestamp, relative_path)
+            # Reorder tuple elements to match SQL parameter order
+            [(scan_run_id, last_seen_timestamp, relative_path) 
+             for relative_path, scan_run_id, last_seen_timestamp in file_updates]
         )
+        rows_updated = cursor.rowcount
         cursor.close()
-        self.db.commit()
+        # Note: No commit here - caller will commit the batch
+        return rows_updated
     
     def get_media_item_by_id(self, media_item_id: str) -> Optional[Dict[str, Any]]:
         """

@@ -71,7 +71,8 @@ class ScanRunDAL:
         cursor.close()
         self.db.commit()
         
-        logger.debug(f"Updated scan run {scan_run_id}: {fields}")
+        # Log only scan_run_id and count of updated fields
+        logger.debug(f"Updated scan run: id={scan_run_id}, fields={len(fields)}")
     
     def complete_scan_run(self, scan_run_id: str, status: str = 'completed'):
         """

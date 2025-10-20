@@ -124,16 +124,17 @@ def worker_thread_main(
                         content_fingerprint,
                         sidecar_fingerprint
                     ):
-                        # File is unchanged - skip expensive processing but update scan_run_id
+                        # File is unchanged - skip expensive processing
+                        # Send to writer thread to batch update scan_run_id and last_seen_timestamp
                         logger.debug(f"Skipping unchanged file: {file_info.relative_path}")
                         
-                        # Update scan_run_id and last_seen_timestamp to prevent being marked missing
                         from datetime import datetime, timezone
-                        media_dal.update_file_seen(
-                            normalized_path,
-                            scan_run_id,
-                            datetime.now(timezone.utc).isoformat()
-                        )
+                        results_queue.put({
+                            "type": "file_seen",
+                            "relative_path": normalized_path,
+                            "scan_run_id": scan_run_id,
+                            "last_seen_timestamp": datetime.now(timezone.utc).isoformat(),
+                        })
                         
                         skipped_count += 1
                         # Don't call task_done() here - it's in finally block

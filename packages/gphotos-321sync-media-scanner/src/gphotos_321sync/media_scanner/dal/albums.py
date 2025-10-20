@@ -213,7 +213,9 @@ class AlbumDAL:
         )
         cursor.close()
         
-        logger.debug(f"Updated album {album_id}: {fields}")
+        # Log only album_id and key identifying fields
+        title = fields.get('title', '')
+        logger.debug(f"Updated album: id={album_id}, title={title}")
     
     def mark_albums_missing(self, scan_run_id: str) -> int:
         """
