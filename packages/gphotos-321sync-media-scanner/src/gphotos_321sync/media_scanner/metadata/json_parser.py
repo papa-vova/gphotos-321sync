@@ -38,7 +38,7 @@ def parse_json_sidecar(json_path: Path) -> Dict[str, Any]:
         with open(json_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
     except json.JSONDecodeError as e:
-        logger.error(f"Failed to parse JSON {json_path}: {e}")
+        logger.error(f"Failed to parse JSON: {{'path': {str(json_path)!r}, 'error': {str(e)!r}}}")
         raise
     
     metadata = {}
@@ -122,7 +122,7 @@ def _parse_photo_taken_time(photo_taken_time: Any) -> Optional[str]:
                 # Try to parse formatted string
                 return _parse_formatted_timestamp(photo_taken_time['formatted'])
     except (ValueError, TypeError, OSError) as e:
-        logger.debug(f"Failed to parse photo taken time: {e}")
+        logger.debug(f"Failed to parse photo taken time: {{'error': {str(e)!r}}}")
     
     return None
 
@@ -157,7 +157,7 @@ def _parse_timestamp(timestamp_data: Any) -> Optional[str]:
             elif 'formatted' in timestamp_data:
                 return _parse_formatted_timestamp(timestamp_data['formatted'])
     except (ValueError, TypeError, OSError) as e:
-        logger.debug(f"Failed to parse timestamp: {e}")
+        logger.debug(f"Failed to parse timestamp: {{'error': {str(e)!r}}}")
     
     return None
 
@@ -198,7 +198,7 @@ def _parse_formatted_timestamp(formatted: str) -> Optional[str]:
         except ValueError:
             continue
     
-    logger.warning(f"Could not parse timestamp format: {formatted}")
+    logger.warning(f"Could not parse timestamp format: {{'formatted': {formatted!r}}}")
     return None
 
 
@@ -218,31 +218,31 @@ def _parse_geo_data(geo_data: Dict[str, Any]) -> Dict[str, float]:
         try:
             result['latitude'] = float(geo_data['latitude'])
         except (ValueError, TypeError):
-            logger.debug(f"Failed to parse latitude: {geo_data['latitude']}")
+            logger.debug(f"Failed to parse latitude: {{'value': {geo_data['latitude']!r}}}")
     
     if 'longitude' in geo_data:
         try:
             result['longitude'] = float(geo_data['longitude'])
         except (ValueError, TypeError):
-            logger.debug(f"Failed to parse longitude: {geo_data['longitude']}")
+            logger.debug(f"Failed to parse longitude: {{'value': {geo_data['longitude']!r}}}")
     
     if 'altitude' in geo_data:
         try:
             result['altitude'] = float(geo_data['altitude'])
         except (ValueError, TypeError):
-            logger.debug(f"Failed to parse altitude: {geo_data['altitude']}")
+            logger.debug(f"Failed to parse altitude: {{'value': {geo_data['altitude']!r}}}")
     
     if 'latitudeSpan' in geo_data:
         try:
             result['latitudeSpan'] = float(geo_data['latitudeSpan'])
         except (ValueError, TypeError):
-            logger.debug(f"Failed to parse latitudeSpan: {geo_data['latitudeSpan']}")
+            logger.debug(f"Failed to parse latitudeSpan: {{'value': {geo_data['latitudeSpan']!r}}}")
     
     if 'longitudeSpan' in geo_data:
         try:
             result['longitudeSpan'] = float(geo_data['longitudeSpan'])
         except (ValueError, TypeError):
-            logger.debug(f"Failed to parse longitudeSpan: {geo_data['longitudeSpan']}")
+            logger.debug(f"Failed to parse longitudeSpan: {{'value': {geo_data['longitudeSpan']!r}}}")
     
     return result
 

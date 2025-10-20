@@ -91,9 +91,8 @@ class ParallelScanner:
         self.progress_tracker: Optional[ProgressTracker] = None
         
         logger.info(
-            f"ParallelScanner initialized: "
-            f"processes={self.worker_processes}, threads={self.worker_threads}, "
-            f"batch_size={batch_size}, queue_maxsize={queue_maxsize}"
+            f"Initialized ParallelScanner: {{'processes': {self.worker_processes}, 'threads': {self.worker_threads}, "
+            f"'batch_size': {batch_size}, 'queue_maxsize': {queue_maxsize}}}"
         )
     
     def scan(self, target_media_path: Path) -> dict:
@@ -113,7 +112,7 @@ class ParallelScanner:
             - files_processed: Number of files successfully processed
             - duration_seconds: Total scan duration
         """
-        logger.info(f"Starting parallel scan of: {target_media_path}")
+        logger.info(f"Starting parallel scan: {{'path': {str(target_media_path)!r}}}")
         
         # Create scan run
         db_conn = DatabaseConnection(self.db_path)
@@ -125,7 +124,7 @@ class ParallelScanner:
         # Use UTC timezone-aware datetime
         scan_start_time = datetime.now(timezone.utc)
         
-        logger.info(f"Created scan run: {scan_run_id}")
+        logger.info(f"Created scan_run {scan_run_id}")
         
         # Track phase timings
         phase_timings = {
@@ -141,14 +140,14 @@ class ParallelScanner:
             album_count = 0
             album_map = {}  # album_folder_path -> album_id
             
-            logger.debug(f"Calling discover_albums for path: {target_media_path}")
+            logger.debug(f"Calling discover_albums: {{'path': {str(target_media_path)!r}}}")
             for album_info in discover_albums(target_media_path, album_dal, scan_run_id):
-                logger.debug(f"Got album from generator: {album_info.album_folder_path}")
+                logger.debug(f"Discovered album: {{'path': {album_info.album_folder_path!r}}}")
                 album_map[str(album_info.album_folder_path)] = album_info.album_id
                 album_count += 1
             
             phase_timings['album_discovery'] = time.time() - phase_start
-            logger.info(f"Discovered {album_count} albums (took {phase_timings['album_discovery']:.1f}s)")
+            logger.info(f"Discovered {album_count} albums: {{'duration_seconds': {phase_timings['album_discovery']:.1f}}}")
             
             # Phase 2: File discovery
             logger.info("Phase 2: Discovering files...")
@@ -159,9 +158,9 @@ class ParallelScanner:
             total_files = len(files_to_process)
             phase_timings['file_discovery'] = time.time() - phase_start
             
-            logger.info(f"Discovered {total_files} files to process (took {phase_timings['file_discovery']:.1f}s)")
+            logger.info(f"Discovered {total_files} files: {{'duration_seconds': {phase_timings['file_discovery']:.1f}}}")
             if total_files > 0:
-                logger.info(f"Starting parallel processing: {self.worker_processes} processes, {self.worker_threads} threads")
+                logger.info(f"Starting parallel processing: {{'processes': {self.worker_processes}, 'threads': {self.worker_threads}}}")
             
             if total_files == 0:
                 logger.warning("No files found to process")
@@ -181,7 +180,7 @@ class ParallelScanner:
             # CRITICAL: Close main connection before parallel processing
             # Writer thread will open its own connection
             db_conn.close()  # Close via DatabaseConnection to clear cached connection
-            logger.debug("Closed main connection before parallel processing")
+            logger.debug("Closed main database connection before parallel processing")
             
             # Initialize components
             self._initialize_components(total_files)
@@ -207,7 +206,7 @@ class ParallelScanner:
             # Reopen connection for final operations
             conn = db_conn.connect()
             scan_run_dal = ScanRunDAL(conn)
-            logger.debug("Reopened main connection for final operations")
+            logger.debug("Reopened main database connection for final operations")
             
             # Complete scan run
             scan_run_dal.complete_scan_run(scan_run_id, "completed")
@@ -217,7 +216,7 @@ class ParallelScanner:
             
             # Log phase timing breakdown
             total_duration = scan_run.get("duration_seconds", 0)
-            logger.info(f"Scan completed: {scan_run_id}")
+            logger.info(f"Completed scan_run {scan_run_id}")
             
             # Build timing breakdown (avoid division by zero for very fast scans)
             if total_duration > 0:
@@ -250,7 +249,7 @@ class ParallelScanner:
             }
             
         except Exception as e:
-            logger.error(f"Scan failed: {e}", exc_info=True)
+            logger.error(f"Scan failed: {{'error': {str(e)!r}}}", exc_info=True)
             scan_run_dal.complete_scan_run(scan_run_id, "failed")
             raise
         
@@ -268,7 +267,7 @@ class ParallelScanner:
         
         # Process pool
         self.process_pool = Pool(processes=self.worker_processes)
-        logger.info(f"Created process pool with {self.worker_processes} processes")
+        logger.info(f"Created process pool: {{'processes': {self.worker_processes}}}")
         
         # Shutdown event
         self.shutdown_event = threading.Event()
@@ -303,7 +302,7 @@ class ParallelScanner:
             thread.start()
             self.worker_thread_list.append(thread)
         
-        logger.info(f"Started {self.worker_threads} worker threads")
+        logger.info(f"Started worker threads: {{'count': {self.worker_threads}}}")
         
         # Start writer thread
         self.writer_thread = threading.Thread(
@@ -340,8 +339,7 @@ class ParallelScanner:
                 # Fallback: use parent folder path as album_id
                 # This shouldn't happen if album discovery is correct
                 logger.warning(
-                    f"No album found for folder: {album_folder_str}, "
-                    f"file: {file_info.relative_path}"
+                    f"No album found for file: {{'folder': {album_folder_str!r}, 'file': {file_info.relative_path!r}}}"
                 )
                 # Generate album_id from folder path
                 from .dal.albums import AlbumDAL
@@ -350,7 +348,7 @@ class ParallelScanner:
             # Put work item in queue
             work_queue.put((file_info, album_id))
         
-        logger.info(f"Populated work queue with {len(files_to_process)} items")
+        logger.info(f"Populated work queue: {{'items': {len(files_to_process)}}}")
     
     def _wait_for_completion(self) -> None:
         """Wait for all work to complete."""

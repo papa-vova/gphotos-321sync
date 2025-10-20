@@ -50,7 +50,7 @@ def writer_thread_main(
     Returns:
         None (runs until shutdown_event is set and queue is empty)
     """
-    logger.info(f"Writer thread started (batch_size={batch_size})")
+    logger.info(f"Started writer thread: {{'batch_size': {batch_size}}}")
     
     # Connect to database
     from pathlib import Path
@@ -110,7 +110,7 @@ def writer_thread_main(
                             progress_tracker.update(total_written)
                         else:
                             logger.info(
-                                f"Progress: {total_written} files processed, {total_errors} errors"
+                                f"Progress: {{'files_processed': {total_written}, 'errors': {total_errors}}}"
                             )
                     
                     batch.clear()
@@ -141,14 +141,13 @@ def writer_thread_main(
         )
         
     except Exception as e:
-        logger.error(f"Writer thread crashed: {e}", exc_info=True)
+        logger.error(f"Writer thread crashed: {{'error': {str(e)!r}}}", exc_info=True)
         raise
     
     finally:
         conn.close()
         logger.info(
-            f"Writer thread shutting down "
-            f"(written={total_written}, errors={total_errors})"
+            f"Writer thread shutting down: {{'written': {total_written}, 'errors': {total_errors}}}"
         )
 
 
@@ -189,8 +188,7 @@ def _write_batch(
                     # Handle duplicate path gracefully - log and skip
                     if "UNIQUE constraint failed: media_items.relative_path" in str(e):
                         logger.warning(
-                            f"Skipping duplicate path: {record.relative_path} "
-                            f"(media_item_id={record.media_item_id})"
+                            f"Skipping duplicate path: {{'path': {record.relative_path!r}, 'media_item_id': {record.media_item_id!r}}}"
                         )
                     else:
                         # Other integrity errors should still fail
@@ -214,7 +212,7 @@ def _write_batch(
                     error_message=result["error_message"],
                 )
             else:
-                logger.warning(f"Unknown result type: {result['type']}")
+                logger.warning(f"Unknown result type: {{'type': {result['type']!r}}}")
         
         # Batch update file_seen records
         if file_seen_updates:
@@ -227,11 +225,11 @@ def _write_batch(
     except Exception as e:
         # Rollback on error
         conn.rollback()
-        logger.error(f"Failed to write batch of {len(batch)} items: {e}", exc_info=True)
+        logger.error(f"Failed to write batch: {{'items': {len(batch)}, 'error': {str(e)!r}}}", exc_info=True)
         # Log first item for debugging (without full object dump)
         if batch:
             first_item = batch[0]
-            logger.error(f"First item in failed batch: type={first_item.get('type')}, path={first_item.get('relative_path', 'N/A')}")
+            logger.error(f"First item in failed batch: {{'type': {first_item.get('type')!r}, 'path': {first_item.get('relative_path', 'N/A')!r}}}")
         raise
 
 
@@ -258,7 +256,7 @@ def writer_thread_with_retry(
         progress_interval: Update progress every N files
         max_retries: Maximum retry attempts for failed batches
     """
-    logger.info(f"Writer thread started with retry (batch_size={batch_size}, max_retries={max_retries})")
+    logger.info(f"Started writer thread with retry: {{'batch_size': {batch_size}, 'max_retries': {max_retries}}}")
     
     from pathlib import Path
     db_conn = DatabaseConnection(Path(db_path))
@@ -304,7 +302,7 @@ def writer_thread_with_retry(
                             files_processed=total_written,
                         )
                         logger.info(
-                            f"Progress: {total_written} files processed, {total_errors} errors"
+                            f"Progress: {{'files_processed': {total_written}, 'errors': {total_errors}}}"
                         )
                     
                     batch.clear()
@@ -335,14 +333,13 @@ def writer_thread_with_retry(
         )
         
     except Exception as e:
-        logger.error(f"Writer thread crashed: {e}", exc_info=True)
+        logger.error(f"Writer thread crashed: {{'error': {str(e)!r}}}", exc_info=True)
         raise
     
     finally:
         conn.close()
         logger.info(
-            f"Writer thread shutting down "
-            f"(written={total_written}, errors={total_errors})"
+            f"Writer thread shutting down: {{'written': {total_written}, 'errors': {total_errors}}}"
         )
 
 
@@ -374,11 +371,10 @@ def _write_batch_with_retry(
                 # Exponential backoff: 0.1s, 0.2s, 0.4s, ...
                 wait_time = 0.1 * (2 ** attempt)
                 logger.warning(
-                    f"Batch write failed (attempt {attempt + 1}/{max_retries}), "
-                    f"retrying in {wait_time}s: {e}"
+                    f"Batch write failed: {{'attempt': {attempt + 1}, 'max_retries': {max_retries}, 'retry_in_seconds': {wait_time}, 'error': {str(e)!r}}}"
                 )
                 time.sleep(wait_time)
             else:
                 # Final attempt failed
-                logger.error(f"Batch write failed after {max_retries} attempts: {e}")
+                logger.error(f"Batch write failed after retries: {{'max_retries': {max_retries}, 'error': {str(e)!r}}}")
                 raise

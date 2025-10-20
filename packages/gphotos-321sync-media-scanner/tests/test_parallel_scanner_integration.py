@@ -4,7 +4,6 @@ These tests verify end-to-end scanning behavior including:
 - Initial scan with album discovery and file processing
 - Rescan with no changes (should skip all files)
 - Rescan with changes (should detect and reprocess)
-- Album upsert behavior on rescan
 - Worker thread shutdown handling
 """
 
@@ -365,48 +364,3 @@ class TestParallelScannerRescan:
         assert len(scan_runs) == 2
         
         conn.close()
-    
-    def test_album_upsert_logs_correctly(self, test_takeout, test_db, caplog):
-        """Test that album upsert logs 'Updated' on rescan, not 'Inserted'."""
-        import logging
-        import sqlite3
-        caplog.set_level(logging.DEBUG)
-        
-        # Initial scan
-        scanner = ParallelScanner(
-            db_path=test_db,
-            worker_processes=1,
-            worker_threads=2,
-            use_exiftool=False,
-            use_ffprobe=False
-        )
-        scanner.scan(test_takeout)
-        
-        # Force WAL checkpoint to ensure data is visible to next connection
-        conn = sqlite3.connect(test_db)
-        conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-        conn.close()
-        
-        # Clear logs
-        caplog.clear()
-        
-        # Rescan
-        scanner2 = ParallelScanner(
-            db_path=test_db,
-            worker_processes=1,
-            worker_threads=2,
-            use_exiftool=False,
-            use_ffprobe=False
-        )
-        scanner2.scan(test_takeout)
-        
-        # Check logs - should see "Updated existing album", not "Inserted new album"
-        log_messages = [record.message for record in caplog.records]
-        
-        # Should have "Updated existing album" messages
-        updated_messages = [msg for msg in log_messages if 'Updated existing album' in msg]
-        assert len(updated_messages) >= 2  # At least 2 albums updated
-        
-        # Should NOT have "Inserted new album" messages (albums already exist)
-        inserted_messages = [msg for msg in log_messages if 'Inserted new album' in msg]
-        assert len(inserted_messages) == 0

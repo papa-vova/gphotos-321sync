@@ -77,7 +77,7 @@ def process_file_cpu_work(
         # Check if file exists first
         if not file_path.exists():
             error_msg = f"File does not exist: {file_path}"
-            logger.error(error_msg)
+            logger.error(f"File does not exist: {{'path': {str(file_path)!r}}}")
             result['error'] = error_msg
             result['error_category'] = 'io'
             result['success'] = False
@@ -88,7 +88,7 @@ def process_file_cpu_work(
             mime_type = detect_mime_type(file_path)
             result['mime_type'] = mime_type
         except Exception as e:
-            logger.debug(f"MIME type detection failed for {file_path}: {e}")
+            logger.debug(f"MIME type detection failed: {{'path': {str(file_path)!r}, 'error': {str(e)!r}}}")
             # Use a fallback - continue processing
             mime_type = 'application/octet-stream'
             result['mime_type'] = mime_type
@@ -98,7 +98,7 @@ def process_file_cpu_work(
             crc32_value = calculate_crc32(file_path)
             result['crc32'] = crc32_value
         except Exception as e:
-            logger.debug(f"CRC32 calculation failed for {file_path}: {e}")
+            logger.debug(f"CRC32 calculation failed: {{'path': {str(file_path)!r}, 'error': {str(e)!r}}}")
             # Not a critical error - continue processing
         
         # 3. Calculate content fingerprint (first 64KB + last 64KB)
@@ -106,7 +106,7 @@ def process_file_cpu_work(
             fingerprint = compute_content_fingerprint(file_path, file_size)
             result['content_fingerprint'] = fingerprint
         except Exception as e:
-            logger.debug(f"Content fingerprint calculation failed for {file_path}: {e}")
+            logger.debug(f"Content fingerprint calculation failed: {{'path': {str(file_path)!r}, 'error': {str(e)!r}}}")
             # Not a critical error - continue processing
         
         # 4. Extract EXIF metadata (if applicable)
@@ -114,7 +114,7 @@ def process_file_cpu_work(
             exif_data = extract_exif_smart(file_path, use_exiftool)
             result['exif_data'] = exif_data
         except Exception as e:
-            logger.debug(f"EXIF extraction failed for {file_path}: {e}")
+            logger.debug(f"EXIF extraction failed: {{'path': {str(file_path)!r}, 'error': {str(e)!r}}}")
             # Not a critical error - continue processing
         
         # 5. Extract resolution (width x height)
@@ -125,7 +125,7 @@ def process_file_cpu_work(
                 if resolution:
                     result['width'], result['height'] = resolution
             except Exception as e:
-                logger.debug(f"Resolution extraction failed for {file_path}: {e}")
+                logger.debug(f"Resolution extraction failed: {{'path': {str(file_path)!r}, 'error': {str(e)!r}}}")
                 # Not a critical error - continue processing
         
         # 6. Extract video metadata (if video and ffprobe available)
@@ -138,7 +138,7 @@ def process_file_cpu_work(
                     result['width'] = video_data['width']
                     result['height'] = video_data['height']
             except Exception as e:
-                logger.debug(f"Video metadata extraction failed for {file_path}: {e}")
+                logger.debug(f"Video metadata extraction failed: {{'path': {str(file_path)!r}, 'error': {str(e)!r}}}")
                 # Not a critical error - continue processing
         
         result['success'] = True
@@ -148,7 +148,7 @@ def process_file_cpu_work(
         error_msg = str(e)
         error_category = classify_error(e)
         
-        logger.error(f"Failed to process {file_path}: {error_msg}", exc_info=True)
+        logger.error(f"Failed to process file: {{'path': {str(file_path)!r}, 'error': {error_msg!r}}}", exc_info=True)
         
         result['error'] = error_msg
         result['error_category'] = error_category

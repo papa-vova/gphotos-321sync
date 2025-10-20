@@ -95,16 +95,16 @@ def extract_video_metadata(file_path: Path) -> Dict[str, Any]:
         logger.warning("ffprobe not found - video metadata extraction disabled")
         raise
     except subprocess.CalledProcessError as e:
-        logger.error(f"ffprobe failed for {file_path}: {e.stderr}")
+        logger.error(f"ffprobe failed: {{'path': {str(file_path)!r}, 'stderr': {e.stderr!r}}}")
         raise
     except subprocess.TimeoutExpired:
-        logger.error(f"ffprobe timed out for {file_path}")
+        logger.error(f"ffprobe timed out: {{'path': {str(file_path)!r}}}")
         raise
     except json.JSONDecodeError as e:
-        logger.error(f"Failed to parse ffprobe output for {file_path}: {e}")
+        logger.error(f"Failed to parse ffprobe output: {{'path': {str(file_path)!r}, 'error': {str(e)!r}}}")
         raise
     except Exception as e:
-        logger.error(f"Unexpected error extracting video metadata from {file_path}: {e}")
+        logger.error(f"Unexpected error extracting video metadata: {{'path': {str(file_path)!r}, 'error': {str(e)!r}}}")
         raise
     
     return metadata
@@ -133,5 +133,5 @@ def _parse_frame_rate(frame_rate_str: str) -> Optional[float]:
         else:
             return float(frame_rate_str)
     except (ValueError, ZeroDivisionError):
-        logger.warning(f"Could not parse frame rate: {frame_rate_str}")
+        logger.warning(f"Could not parse frame rate: {{'value': {frame_rate_str!r}}}")
         return None

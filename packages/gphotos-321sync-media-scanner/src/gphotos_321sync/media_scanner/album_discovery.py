@@ -74,7 +74,7 @@ def parse_album_metadata(metadata_path: Path) -> dict:
                     timestamp_str = timestamp_data['timestamp']
                     metadata['creation_timestamp'] = datetime.fromtimestamp(int(timestamp_str))
             except (ValueError, KeyError, TypeError) as e:
-                logger.warning(f"Failed to parse creation timestamp in {metadata_path}: {e}")
+                logger.warning(f"Failed to parse creation timestamp: {{'path': {str(metadata_path)!r}, 'error': {str(e)!r}}}")
         
         return metadata
         
@@ -153,20 +153,18 @@ def discover_albums(target_media_path: Path, album_dal: AlbumDAL, scan_run_id: s
             f"Please provide a valid directory path."
         )
     
-    logger.debug(f"Starting album discovery from: {target_media_path}")
-    logger.debug(f"target_media_path type = {type(target_media_path)}")
-    logger.debug(f"target_media_path value = {target_media_path}")
+    logger.debug(f"Starting album discovery: {{'path': {str(target_media_path)!r}, 'type': {type(target_media_path).__name__!r}}}")
     
     # Detect Google Takeout structure: Takeout/Google Photos/
     # This is CRITICAL - Google Takeout places all albums in this subfolder
     # scan_root is where albums actually live (excludes Takeout/Google Photos prefix)
     google_photos_path = target_media_path / "Takeout" / "Google Photos"
     if google_photos_path.exists() and google_photos_path.is_dir():
-        logger.info(f"✓ Detected Google Takeout structure")
+        logger.info("✓ Detected Google Takeout structure")
         logger.info(f"  Scanning albums from: {google_photos_path}")
         scan_root = google_photos_path
     else:
-        logger.info(f"Using flat structure (no Takeout/Google Photos found)")
+        logger.info("Using flat structure (no Takeout/Google Photos found)")
         logger.info(f"  Scanning albums from: {target_media_path}")
         scan_root = target_media_path
     
@@ -176,9 +174,9 @@ def discover_albums(target_media_path: Path, album_dal: AlbumDAL, scan_run_id: s
     errors = 0
     
     # Walk directory to find album folders (Google Photos doesn't support nested albums)
-    logger.debug(f"Scanning for albums in: {scan_root}")
+    logger.debug(f"Scanning for albums: {{'path': {str(scan_root)!r}}}")
     folder_list = list(scan_root.iterdir())
-    logger.debug(f"Found {len(folder_list)} items in scan directory")
+    logger.debug(f"Found items in scan directory: {{'count': {len(folder_list)}}}")
     for folder_path in folder_list:
         if not folder_path.is_dir():
             continue
@@ -189,7 +187,7 @@ def discover_albums(target_media_path: Path, album_dal: AlbumDAL, scan_run_id: s
         try:
             album_folder_path = folder_path.relative_to(scan_root)
         except ValueError:
-            logger.warning(f"Folder is not relative to scan root: {folder_path}")
+            logger.warning(f"Folder not relative to scan root: {{'path': {str(folder_path)!r}}}")
             continue
         
         # Generate deterministic album_id from ALBUM NAME ONLY
@@ -220,7 +218,7 @@ def discover_albums(target_media_path: Path, album_dal: AlbumDAL, scan_run_id: s
                 user_albums += 1
                 
             except ParseError as e:
-                logger.warning(f"Failed to parse album metadata {metadata_path}: {e}")
+                logger.warning(f"Failed to parse album metadata: {{'path': {str(metadata_path)!r}, 'error': {str(e)!r}}}")
                 status = 'error'
                 errors += 1
                 # Continue with default values
@@ -270,6 +268,5 @@ def discover_albums(target_media_path: Path, album_dal: AlbumDAL, scan_run_id: s
         )
     
     logger.info(
-        f"Album discovery complete: {albums_discovered} albums discovered "
-        f"({user_albums} user albums, {year_albums} year-based albums, {errors} errors)"
+        f"Album discovery complete: {{'total': {albums_discovered}, 'user_albums': {user_albums}, 'year_albums': {year_albums}, 'errors': {errors}}}"
     )

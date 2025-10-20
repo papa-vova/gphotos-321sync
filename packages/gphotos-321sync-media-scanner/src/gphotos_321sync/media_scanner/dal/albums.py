@@ -67,20 +67,39 @@ class AlbumDAL:
         existing = self.get_album_by_path(album_folder_path)
         
         if existing:
-            # Update existing album
-            self.update_album(
-                album_id,
-                title=album.get('title'),
-                description=album.get('description'),
-                creation_timestamp=album.get('creation_timestamp'),
-                access_level=album.get('access_level'),
-                status=album.get('status', 'present'),
-                # Use UTC timezone-aware datetime
-                last_seen_timestamp=datetime.now(timezone.utc).isoformat(),
-                scan_run_id=album['scan_run_id']
-            )
-            self.db.commit()
-            logger.debug(f"Updated existing album: {album_id} ({album.get('title', album_folder_path)})")
+            # Check if album data actually changed
+            fields_to_update = {}
+            
+            # Always update scan_run_id and last_seen_timestamp (like file_seen)
+            fields_to_update['scan_run_id'] = album['scan_run_id']
+            fields_to_update['last_seen_timestamp'] = datetime.now(timezone.utc).isoformat()
+            
+            # Check if metadata fields changed
+            new_title = album.get('title')
+            if new_title is not None and new_title != existing.get('title'):
+                fields_to_update['title'] = new_title
+            
+            new_description = album.get('description')
+            if new_description is not None and new_description != existing.get('description'):
+                fields_to_update['description'] = new_description
+            
+            new_creation_timestamp = album.get('creation_timestamp')
+            if new_creation_timestamp is not None and new_creation_timestamp != existing.get('creation_timestamp'):
+                fields_to_update['creation_timestamp'] = new_creation_timestamp
+            
+            new_access_level = album.get('access_level')
+            if new_access_level is not None and new_access_level != existing.get('access_level'):
+                fields_to_update['access_level'] = new_access_level
+            
+            new_status = album.get('status', 'present')
+            if new_status != existing.get('status'):
+                fields_to_update['status'] = new_status
+            
+            # Only update if there are fields to change
+            if fields_to_update:
+                self.update_album(album_id, **fields_to_update)
+                self.db.commit()
+                logger.debug(f"Updated album {album_id}: {list(fields_to_update.keys())}")
         else:
             # Insert new album
             self._insert_album_internal(
@@ -94,7 +113,7 @@ class AlbumDAL:
                 album['scan_run_id']
             )
             self.db.commit()
-            logger.debug(f"Inserted new album: {album_id} ({album.get('title', album_folder_path)})")
+            logger.debug(f"Inserted album {album_id}: {{'title': {album.get('title')!r}}}")
         
         return album_id
     
@@ -212,10 +231,6 @@ class AlbumDAL:
             values
         )
         cursor.close()
-        
-        # Log only album_id and key identifying fields
-        title = fields.get('title', '')
-        logger.debug(f"Updated album: id={album_id}, title={title}")
     
     def mark_albums_missing(self, scan_run_id: str) -> int:
         """

@@ -61,17 +61,15 @@ def extract_exif(file_path: Path) -> Dict[str, Any]:
             for warning_item in caught_warnings:
                 if issubclass(warning_item.category, UserWarning):
                     logger.warning(
-                        f"PIL UserWarning for {file_path}: {warning_item.message}",
-                        extra={'warning_category': 'PIL.UserWarning', 'file': str(file_path)}
+                        f"PIL UserWarning: {{'path': {str(file_path)!r}, 'message': {str(warning_item.message)!r}}}"
                     )
                 elif issubclass(warning_item.category, Image.DecompressionBombWarning):
                     logger.warning(
-                        f"PIL DecompressionBombWarning for {file_path}: {warning_item.message}",
-                        extra={'warning_category': 'PIL.DecompressionBombWarning', 'file': str(file_path)}
+                        f"PIL DecompressionBombWarning: {{'path': {str(file_path)!r}, 'message': {str(warning_item.message)!r}}}"
                     )
             
             if not exif_data:
-                logger.debug(f"No EXIF data found in {file_path}")
+                logger.debug(f"No EXIF data found: {{'path': {str(file_path)!r}}}")
                 return metadata
             
             # Extract basic EXIF tags
@@ -122,7 +120,7 @@ def extract_exif(file_path: Path) -> Dict[str, Any]:
                     metadata.update(gps_data)
     
     except Exception as e:
-        logger.debug(f"Failed to extract EXIF from {file_path}: {e}")
+        logger.debug(f"Failed to extract EXIF: {{'path': {str(file_path)!r}, 'error': {str(e)!r}}}")
     
     return metadata
 
@@ -153,32 +151,30 @@ def extract_resolution(file_path: Path, use_exiftool: bool = False) -> Optional[
             for warning_item in caught_warnings:
                 if issubclass(warning_item.category, UserWarning):
                     logger.warning(
-                        f"PIL UserWarning for {file_path}: {warning_item.message}",
-                        extra={'warning_category': 'PIL.UserWarning', 'file': str(file_path)}
+                        f"PIL UserWarning: {{'path': {str(file_path)!r}, 'message': {str(warning_item.message)!r}}}"
                     )
                 elif issubclass(warning_item.category, Image.DecompressionBombWarning):
                     logger.warning(
-                        f"PIL DecompressionBombWarning for {file_path}: {warning_item.message}",
-                        extra={'warning_category': 'PIL.DecompressionBombWarning', 'file': str(file_path)}
+                        f"PIL DecompressionBombWarning: {{'path': {str(file_path)!r}, 'message': {str(warning_item.message)!r}}}"
                     )
             
             return resolution
     except Exception as e:
-        logger.debug(f"PIL failed to extract resolution from {file_path}: {e}")
+        logger.debug(f"PIL failed to extract resolution: {{'path': {str(file_path)!r}, 'error': {str(e)!r}}}")
         
         # Try ExifTool fallback for HEIC and other unsupported formats (only if available)
         if use_exiftool and str(file_path).lower().endswith(('.heic', '.heif')):
             try:
-                logger.debug(f"Trying ExifTool fallback for resolution of {file_path}")
+                logger.debug(f"Trying ExifTool fallback for resolution: {{'path': {str(file_path)!r}}}")
                 metadata = extract_exif_with_exiftool(file_path)
                 if 'width' in metadata and 'height' in metadata:
                     return (metadata['width'], metadata['height'])
             except FileNotFoundError:
-                logger.info(f"ExifTool not available - cannot extract resolution from HEIC file {file_path}")
+                logger.info(f"ExifTool not available for HEIC resolution: {{'path': {str(file_path)!r}}}")
             except Exception as fallback_error:
-                logger.debug(f"ExifTool resolution fallback failed for {file_path}: {fallback_error}")
+                logger.debug(f"ExifTool resolution fallback failed: {{'path': {str(file_path)!r}, 'error': {str(fallback_error)!r}}}")
         elif not use_exiftool and str(file_path).lower().endswith(('.heic', '.heif')):
-            logger.info(f"HEIC file {file_path} requires ExifTool (not available)")
+            logger.info(f"HEIC file requires ExifTool: {{'path': {str(file_path)!r}}}")
         
         return None
 
@@ -233,7 +229,7 @@ def _extract_gps_data(exif_data) -> Dict[str, float]:
                 gps_info['gps_altitude'] = altitude
     
     except Exception as e:
-        logger.warning(f"Failed to extract GPS data: {e}", exc_info=True)
+        logger.warning(f"Failed to extract GPS data: {{'error': {str(e)!r}}}", exc_info=True)
     
     return gps_info
 
@@ -475,16 +471,16 @@ def extract_exif_with_exiftool(file_path: Path) -> Dict[str, Any]:
         logger.warning("exiftool not found - RAW format metadata extraction disabled")
         raise
     except subprocess.CalledProcessError as e:
-        logger.error(f"exiftool failed for {file_path}: {e.stderr}")
+        logger.error(f"exiftool failed: {{'path': {str(file_path)!r}, 'stderr': {e.stderr!r}}}")
         raise
     except subprocess.TimeoutExpired:
-        logger.error(f"exiftool timed out for {file_path}")
+        logger.error(f"exiftool timed out: {{'path': {str(file_path)!r}}}")
         raise
     except json.JSONDecodeError as e:
-        logger.error(f"Failed to parse exiftool output for {file_path}: {e}")
+        logger.error(f"Failed to parse exiftool output: {{'path': {str(file_path)!r}, 'error': {str(e)!r}}}")
         raise
     except Exception as e:
-        logger.error(f"Unexpected error extracting EXIF with exiftool from {file_path}: {e}")
+        logger.error(f"Unexpected error with exiftool: {{'path': {str(file_path)!r}, 'error': {str(e)!r}}}")
         raise
     
     return metadata
@@ -540,7 +536,7 @@ def _parse_exiftool_gps_coordinate(coord_str: str) -> Optional[float]:
             
             return decimal
     except Exception as e:
-        logger.warning(f"Could not parse GPS coordinate: {coord_str}: {e}")
+        logger.warning(f"Could not parse GPS coordinate: {{'coord': {coord_str!r}, 'error': {str(e)!r}}}")
     
     return None
 
@@ -631,14 +627,14 @@ def extract_exif_smart(file_path: Path, use_exiftool: bool = False) -> Dict[str,
         if not metadata and str(file_path).lower().endswith(('.heic', '.heif')):
             if use_exiftool:
                 try:
-                    logger.debug(f"Pillow failed for HEIC file {file_path}, trying ExifTool fallback")
+                    logger.debug(f"Pillow failed for HEIC, trying ExifTool: {{'path': {str(file_path)!r}}}")
                     return extract_exif_with_exiftool(file_path)
                 except FileNotFoundError:
-                    logger.info(f"ExifTool not available - cannot extract EXIF from HEIC file {file_path}")
+                    logger.info(f"ExifTool not available for HEIC: {{'path': {str(file_path)!r}}}")
                 except Exception as e:
-                    logger.debug(f"ExifTool fallback failed for {file_path}: {e}")
+                    logger.debug(f"ExifTool fallback failed: {{'path': {str(file_path)!r}, 'error': {str(e)!r}}}")
             else:
-                logger.info(f"HEIC file {file_path} requires ExifTool (not available)")
+                logger.info(f"HEIC file requires ExifTool: {{'path': {str(file_path)!r}}}")
         
         return metadata
     
@@ -647,16 +643,16 @@ def extract_exif_smart(file_path: Path, use_exiftool: bool = False) -> Dict[str,
     if is_unknown_mime_type(mime_type):
         if use_exiftool:
             try:
-                logger.debug(f"Unknown format {file_path}, trying ExifTool")
+                logger.debug(f"Unknown format, trying ExifTool: {{'path': {str(file_path)!r}}}")
                 return extract_exif_with_exiftool(file_path)
             except FileNotFoundError:
-                logger.info(f"ExifTool not available - cannot process unknown format {file_path}")
+                logger.info(f"ExifTool not available for unknown format: {{'path': {str(file_path)!r}}}")
                 return {}
             except Exception as e:
-                logger.debug(f"ExifTool failed for {file_path}: {e}")
+                logger.debug(f"ExifTool failed: {{'path': {str(file_path)!r}, 'error': {str(e)!r}}}")
                 return {}
         else:
-            logger.debug(f"Unknown format {file_path} - ExifTool not available, skipping")
+            logger.debug(f"Unknown format, ExifTool not available: {{'path': {str(file_path)!r}}}")
     
     # Not an image or ExifTool not enabled
     return {}

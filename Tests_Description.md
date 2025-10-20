@@ -4,11 +4,11 @@ Comprehensive documentation of all test suites in the gphotos-321sync project.
 
 ## Summary
 
-**Total: 360 tests** (12 + 42 + 306)
+**Total: 353 tests** (12 + 42 + 299)
 
 - **gphotos-321sync-common:** 12 tests
 - **gphotos-321sync-takeout-extractor:** 42 tests
-- **gphotos-321sync-media-scanner:** 306 tests
+- **gphotos-321sync-media-scanner:** 299 tests
 
 ---
 
@@ -407,19 +407,6 @@ Tests for EXIF metadata extraction (8 tests).
 | 7 | `test_extract_exif_invalid_file` | File with garbage data | Empty dictionary | Invalid image data | Handles corrupted files |
 | 8 | `test_resolution_extraction_png` | PNG file (640×480) | Tuple (640, 480) | PNG format (no EXIF) | Tests resolution extraction for PNG format specifically. While `test_extract_exif_no_data` already tests JPEG without EXIF (fallback behavior), this test validates that PIL's `.size` property works correctly for PNG's different decoder/format. Ensures format-specific bugs don't break resolution extraction. Real-world: Google Photos exports contain PNGs (screenshots). Note: JPEG/HEIC have EXIF; PNG/GIF/WebP don't; videos use different standards. |
 
-### test_exif_warning_logging.py
-
-Tests for PIL warning logging behavior (4 tests).
-
-**Rationale**: Validates that PIL warnings (UserWarning for corrupt EXIF, DecompressionBombWarning for large images) are captured and logged as structured JSON entries instead of appearing as raw Python output. This ensures warnings are properly integrated into the logging system for monitoring and debugging.
-
-| # | Test | Input | Output | Conditions/Assumptions | Logic |
-|---|------|-------|--------|----------------------|-------|
-| 1 | `test_decompression_bomb_warning_logged` | Large image (10000×10000 = 100MP), threshold lowered to 50MP | Resolution extracted successfully, WARNING log entry with "DecompressionBombWarning" | Image exceeds threshold | Tests that DecompressionBombWarning is captured and logged as structured JSON at WARNING level. Temporarily lowers threshold to trigger warning. Verifies image is still processed successfully. |
-| 2 | `test_no_warnings_for_normal_image` | Normal image (800×600) | Resolution extracted, no warnings logged | Image below threshold | Tests that normal-sized images don't trigger any warnings. Validates warning system doesn't produce false positives. |
-| 3 | `test_warning_logging_includes_file_path` | Large image triggering warning | WARNING log includes file path | Warning triggered | Tests that warning log entries include the file path for debugging. Verifies structured logging includes context. |
-| 4 | `test_exif_extraction_with_warnings` | Large image (10000×10000), threshold lowered to 50MP | EXIF extracted (even if empty), warnings logged | Image exceeds threshold | Tests that EXIF extraction also captures and logs warnings properly. Verifies warning capture works in both extract_exif() and extract_resolution(). |
-
 ### test_exif_extractor_integration.py
 
 Integration tests for EXIF extraction (10 tests).
@@ -554,7 +541,7 @@ Tests for post-scan validation and cleanup (9 tests).
 
 ### test_progress.py
 
-Tests for progress tracker (14 tests).
+Tests for progress tracker (15 tests).
 
 | # | Test | Input | Output | Conditions/Assumptions | Logic |
 |---|------|-------|--------|----------------------|-------|
@@ -570,8 +557,9 @@ Tests for progress tracker (14 tests).
 | 10 | `test_format_time_seconds` | 0-59 seconds | "Xs" format | Seconds only | Formats seconds |
 | 11 | `test_format_time_minutes` | 60-3599 seconds | "Xm Ys" format | Minutes + seconds | Formats minutes |
 | 12 | `test_format_time_hours` | ≥3600 seconds | "Xh Ym Zs" format | Hours + minutes + seconds | Formats hours |
-| 13 | `test_zero_total_files` | total_files=0 | 0%, 0 remaining | Edge case | Handles zero files |
-| 14 | `test_log_interval_triggering` | Updates at intervals | Logs at specified intervals | Logging enabled | Logs at intervals |
+| 13 | `test_format_time_complex` | 8130 seconds | "2h 15m 30s" format | Complex time | Formats complex durations |
+| 14 | `test_zero_total_files` | total_files=0 | 0%, 0 remaining | Edge case | Handles zero files |
+| 15 | `test_elapsed_time_tracking` | Process 50 files with delay | Elapsed time ≥ 0.1s | Time tracking | Tracks elapsed time correctly |
 
 ### test_queue_manager.py
 
@@ -643,16 +631,12 @@ Tests for writer thread database operations (7 tests).
 
 ### test_parallel_scanner_integration.py
 
-**NEW** End-to-end integration tests for rescan scenarios (7 tests).
+**NEW** End-to-end integration tests for rescan scenarios (3 tests).
 
-**Purpose**: Tests full ParallelScanner workflow including rescans. These tests catch bugs that unit tests miss (queue race conditions, album upsert logging, end-to-end behavior).
+**Purpose**: Tests full ParallelScanner workflow including rescans. These tests catch bugs that unit tests miss (queue race conditions, end-to-end behavior).
 
 | # | Test | Input | Output | Conditions/Assumptions | Logic |
 |---|------|-------|--------|----------------------|-------|
-| 1 | `test_fixture_creates_structure` | Test fixture setup | Takeout directory structure created with 2 albums, 3 files | Fixture validation | Verifies test fixture creates expected directory structure before testing scanner - ensures test setup is correct |
-| 2 | `test_initial_scan_creates_albums_and_items` | Minimal Takeout (2 albums, 3 files) | 2 albums created, 3 items processed, fingerprints computed | Initial scan | Verifies end-to-end initial scan workflow |
-| 3 | `test_rescan_with_no_changes_skips_all_files` | Rescan same Takeout (no changes) | 0 files processed, all skipped via fingerprints, albums updated not duplicated | Rescan optimization | Tests fingerprint-based skip optimization works correctly |
-| 4 | `test_rescan_detects_modified_file` | Modify 1 file between scans | Modified file detected and reprocessed | File content changed | Verifies changed files are detected via fingerprint mismatch |
-| 5 | `test_rescan_detects_new_file` | Add new file after initial scan | New file discovered and processed | New file added | Verifies new files are discovered on rescan |
-| 6 | `test_rescan_with_multiple_threads_no_crash` | Rescan with 16 threads on 3 files | Scan completes without ValueError | **Tests queue sentinel fix** | Specifically tests the queue sentinel handling bug fix - many threads, few files triggers race condition |
-| 7 | `test_album_upsert_logs_correctly` | Rescan, capture logs | Logs show "Updated existing album", NOT "Inserted new album" | **Tests album upsert fix** | Specifically tests the album upsert logging bug fix - verifies correct log messages on rescan |
+| 1 | `test_initial_scan` | Minimal Takeout (2 albums, 3 files) | 2 albums created, 3 items processed, fingerprints computed | Initial scan | Verifies end-to-end initial scan workflow |
+| 2 | `test_rescan_with_no_changes` | Rescan same Takeout (no changes) | 0 files processed, all skipped via fingerprints, albums updated not duplicated | Rescan optimization | Tests fingerprint-based skip optimization works correctly |
+| 3 | `test_rescan_with_many_threads` | Rescan with 16 threads on 3 files | Scan completes without ValueError | **Tests queue sentinel fix** | Specifically tests the queue sentinel handling bug fix - many threads, few files triggers race condition |

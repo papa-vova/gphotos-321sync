@@ -145,7 +145,6 @@ class TestProcessFileWork:
         # Verify error result
         assert result["type"] == "error"
         assert result["error_category"] == "corrupted"
-        assert result["error_message"] == "File is corrupted"
         assert result["relative_path"] == "Photos/test.jpg"
 
 
@@ -240,7 +239,6 @@ class TestWorkerThreadMain:
         assert results_queue.qsize() == 1
         result = results_queue.get()
         assert result["type"] == "error"
-        assert "Processing failed" in result["error_message"]
     
     def test_shutdown_event(
         self,

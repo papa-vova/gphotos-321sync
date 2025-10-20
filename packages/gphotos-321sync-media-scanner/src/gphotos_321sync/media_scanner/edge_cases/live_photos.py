@@ -39,7 +39,7 @@ def detect_live_photo_pairs(files: List[FileInfo]) -> List[Tuple[FileInfo, FileI
     Returns:
         List of (image_file, video_file) tuples representing Live Photo pairs
     """
-    logger.info(f"Detecting Live Photo pairs from {len(files)} files")
+    logger.info(f"Detecting Live Photo pairs: {{'files': {len(files)}}}")
     
     # Group files by directory and base name
     file_groups: Dict[Tuple[str, str], List[FileInfo]] = {}
@@ -83,10 +83,10 @@ def detect_live_photo_pairs(files: List[FileInfo]) -> List[Tuple[FileInfo, FileI
             for video in videos:
                 pairs.append((image, video))
                 logger.debug(
-                    f"Detected Live Photo pair: {image.relative_path} + {video.relative_path}"
+                    f"Detected Live Photo pair: {{'image': {image.relative_path!r}, 'video': {video.relative_path!r}}}"
                 )
     
-    logger.info(f"Detected {len(pairs)} Live Photo pairs")
+    logger.info(f"Detected Live Photo pairs: {{'count': {len(pairs)}}}")
     
     return pairs
 
@@ -107,7 +107,7 @@ def link_live_photo_pairs(
     Returns:
         Dictionary with statistics (pairs_linked, files_updated)
     """
-    logger.info(f"Linking {len(pairs)} Live Photo pairs in database")
+    logger.info(f"Linking Live Photo pairs: {{'count': {len(pairs)}}}")
     
     files_updated = 0
     
@@ -143,7 +143,7 @@ def link_live_photo_pairs(
                     files_updated += 1
                 cursor.close()
         
-        logger.debug(f"Linked Live Photo pair with ID: {pair_id}")
+        logger.debug(f"Linked Live Photo pair: {{'pair_id': {pair_id!r}}}")
     
     db_conn.commit()
     
@@ -176,7 +176,7 @@ def detect_and_link_live_photos(db_path: str, scan_run_id: str) -> Dict[str, int
     from pathlib import Path
     from ..database import DatabaseConnection
     
-    logger.info(f"Processing Live Photos for scan_run_id: {scan_run_id}")
+    logger.info(f"Processing Live Photos for scan_run {scan_run_id}")
     
     db_conn = DatabaseConnection(Path(db_path))
     conn = db_conn.connect()

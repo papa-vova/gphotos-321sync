@@ -34,8 +34,7 @@ class QueueManager:
         self.results_queue: Queue = None
         
         logger.info(
-            f"QueueManager initialized (work_maxsize={work_queue_maxsize}, "
-            f"results_maxsize={results_queue_maxsize})"
+            f"Initialized QueueManager: {{'work_maxsize': {work_queue_maxsize}, 'results_maxsize': {results_queue_maxsize}}}"
         )
     
     def create_queues(self) -> Tuple[Queue, Queue]:

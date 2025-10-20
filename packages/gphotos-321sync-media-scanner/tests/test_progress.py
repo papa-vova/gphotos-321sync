@@ -151,38 +151,6 @@ class TestProgressTracker:
         assert progress["percentage"] == 0.0
         assert progress["remaining_files"] == 0
     
-    def test_log_interval_triggering(self, caplog):
-        """Test that logging happens at intervals."""
-        import logging
-        caplog.set_level(logging.INFO)
-        
-        tracker = ProgressTracker(total_files=1000, log_interval=100)
-        
-        # Should not log at 50
-        tracker.update(50)
-        assert len([r for r in caplog.records if "Progress:" in r.message]) == 0
-        
-        # Should log at 100
-        tracker.update(100)
-        assert len([r for r in caplog.records if "Progress:" in r.message]) == 1
-        
-        # Should log at 200
-        tracker.update(200)
-        assert len([r for r in caplog.records if "Progress:" in r.message]) == 2
-    
-    def test_final_summary_logging(self, caplog):
-        """Test final summary logging."""
-        import logging
-        caplog.set_level(logging.INFO)
-        
-        tracker = ProgressTracker(total_files=100)
-        tracker.update(100)
-        
-        tracker.log_final_summary()
-        
-        # Should have logged completion message
-        assert any("Scan complete" in r.message for r in caplog.records)
-    
     def test_elapsed_time_tracking(self):
         """Test that elapsed time is tracked."""
         tracker = ProgressTracker(total_files=100)

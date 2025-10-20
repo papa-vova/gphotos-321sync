@@ -45,7 +45,7 @@ class ScanRunDAL:
         cursor.close()
         self.db.commit()
         
-        logger.info(f"Created scan run: {scan_run_id}")
+        logger.info(f"Created scan_run {scan_run_id}")
         return scan_run_id
     
     def update_scan_run(self, scan_run_id: str, **fields):
@@ -71,8 +71,7 @@ class ScanRunDAL:
         cursor.close()
         self.db.commit()
         
-        # Log only scan_run_id and count of updated fields
-        logger.debug(f"Updated scan run: id={scan_run_id}, fields={len(fields)}")
+        logger.debug(f"Updated scan_run {scan_run_id}: {list(fields.keys())}")
     
     def complete_scan_run(self, scan_run_id: str, status: str = 'completed'):
         """
@@ -103,7 +102,7 @@ class ScanRunDAL:
         cursor.close()
         self.db.commit()
         
-        logger.info(f"Completed scan run {scan_run_id} with status: {status}")
+        logger.info(f"Completed scan_run {scan_run_id}: {{'status': {status!r}}}")
     
     def get_scan_run(self, scan_run_id: str) -> Optional[Dict[str, Any]]:
         """

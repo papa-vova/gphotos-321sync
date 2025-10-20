@@ -29,7 +29,7 @@ def validate_scan(db_path: str, scan_run_id: str, scan_start_time: datetime) -> 
     """
     from pathlib import Path
     
-    logger.info(f"Starting post-scan validation for scan_run_id: {scan_run_id}")
+    logger.info(f"Starting post-scan validation for scan_run {scan_run_id}")
     
     db_conn = DatabaseConnection(Path(db_path) if isinstance(db_path, str) else db_path)
     conn = db_conn.connect()
@@ -80,7 +80,7 @@ def validate_scan(db_path: str, scan_run_id: str, scan_start_time: datetime) -> 
         cursor.close()
         
         if missing_count > 0:
-            logger.info(f"Marked {missing_count} files as missing")
+            logger.info(f"Marked {missing_count} media_item(s) as missing")
         
         # Step 3: Mark missing albums
         cursor = conn.execute(
@@ -96,7 +96,7 @@ def validate_scan(db_path: str, scan_run_id: str, scan_start_time: datetime) -> 
         cursor.close()
         
         if missing_albums_count > 0:
-            logger.info(f"Marked {missing_albums_count} albums as missing")
+            logger.info(f"Marked {missing_albums_count} album(s) as missing")
         
         # Step 4: Update scan_runs statistics
         cursor = conn.execute(
@@ -124,8 +124,7 @@ def validate_scan(db_path: str, scan_run_id: str, scan_start_time: datetime) -> 
         
         if orphaned_present_count > 0:
             logger.error(
-                f"Found {orphaned_present_count} files marked 'present' "
-                f"but with wrong scan_run_id"
+                f"Found orphaned files: {{'count': {orphaned_present_count}, 'status': 'present', 'issue': 'wrong scan_run_id'}}"
             )
         
         # Step 6: Get validation summary
@@ -156,7 +155,7 @@ def validate_scan(db_path: str, scan_run_id: str, scan_start_time: datetime) -> 
             'missing_albums': missing_albums_count,
         }
         
-        logger.info(f"Post-scan validation completed: {validation_stats}")
+        logger.info(f"Completed post-scan validation: {validation_stats}")
         
         return validation_stats
         
@@ -182,7 +181,7 @@ def cleanup_old_scan_data(db_path: str, keep_recent_scans: int = 10) -> Dict[str
     """
     from pathlib import Path
     
-    logger.info(f"Starting cleanup of old scan data (keeping {keep_recent_scans} scans)")
+    logger.info(f"Starting cleanup: {{'keep_recent_scans': {keep_recent_scans}}}")
     
     db_conn = DatabaseConnection(Path(db_path) if isinstance(db_path, str) else db_path)
     conn = db_conn.connect()
@@ -202,7 +201,7 @@ def cleanup_old_scan_data(db_path: str, keep_recent_scans: int = 10) -> Dict[str
         cursor.close()
         
         if not old_scan_ids:
-            logger.info("No old scan runs to clean up")
+            logger.info("No old scan_runs to clean up")
             return {
                 'scan_runs_deleted': 0,
                 'errors_deleted': 0,
@@ -238,7 +237,7 @@ def cleanup_old_scan_data(db_path: str, keep_recent_scans: int = 10) -> Dict[str
             'errors_deleted': errors_deleted,
         }
         
-        logger.info(f"Cleanup completed: {cleanup_stats}")
+        logger.info(f"Completed cleanup: {cleanup_stats}")
         
         return cleanup_stats
         

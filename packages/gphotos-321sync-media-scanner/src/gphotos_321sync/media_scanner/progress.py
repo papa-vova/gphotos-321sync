@@ -35,7 +35,7 @@ class ProgressTracker:
         self.last_log_time = self.start_time
         self.last_log_count = 0
         
-        logger.info(f"ProgressTracker initialized (total_files={total_files})")
+        logger.info(f"Initialized ProgressTracker: {{'total_files': {total_files}}}")
     
     def update(self, files_processed: int) -> None:
         """Update progress with current file count.

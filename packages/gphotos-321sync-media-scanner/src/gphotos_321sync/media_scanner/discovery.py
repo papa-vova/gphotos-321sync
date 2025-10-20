@@ -51,23 +51,23 @@ def discover_files(target_media_path: Path) -> Iterator[FileInfo]:
         - relative_path and album_folder_path are relative to scan_root (excludes Takeout/Google Photos)
     """
     if not target_media_path.exists():
-        logger.error(f"Target media path does not exist: {target_media_path}")
+        logger.error(f"Target media path does not exist: {{'path': {str(target_media_path)!r}}}")
         return
     
     if not target_media_path.is_dir():
-        logger.error(f"Target media path is not a directory: {target_media_path}")
+        logger.error(f"Target media path is not a directory: {{'path': {str(target_media_path)!r}}}")
         return
     
-    logger.info(f"Starting file discovery from: {target_media_path}")
+    logger.info(f"Starting file discovery: {{'path': {str(target_media_path)!r}}}")
     
     # Detect Google Takeout structure (same logic as album_discovery)
     # scan_root is where albums actually live (excludes Takeout/Google Photos prefix)
     google_photos_path = target_media_path / "Takeout" / "Google Photos"
     if google_photos_path.exists() and google_photos_path.is_dir():
-        logger.debug(f"Using scan root: {google_photos_path}")
+        logger.debug(f"Using scan root: {{'path': {str(google_photos_path)!r}}}")
         scan_root = google_photos_path
     else:
-        logger.debug(f"Using scan root: {target_media_path}")
+        logger.debug(f"Using scan root: {{'path': {str(target_media_path)!r}}}")
         scan_root = target_media_path
     
     # Build a map of JSON sidecars for efficient lookup
@@ -180,7 +180,7 @@ def discover_files(target_media_path: Path) -> Iterator[FileInfo]:
             key = parent_dir / media_filename
             json_sidecars[key] = json_path
     
-    logger.info(f"Found {len(json_sidecars)} JSON sidecar files")
+    logger.info(f"Found JSON sidecar files: {{'count': {len(json_sidecars)}}}")
     
     # Second pass: discover all files and pair with sidecars
     logger.info("Discovering media files (this may take several minutes for large libraries)...")
@@ -211,7 +211,7 @@ def discover_files(target_media_path: Path) -> Iterator[FileInfo]:
         try:
             file_size = file_path.stat().st_size
         except OSError as e:
-            logger.warning(f"Failed to get file size for {file_path}: {e}")
+            logger.warning(f"Failed to get file size: {{'path': {str(file_path)!r}, 'error': {str(e)!r}}}")
             continue
         
         # Calculate relative path
@@ -220,7 +220,7 @@ def discover_files(target_media_path: Path) -> Iterator[FileInfo]:
         try:
             relative_path = file_path.relative_to(scan_root)
         except ValueError:
-            logger.warning(f"File is not relative to scan root: {file_path}")
+            logger.warning(f"File not relative to scan root: {{'path': {str(file_path)!r}}}")
             continue
         
         # Get album folder path (relative to scan_root) for album_id lookup
@@ -301,8 +301,7 @@ def discover_files(target_media_path: Path) -> Iterator[FileInfo]:
             elapsed = current_time - discovery_start_time
             rate = files_discovered / elapsed if elapsed > 0 else 0
             logger.info(
-                f"Discovery progress: {files_discovered} files found, {files_with_sidecars} with sidecars "
-                f"({elapsed:.1f}s elapsed, {rate:.0f} files/sec)"
+                f"Discovery progress: {{'files_found': {files_discovered}, 'with_sidecars': {files_with_sidecars}, 'elapsed_seconds': {elapsed:.1f}, 'files_per_sec': {rate:.0f}}}"
             )
             last_progress_time = current_time
         
@@ -315,10 +314,9 @@ def discover_files(target_media_path: Path) -> Iterator[FileInfo]:
         )
     
     if files_discovered == 0:
-        logger.warning(f"No media files discovered in: {target_media_path}")
+        logger.warning(f"No media files discovered: {{'path': {str(target_media_path)!r}}}")
     else:
         total_discovery_time = time.time() - discovery_start_time
         logger.info(
-            f"File discovery complete: {files_discovered} files discovered, "
-            f"{files_with_sidecars} with JSON sidecars (took {total_discovery_time:.1f}s)"
+            f"File discovery complete: {{'files_discovered': {files_discovered}, 'with_sidecars': {files_with_sidecars}, 'duration_seconds': {total_discovery_time:.1f}}}"
         )

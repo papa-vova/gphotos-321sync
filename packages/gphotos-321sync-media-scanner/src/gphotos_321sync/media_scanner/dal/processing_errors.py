@@ -54,7 +54,7 @@ class ProcessingErrorDAL:
         )
         cursor.close()
         
-        logger.debug(f"Recorded error for {relative_path}: {error_category}")
+        logger.debug(f"Recorded error for {relative_path}: {{'category': {error_category!r}}}")
     
     def get_errors_by_scan(self, scan_run_id: str) -> List[Dict[str, Any]]:
         """
@@ -187,5 +187,5 @@ class ProcessingErrorDAL:
         count = cursor.rowcount
         cursor.close()
         
-        logger.debug(f"Batch inserted {count} errors")
+        logger.debug(f"Batch inserted {count} processing_errors")
         return count

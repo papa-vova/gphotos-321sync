@@ -30,7 +30,7 @@ def generate_summary(db_path: str, scan_run_id: str) -> Dict[str, Any]:
     """
     from pathlib import Path
     
-    logger.info(f"Generating summary for scan_run_id: {scan_run_id}")
+    logger.info(f"Generating summary for scan_run {scan_run_id}")
     
     db_conn = DatabaseConnection(Path(db_path) if isinstance(db_path, str) else db_path)
     conn = db_conn.connect()
@@ -90,7 +90,7 @@ def generate_summary(db_path: str, scan_run_id: str) -> Dict[str, Any]:
             },
         }
         
-        logger.info(f"Summary generated successfully for scan_run_id: {scan_run_id}")
+        logger.info(f"Generated summary for scan_run {scan_run_id}")
         
         return summary
         

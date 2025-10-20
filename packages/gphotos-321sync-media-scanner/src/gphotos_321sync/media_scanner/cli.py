@@ -27,10 +27,10 @@ def progress_callback(logger: logging.Logger, current: int, total: int, item: st
         item: Name of current item
     """
     if current > total:
-        logger.info(f"Scanning complete: {total} item(s) processed")
+        logger.info(f"Scanning complete: {{'items': {total}}}")
     else:
         percent = (current / total) * 100 if total > 0 else 0
-        logger.info(f"Scanning item {current}/{total} ({percent:.1f}%): {item}")
+        logger.info(f"Scanning: {{'current': {current}, 'total': {total}, 'percent': {percent:.1f}, 'item': {item!r}}}")
 
 
 def scan_command(
@@ -84,16 +84,11 @@ def scan_command(
     use_ffprobe = use_ffprobe_override if use_ffprobe_override is not None else config.scanner.use_ffprobe
     
     try:
-        logger.info(f"Target media directory: {target_media_path}")
-        logger.info(f"Database path: {database_path}")
-        logger.info(f"Worker processes: {worker_processes}")
-        logger.info(f"Worker threads: {worker_threads}")
-        logger.info(f"Use exiftool: {use_exiftool}")
-        logger.info(f"Use ffprobe: {use_ffprobe}")
+        logger.info(f"Configuration: {{'target_media_path': {str(target_media_path)!r}, 'database_path': {str(database_path)!r}, 'worker_processes': {worker_processes}, 'worker_threads': {worker_threads}, 'use_exiftool': {use_exiftool}, 'use_ffprobe': {use_ffprobe}}}")
         
         # Validate target media path exists
         if not target_media_path.exists():
-            logger.error(f"Target media directory does not exist: {target_media_path}")
+            logger.error(f"Target media directory does not exist: {{'path': {str(target_media_path)!r}}}")
             return 1
         
         # Initialize database schema if needed

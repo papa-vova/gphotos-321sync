@@ -67,7 +67,7 @@ def worker_thread_main(
         use_ffprobe: Whether to use ffprobe for video metadata
         shutdown_event: Event to signal shutdown
     """
-    logger.info(f"Worker thread {thread_id} started")
+    logger.info(f"Started worker_thread {thread_id}")
     
     # Open database connection for this thread
     db_conn = DatabaseConnection(Path(db_path))
@@ -115,7 +115,7 @@ def worker_thread_main(
                                 sidecar_fingerprint = hashlib.sha256(f.read()).hexdigest()
                         except Exception as e:
                             logger.warning(
-                                f"Failed to calculate sidecar fingerprint for {file_info.relative_path}: {e}"
+                                f"Failed to calculate sidecar fingerprint: {{'path': {file_info.relative_path!r}, 'error': {str(e)!r}}}"
                             )
                     
                     # Step 3: Check if file exists with matching fingerprints
@@ -126,7 +126,7 @@ def worker_thread_main(
                     ):
                         # File is unchanged - skip expensive processing
                         # Send to writer thread to batch update scan_run_id and last_seen_timestamp
-                        logger.debug(f"Skipping unchanged file: {file_info.relative_path}")
+                        logger.debug(f"Skipping unchanged file: {{'path': {file_info.relative_path!r}}}")
                         
                         from datetime import datetime, timezone
                         results_queue.put({
@@ -141,7 +141,7 @@ def worker_thread_main(
                         continue
                     
                     # File is new or changed - do full processing
-                    logger.debug(f"Processing changed/new file: {file_info.relative_path}")
+                    logger.debug(f"Processing changed/new file: {{'path': {file_info.relative_path!r}}}")
                     
                     # Submit CPU work to process pool
                     cpu_future = process_pool.apply_async(
@@ -199,7 +199,7 @@ def worker_thread_main(
                     error_count += 1
                     
                     logger.error(
-                        f"Worker {thread_id} failed to process {file_info.relative_path}: {e}",
+                        f"Worker thread {thread_id} failed to process file: {{'path': {file_info.relative_path!r}, 'error': {str(e)!r}}}",
                         exc_info=True
                     )
                 
@@ -213,14 +213,13 @@ def worker_thread_main(
                 continue
     
     except Exception as e:
-        logger.error(f"Worker thread {thread_id} crashed: {e}", exc_info=True)
+        logger.error(f"Worker thread {thread_id} crashed: {{'error': {str(e)!r}}}", exc_info=True)
         raise
     
     finally:
         conn.close()
         logger.info(
-            f"Worker thread {thread_id} shutting down "
-            f"(processed={processed_count}, skipped={skipped_count}, errors={error_count})"
+            f"Worker thread {thread_id} shutting down: {{'processed': {processed_count}, 'skipped': {skipped_count}, 'errors': {error_count}}}"
         )
 
 
@@ -267,7 +266,7 @@ def _process_file_work(
     except Exception as e:
         # Handle process pool errors (crashes, timeouts, etc.)
         logger.error(
-            f"Process pool error for {file_info.relative_path}: {e}",
+            f"Process pool error: {{'path': {file_info.relative_path!r}, 'error': {str(e)!r}}}",
             exc_info=True
         )
         return {
@@ -336,7 +335,7 @@ def worker_thread_batch_main(
         shutdown_event: Event to signal shutdown
         batch_size: Number of jobs to submit to pool at once
     """
-    logger.info(f"Worker thread {thread_id} started (batch mode, batch_size={batch_size})")
+    logger.info(f"Started worker_thread {thread_id}: {{'mode': 'batch', 'batch_size': {batch_size}}}")
     
     processed_count = 0
     error_count = 0
@@ -434,7 +433,7 @@ def worker_thread_batch_main(
                     error_count += 1
                     
                     logger.error(
-                        f"Worker {thread_id} failed to process {file_info.relative_path}: {e}",
+                        f"Worker thread {thread_id} failed to process file: {{'path': {file_info.relative_path!r}, 'error': {str(e)!r}}}",
                         exc_info=True
                     )
                 
@@ -442,11 +441,10 @@ def worker_thread_batch_main(
                     work_queue.task_done()
             
     except Exception as e:
-        logger.error(f"Worker thread {thread_id} crashed: {e}", exc_info=True)
+        logger.error(f"Worker thread {thread_id} crashed: {{'error': {str(e)!r}}}", exc_info=True)
         raise
     
     finally:
         logger.info(
-            f"Worker thread {thread_id} shutting down "
-            f"(processed={processed_count}, errors={error_count})"
+            f"Worker thread {thread_id} shutting down: {{'processed': {processed_count}, 'errors': {error_count}}}"
         )

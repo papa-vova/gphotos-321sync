@@ -38,7 +38,7 @@ def detect_edited_variants(files: List[FileInfo]) -> Dict[str, str]:
     Returns:
         Dictionary mapping edited_path -> original_path
     """
-    logger.info(f"Detecting edited variants from {len(files)} files")
+    logger.info(f"Detecting edited variants: {{'files': {len(files)}}}")
     
     # Build a map of normalized paths to original paths for lookup
     normalized_to_original = {normalize_path(f.relative_path): f.relative_path for f in files}
@@ -69,10 +69,10 @@ def detect_edited_variants(files: List[FileInfo]) -> Dict[str, str]:
             original_path_db = normalized_to_original[original_path_normalized]
             edited_to_original[file_info.relative_path] = original_path_db
             logger.debug(
-                f"Detected edited variant: {file_info.relative_path} -> {original_path_db}"
+                f"Detected edited variant: {{'edited': {file_info.relative_path!r}, 'original': {original_path_db!r}}}"
             )
     
-    logger.info(f"Detected {len(edited_to_original)} edited variants")
+    logger.info(f"Detected edited variants: {{'count': {len(edited_to_original)}}}")
     
     return edited_to_original
 
@@ -94,14 +94,14 @@ def link_edited_variants(
     Returns:
         Dictionary with statistics (variants_linked, originals_found, originals_missing)
     """
-    logger.info(f"Linking {len(edited_to_original)} edited variants in database")
+    logger.info(f"Linking edited variants: {{'count': {len(edited_to_original)}}}")
     
     variants_linked = 0
     originals_found = 0
     originals_missing = 0
     
     for edited_path, original_path in edited_to_original.items():
-        logger.debug(f"Processing pair: {edited_path} -> {original_path}")
+        logger.debug(f"Processing pair: {{'edited': {edited_path!r}, 'original': {original_path!r}}}")
         
         # Get the original's media_item_id
         cursor = db_conn.execute(
@@ -117,8 +117,7 @@ def link_edited_variants(
         
         if not row:
             logger.warning(
-                f"Original not found in database for edited variant: "
-                f"{edited_path} -> {original_path}"
+                f"Original not found for edited variant: {{'edited': {edited_path!r}, 'original': {original_path!r}}}"
             )
             originals_missing += 1
             continue
@@ -139,11 +138,11 @@ def link_edited_variants(
         if cursor.rowcount > 0:
             variants_linked += 1
             logger.debug(
-                f"Linked edited variant {edited_path} to original {original_media_item_id}"
+                f"Linked edited variant: {{'edited': {edited_path!r}, 'original_id': {original_media_item_id!r}}}"
             )
         else:
             logger.warning(
-                f"Failed to update edited variant in database: {edited_path}"
+                f"Failed to update edited variant: {{'path': {edited_path!r}}}"
             )
         
         cursor.close()
@@ -180,14 +179,14 @@ def detect_and_link_edited_variants(db_path: str, scan_run_id: str) -> Dict[str,
     from pathlib import Path
     from ..database import DatabaseConnection
     
-    logger.info(f"Processing edited variants for scan_run_id: {scan_run_id}")
+    logger.info(f"Processing edited variants for scan_run {scan_run_id}")
     
     db_conn = DatabaseConnection(Path(db_path))
     conn = db_conn.connect()
     
     try:
         # Get all media items from this scan run
-        logger.info(f"Querying media items for scan_run_id: {scan_run_id}")
+        logger.info(f"Querying media items for scan_run {scan_run_id}")
         cursor = conn.execute(
             """
             SELECT media_item_id, relative_path, mime_type
@@ -207,16 +206,16 @@ def detect_and_link_edited_variants(db_path: str, scan_run_id: str) -> Dict[str,
             ))
         
         cursor.close()
-        logger.info(f"Query returned {len(files)} files")
+        logger.info(f"Query returned files: {{'count': {len(files)}}}")
         
         # Detect edited variants
-        logger.info(f"Detecting edited variants from {len(files)} files")
+        logger.info(f"Detecting edited variants: {{'files': {len(files)}}}")
         edited_to_original = detect_edited_variants(files)
-        logger.info(f"Detection found {len(edited_to_original)} edited variants")
+        logger.info(f"Detection found edited variants: {{'count': {len(edited_to_original)}}}")
         
         # Link variants
         if edited_to_original:
-            logger.info(f"Linking {len(edited_to_original)} variants")
+            logger.info(f"Linking variants: {{'count': {len(edited_to_original)}}}")
             stats = link_edited_variants(conn, edited_to_original)
         else:
             logger.info("No edited variants detected")

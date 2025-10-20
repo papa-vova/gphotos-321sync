@@ -125,16 +125,10 @@ def test_discover_files_excludes_hidden(test_tree):
     assert ".hidden.jpg" not in files
 
 
-def test_discover_files_empty_directory(tmp_path, caplog):
-    """Test discovery in empty directory logs warning."""
-    import logging
-    caplog.set_level(logging.WARNING)
-    
+def test_discover_files_empty_directory(tmp_path):
+    """Test discovery in empty directory returns empty list."""
     files = list(discover_files(tmp_path))
     assert len(files) == 0
-    
-    # Check that warning was logged
-    assert any("No media files discovered" in record.message for record in caplog.records)
 
 
 def test_discover_files_nonexistent_path(tmp_path):

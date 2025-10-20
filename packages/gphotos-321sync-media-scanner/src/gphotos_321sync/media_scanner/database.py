@@ -47,7 +47,7 @@ class DatabaseConnection:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         
         # Create connection
-        logger.info(f"Connecting to database: {self.db_path}")
+        logger.info(f"Connecting to database: {{'path': {str(self.db_path)!r}}}")
         self._connection = sqlite3.connect(
             str(self.db_path),
             check_same_thread=False,  # Allow multi-threaded access (WAL mode)
@@ -177,7 +177,7 @@ class DatabaseConnection:
                 cursor.close()
                 logger.debug("WAL checkpoint completed")
             except sqlite3.Error as e:
-                logger.warning(f"Failed to checkpoint WAL: {e}")
+                logger.warning(f"Failed to checkpoint WAL: {{'error': {str(e)!r}}}")
             
             self._connection.close()
             self._connection = None

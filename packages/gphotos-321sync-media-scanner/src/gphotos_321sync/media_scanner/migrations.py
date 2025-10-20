@@ -48,7 +48,7 @@ class MigrationRunner:
             
             if row and row['version'] is not None:
                 version = row['version']
-                logger.debug(f"Current schema version: {version}")
+                logger.debug(f"Current schema version: {{'version': {version}}}")
                 return version
             return 0
         except sqlite3.OperationalError:
@@ -66,7 +66,7 @@ class MigrationRunner:
         migrations = []
         
         if not self.schema_dir.exists():
-            logger.warning(f"Schema directory not found: {self.schema_dir}")
+            logger.warning(f"Schema directory not found: {{'path': {str(self.schema_dir)!r}}}")
             return migrations
         
         # Find all SQL files matching pattern: NNN_*.sql
@@ -77,13 +77,13 @@ class MigrationRunner:
                 version = int(version_str)
                 migrations.append((version, sql_file))
             except (ValueError, IndexError):
-                logger.warning(f"Skipping invalid migration file: {sql_file.name}")
+                logger.warning(f"Skipping invalid migration file: {{'name': {sql_file.name!r}}}")
                 continue
         
         # Sort by version number
         migrations.sort(key=lambda x: x[0])
         
-        logger.debug(f"Found {len(migrations)} migration files")
+        logger.debug(f"Found migration files: {{'count': {len(migrations)}}}")
         return migrations
     
     def apply_migrations(self, target_version: Optional[int] = None):
@@ -107,7 +107,7 @@ class MigrationRunner:
         if target_version is None:
             target_version = max(v for v, _ in available_migrations)
         
-        logger.info(f"Current version: {current_version}, Target version: {target_version}")
+        logger.info(f"Migration versions: {{'current': {current_version}, 'target': {target_version}}}")
         
         # Filter migrations to apply
         pending_migrations = [
@@ -119,13 +119,13 @@ class MigrationRunner:
             logger.info("No pending migrations")
             return
         
-        logger.info(f"Applying {len(pending_migrations)} migration(s)")
+        logger.info(f"Applying migrations: {{'count': {len(pending_migrations)}}}")
         
         # Apply each migration in a transaction
         for version, migration_path in pending_migrations:
             self._apply_migration(version, migration_path)
         
-        logger.info(f"Successfully migrated to version {target_version}")
+        logger.info(f"Successfully migrated: {{'version': {target_version}}}")
     
     def _apply_migration(self, version: int, migration_path: Path):
         """
@@ -138,13 +138,13 @@ class MigrationRunner:
         Raises:
             sqlite3.Error: If migration fails
         """
-        logger.info(f"Applying migration {version}: {migration_path.name}")
+        logger.info(f"Applying migration: {{'version': {version}, 'file': {migration_path.name!r}}}")
         
         # Read migration SQL
         try:
             sql = migration_path.read_text(encoding='utf-8')
         except IOError as e:
-            logger.error(f"Failed to read migration file: {e}")
+            logger.error(f"Failed to read migration file: {{'error': {str(e)!r}}}")
             raise
         
         # Apply migration in a transaction
@@ -154,10 +154,10 @@ class MigrationRunner:
                 # Note: executescript doesn't support parameters, but migrations shouldn't need them
                 cursor.executescript(sql)
                 
-                logger.debug(f"Migration {version} executed successfully")
+                logger.debug(f"Migration executed: {{'version': {version}}}")
                 
         except sqlite3.Error as e:
-            logger.error(f"Failed to apply migration {version}: {e}")
+            logger.error(f"Failed to apply migration: {{'version': {version}, 'error': {str(e)!r}}}")
             raise
     
     def verify_schema(self) -> bool:
@@ -178,11 +178,11 @@ class MigrationRunner:
         
         if current_version < latest_version:
             logger.warning(
-                f"Schema out of date: current={current_version}, latest={latest_version}"
+                f"Schema out of date: {{'current': {current_version}, 'latest': {latest_version}}}"
             )
             return False
         
-        logger.info(f"Schema is up to date: version {current_version}")
+        logger.info(f"Schema is up to date: {{'version': {current_version}}}")
         return True
     
     def reset_database(self):
@@ -204,6 +204,6 @@ class MigrationRunner:
         with self.db.transaction() as cursor:
             for table in tables:
                 cursor.execute(f"DROP TABLE IF EXISTS {table}")
-                logger.debug(f"Dropped table: {table}")
+                logger.debug(f"Dropped table: {{'name': {table!r}}}")
         
         logger.info("Database reset complete")

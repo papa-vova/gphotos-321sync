@@ -47,7 +47,7 @@ class MediaItemDAL:
         # Validate exif_orientation: must be NULL or 1-8
         exif_orientation = item.exif_orientation
         if exif_orientation is not None and (exif_orientation < 1 or exif_orientation > 8):
-            logger.warning(f"Invalid exif_orientation {exif_orientation} for {relative_path}, setting to None")
+            logger.warning(f"Invalid exif_orientation for {relative_path}: {{'value': {exif_orientation}, 'action': 'setting to None'}}")
             exif_orientation = None
         
         cursor = self.db.execute(
@@ -121,7 +121,7 @@ class MediaItemDAL:
         cursor.close()
         # No commit - caller's responsibility (writer thread commits batches)
         
-        logger.debug(f"Inserted media item: {media_item_id} ({relative_path})")
+        logger.debug(f"Inserted media_item {media_item_id}: {{'path': {relative_path!r}}}")
         return media_item_id
     
     def update_media_item(self, media_item_id: str, **fields):
@@ -312,7 +312,7 @@ class MediaItemDAL:
         self.db.commit()
         
         if count > 0:
-            logger.info(f"Marked {count} file(s) as missing")
+            logger.info(f"Marked {count} media_item(s) as missing")
         
         return count
     
@@ -344,7 +344,7 @@ class MediaItemDAL:
         self.db.commit()
         
         if count > 0:
-            logger.warning(f"Marked {count} file(s) as inconsistent")
+            logger.warning(f"Marked {count} media_item(s) as inconsistent")
         
         return count
     
@@ -489,5 +489,5 @@ class MediaItemDAL:
         count = cursor.rowcount
         cursor.close()
         
-        logger.debug(f"Batch inserted {count} media items")
+        logger.debug(f"Batch inserted {count} media_items")
         return count

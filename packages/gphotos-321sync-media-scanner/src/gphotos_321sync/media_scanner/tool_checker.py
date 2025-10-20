@@ -70,22 +70,22 @@ def check_required_tools(use_ffprobe: bool = False, use_exiftool: bool = False) 
     # Check ffprobe
     if use_ffprobe:
         if tools.get('ffprobe', False):
-            logger.info("ffprobe: available - will extract video metadata (duration, resolution, fps)")
+            logger.info("Tool available: {{'tool': 'ffprobe', 'capability': 'video metadata extraction'}}")
         else:
-            logger.error("ffprobe: NOT FOUND but required by config (use_ffprobe=true)")
+            logger.error("Tool not found: {{'tool': 'ffprobe', 'required': True}}")
             _require_tool('ffprobe')  # Raises ToolNotFoundError
     else:
-        logger.info("ffprobe: disabled in config - video metadata will not be extracted")
+        logger.info("Tool disabled: {{'tool': 'ffprobe', 'reason': 'config'}}")
     
     # Check exiftool
     if use_exiftool:
         if tools.get('exiftool', False):
-            logger.info("exiftool: available - will extract EXIF from RAW formats (DNG, CR2, NEF, ARW)")
+            logger.info("Tool available: {{'tool': 'exiftool', 'capability': 'RAW format EXIF extraction'}}")
         else:
-            logger.error("exiftool: NOT FOUND but required by config (use_exiftool=true)")
+            logger.error("Tool not found: {{'tool': 'exiftool', 'required': True}}")
             _require_tool('exiftool')  # Raises ToolNotFoundError
     else:
-        logger.info("exiftool: disabled in config - RAW format EXIF will not be extracted")
+        logger.info("Tool disabled: {{'tool': 'exiftool', 'reason': 'config'}}")
 
 
 def _get_installation_instructions(tool_name: str) -> str:
