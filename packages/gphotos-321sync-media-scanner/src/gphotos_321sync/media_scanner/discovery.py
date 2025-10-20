@@ -4,6 +4,7 @@ Walks directory tree to identify media files and their JSON sidecars.
 """
 
 import logging
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator, Optional
@@ -187,6 +188,11 @@ def discover_files(target_media_path: Path) -> Iterator[FileInfo]:
     files_with_sidecars = 0
     progress_interval = 1000  # Log every 1000 files
     
+    # Time-based progress logging
+    discovery_start_time = time.time()
+    last_progress_time = discovery_start_time
+    time_progress_interval = 2.0  # Log every 2 seconds
+    
     # CRITICAL: Scan from scan_root, not target_media_path
     for file_path in scan_root.rglob("*"):
         # Skip directories
@@ -289,9 +295,16 @@ def discover_files(target_media_path: Path) -> Iterator[FileInfo]:
         
         files_discovered += 1
         
-        # Progress logging
-        if files_discovered % progress_interval == 0:
-            logger.info(f"Discovery progress: {files_discovered} files found, {files_with_sidecars} with sidecars")
+        # Progress logging (both count-based and time-based)
+        current_time = time.time()
+        if files_discovered % progress_interval == 0 or (current_time - last_progress_time) >= time_progress_interval:
+            elapsed = current_time - discovery_start_time
+            rate = files_discovered / elapsed if elapsed > 0 else 0
+            logger.info(
+                f"Discovery progress: {files_discovered} files found, {files_with_sidecars} with sidecars "
+                f"({elapsed:.1f}s elapsed, {rate:.0f} files/sec)"
+            )
+            last_progress_time = current_time
         
         yield FileInfo(
             file_path=file_path,
@@ -304,7 +317,8 @@ def discover_files(target_media_path: Path) -> Iterator[FileInfo]:
     if files_discovered == 0:
         logger.warning(f"No media files discovered in: {target_media_path}")
     else:
+        total_discovery_time = time.time() - discovery_start_time
         logger.info(
             f"File discovery complete: {files_discovered} files discovered, "
-            f"{files_with_sidecars} with JSON sidecars"
+            f"{files_with_sidecars} with JSON sidecars (took {total_discovery_time:.1f}s)"
         )

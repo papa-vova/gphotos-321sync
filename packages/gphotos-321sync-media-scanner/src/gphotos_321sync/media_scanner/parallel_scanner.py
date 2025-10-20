@@ -10,6 +10,7 @@ Coordinates all parallel processing components:
 import logging
 import multiprocessing
 import threading
+import time
 from datetime import datetime, timezone
 from multiprocessing import Pool
 from pathlib import Path
@@ -126,9 +127,17 @@ class ParallelScanner:
         
         logger.info(f"Created scan run: {scan_run_id}")
         
+        # Track phase timings
+        phase_timings = {
+            'album_discovery': 0.0,
+            'file_discovery': 0.0,
+            'file_processing': 0.0,
+        }
+        
         try:
             # Phase 1: Album discovery (must run before file processing)
             logger.info("Phase 1: Discovering albums...")
+            phase_start = time.time()
             album_count = 0
             album_map = {}  # album_folder_path -> album_id
             
@@ -136,16 +145,19 @@ class ParallelScanner:
                 album_map[str(album_info.album_folder_path)] = album_info.album_id
                 album_count += 1
             
-            logger.info(f"Discovered {album_count} albums")
+            phase_timings['album_discovery'] = time.time() - phase_start
+            logger.info(f"Discovered {album_count} albums (took {phase_timings['album_discovery']:.1f}s)")
             
             # Phase 2: File discovery
             logger.info("Phase 2: Discovering files...")
             logger.info("Scanning directory tree for media files and JSON sidecars...")
             logger.debug("Building file list (this may take a while for large libraries)...")
+            phase_start = time.time()
             files_to_process = list(discover_files(target_media_path))
             total_files = len(files_to_process)
+            phase_timings['file_discovery'] = time.time() - phase_start
             
-            logger.info(f"Discovered {total_files} files to process")
+            logger.info(f"Discovered {total_files} files to process (took {phase_timings['file_discovery']:.1f}s)")
             if total_files > 0:
                 logger.info(f"Starting parallel processing: {self.worker_processes} processes, {self.worker_threads} threads")
             
@@ -162,6 +174,7 @@ class ParallelScanner:
             
             # Phase 3: Parallel processing
             logger.info("Phase 3: Processing files in parallel...")
+            phase_start = time.time()
             
             # CRITICAL: Close main connection before parallel processing
             # Writer thread will open its own connection
@@ -187,6 +200,7 @@ class ParallelScanner:
             
             # Final progress log
             self.progress_tracker.log_final_summary()
+            phase_timings['file_processing'] = time.time() - phase_start
             
             # Reopen connection for final operations
             conn = db_conn.connect()
@@ -199,14 +213,24 @@ class ParallelScanner:
             # Get final statistics
             scan_run = scan_run_dal.get_scan_run(scan_run_id)
             
+            # Log phase timing breakdown
+            total_duration = scan_run.get("duration_seconds", 0)
             logger.info(f"Scan completed: {scan_run_id}")
+            logger.info(
+                f"Phase timing breakdown:\n"
+                f"  Phase 1 (Album Discovery):  {phase_timings['album_discovery']:>7.1f}s ({phase_timings['album_discovery']/total_duration*100:>5.1f}%)\n"
+                f"  Phase 2 (File Discovery):   {phase_timings['file_discovery']:>7.1f}s ({phase_timings['file_discovery']/total_duration*100:>5.1f}%)\n"
+                f"  Phase 3 (File Processing):  {phase_timings['file_processing']:>7.1f}s ({phase_timings['file_processing']/total_duration*100:>5.1f}%)\n"
+                f"  Total:                      {total_duration:>7.1f}s"
+            )
             
             return {
                 "scan_run_id": scan_run_id,
                 "status": "completed",
                 "total_files": total_files,
                 "files_processed": scan_run.get("files_processed", 0),
-                "duration_seconds": scan_run.get("duration_seconds", 0),
+                "duration_seconds": total_duration,
+                "phase_timings": phase_timings,
             }
             
         except Exception as e:
