@@ -14,6 +14,7 @@ Architecture:
 """
 
 import logging
+import sqlite3
 import time
 from queue import Empty, Queue
 from typing import Any, Dict, Optional
@@ -178,7 +179,18 @@ def _write_batch(
             if result["type"] == "media_item":
                 # Insert media item (no commit - we batch commit at the end)
                 record = result["record"]
-                media_dal.insert_media_item(record)
+                try:
+                    media_dal.insert_media_item(record)
+                except sqlite3.IntegrityError as e:
+                    # Handle duplicate path gracefully - log and skip
+                    if "UNIQUE constraint failed: media_items.relative_path" in str(e):
+                        logger.warning(
+                            f"Skipping duplicate path: {record.relative_path} "
+                            f"(media_item_id={record.media_item_id})"
+                        )
+                    else:
+                        # Other integrity errors should still fail
+                        raise
                 
             elif result["type"] == "error":
                 # Insert error record

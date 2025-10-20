@@ -3,6 +3,7 @@
 import json
 import logging
 import subprocess
+import warnings
 from datetime import timezone
 from pathlib import Path
 from typing import Dict, Any, Optional, Tuple
@@ -12,12 +13,17 @@ from ..mime_detector import detect_mime_type, is_image_mime_type, is_unknown_mim
 
 logger = logging.getLogger(__name__)
 
+# Increase PIL's decompression bomb threshold for panoramic images
+# Default is ~89MP, we increase to 200MP to handle panoramas
+Image.MAX_IMAGE_PIXELS = 200_000_000
+
 
 def extract_exif(file_path: Path) -> Dict[str, Any]:
     """
     Extract EXIF metadata from image file using Pillow.
     
-    Supports: JPEG, PNG, HEIC, GIF, WebP, BMP, TIFF
+    Supports: JPEG, PNG, GIF, WebP, BMP, TIFF
+    Note: HEIC/HEIF requires ExifTool (use extract_exif_smart with use_exiftool=True)
     
     Args:
         file_path: Path to image file
@@ -44,8 +50,25 @@ def extract_exif(file_path: Path) -> Dict[str, Any]:
     metadata = {}
     
     try:
-        with Image.open(file_path) as img:
-            exif_data = img.getexif()
+        # Capture PIL warnings and log them as structured messages
+        with warnings.catch_warnings(record=True) as caught_warnings:
+            warnings.simplefilter('always')  # Capture all warnings
+            
+            with Image.open(file_path) as img:
+                exif_data = img.getexif()
+            
+            # Log any captured warnings as structured JSON
+            for warning_item in caught_warnings:
+                if issubclass(warning_item.category, UserWarning):
+                    logger.warning(
+                        f"PIL UserWarning for {file_path}: {warning_item.message}",
+                        extra={'warning_category': 'PIL.UserWarning', 'file': str(file_path)}
+                    )
+                elif issubclass(warning_item.category, Image.DecompressionBombWarning):
+                    logger.warning(
+                        f"PIL DecompressionBombWarning for {file_path}: {warning_item.message}",
+                        extra={'warning_category': 'PIL.DecompressionBombWarning', 'file': str(file_path)}
+                    )
             
             if not exif_data:
                 logger.debug(f"No EXIF data found in {file_path}")
@@ -93,32 +116,70 @@ def extract_exif(file_path: Path) -> Dict[str, Any]:
                 elif tag_name == 'WhiteBalance':
                     metadata['white_balance'] = _parse_white_balance(value)
             
-            # Extract GPS data
-            gps_data = _extract_gps_data(exif_data)
-            if gps_data:
-                metadata.update(gps_data)
+                # Extract GPS data
+                gps_data = _extract_gps_data(exif_data)
+                if gps_data:
+                    metadata.update(gps_data)
     
     except Exception as e:
-        logger.warning(f"Failed to extract EXIF from {file_path}: {e}")
+        logger.debug(f"Failed to extract EXIF from {file_path}: {e}")
     
     return metadata
 
 
-def extract_resolution(file_path: Path) -> Optional[Tuple[int, int]]:
+def extract_resolution(file_path: Path, use_exiftool: bool = False) -> Optional[Tuple[int, int]]:
     """
     Extract image resolution (width, height).
     
+    Supports: JPEG, PNG, GIF, WebP, BMP, TIFF via PIL
+    Note: HEIC/HEIF requires ExifTool fallback (if use_exiftool=True)
+    
     Args:
         file_path: Path to image file
+        use_exiftool: Whether to use ExifTool as fallback for unsupported formats
         
     Returns:
         Tuple of (width, height) or None if extraction fails
     """
     try:
-        with Image.open(file_path) as img:
-            return img.size  # (width, height)
+        # Capture PIL warnings and log them as structured messages
+        with warnings.catch_warnings(record=True) as caught_warnings:
+            warnings.simplefilter('always')  # Capture all warnings
+            
+            with Image.open(file_path) as img:
+                resolution = img.size  # (width, height)
+            
+            # Log any captured warnings as structured JSON
+            for warning_item in caught_warnings:
+                if issubclass(warning_item.category, UserWarning):
+                    logger.warning(
+                        f"PIL UserWarning for {file_path}: {warning_item.message}",
+                        extra={'warning_category': 'PIL.UserWarning', 'file': str(file_path)}
+                    )
+                elif issubclass(warning_item.category, Image.DecompressionBombWarning):
+                    logger.warning(
+                        f"PIL DecompressionBombWarning for {file_path}: {warning_item.message}",
+                        extra={'warning_category': 'PIL.DecompressionBombWarning', 'file': str(file_path)}
+                    )
+            
+            return resolution
     except Exception as e:
-        logger.warning(f"Failed to extract resolution from {file_path}: {e}")
+        logger.debug(f"PIL failed to extract resolution from {file_path}: {e}")
+        
+        # Try ExifTool fallback for HEIC and other unsupported formats (only if available)
+        if use_exiftool and str(file_path).lower().endswith(('.heic', '.heif')):
+            try:
+                logger.debug(f"Trying ExifTool fallback for resolution of {file_path}")
+                metadata = extract_exif_with_exiftool(file_path)
+                if 'width' in metadata and 'height' in metadata:
+                    return (metadata['width'], metadata['height'])
+            except FileNotFoundError:
+                logger.info(f"ExifTool not available - cannot extract resolution from HEIC file {file_path}")
+            except Exception as fallback_error:
+                logger.debug(f"ExifTool resolution fallback failed for {file_path}: {fallback_error}")
+        elif not use_exiftool and str(file_path).lower().endswith(('.heic', '.heif')):
+            logger.info(f"HEIC file {file_path} requires ExifTool (not available)")
+        
         return None
 
 
@@ -540,16 +601,21 @@ def extract_exif_smart(file_path: Path, use_exiftool: bool = False) -> Dict[str,
     """
     Smart EXIF extraction with automatic format detection and tool selection.
     
+    Format Support:
+    - JPEG, PNG, GIF, WebP, BMP, TIFF: Pillow (always available)
+    - HEIC/HEIF: Requires ExifTool (if use_exiftool=True)
+    - RAW formats (CR2, NEF, ARW, DNG, etc.): Requires ExifTool (if use_exiftool=True)
+    
     Strategy:
     1. Detect MIME type using magic bytes
-    2. If known image format (JPEG/PNG/HEIC) → use Pillow (fast)
-    3. If unknown format (application/octet-stream) and ExifTool enabled → use ExifTool
-       (handles RAW formats: CR2, NEF, ARW, DNG, etc.)
-    4. Otherwise → return empty dict
+    2. If known image format → use Pillow (fast)
+    3. If Pillow fails and file is HEIC and ExifTool available → fallback to ExifTool
+    4. If unknown format and ExifTool available → use ExifTool (handles RAW formats)
+    5. Otherwise → return empty dict
     
     Args:
         file_path: Path to image file
-        use_exiftool: Whether ExifTool is enabled in config
+        use_exiftool: Whether ExifTool is available and enabled
         
     Returns:
         Dictionary with EXIF metadata
@@ -558,23 +624,39 @@ def extract_exif_smart(file_path: Path, use_exiftool: bool = False) -> Dict[str,
     
     # Known image format - use Pillow (fast path)
     if is_image_mime_type(mime_type):
-        try:
-            return extract_exif(file_path)
-        except Exception as e:
-            logger.warning(f"Pillow failed for {file_path}: {e}")
-            return {}
+        metadata = extract_exif(file_path)
+        
+        # If Pillow failed (empty result) and file is HEIC, try ExifTool as fallback (if available)
+        # This handles HEIC files when pillow-heif plugin is not installed
+        if not metadata and str(file_path).lower().endswith(('.heic', '.heif')):
+            if use_exiftool:
+                try:
+                    logger.debug(f"Pillow failed for HEIC file {file_path}, trying ExifTool fallback")
+                    return extract_exif_with_exiftool(file_path)
+                except FileNotFoundError:
+                    logger.info(f"ExifTool not available - cannot extract EXIF from HEIC file {file_path}")
+                except Exception as e:
+                    logger.debug(f"ExifTool fallback failed for {file_path}: {e}")
+            else:
+                logger.info(f"HEIC file {file_path} requires ExifTool (not available)")
+        
+        return metadata
     
-    # Unknown format - try ExifTool if enabled
+    # Unknown format - try ExifTool if available
     # This handles RAW formats that filetype library can't detect
-    if is_unknown_mime_type(mime_type) and use_exiftool:
-        try:
-            return extract_exif_with_exiftool(file_path)
-        except FileNotFoundError:
-            logger.debug(f"ExifTool not available for {file_path}")
-            return {}
-        except Exception as e:
-            logger.warning(f"ExifTool failed for {file_path}: {e}")
-            return {}
+    if is_unknown_mime_type(mime_type):
+        if use_exiftool:
+            try:
+                logger.debug(f"Unknown format {file_path}, trying ExifTool")
+                return extract_exif_with_exiftool(file_path)
+            except FileNotFoundError:
+                logger.info(f"ExifTool not available - cannot process unknown format {file_path}")
+                return {}
+            except Exception as e:
+                logger.debug(f"ExifTool failed for {file_path}: {e}")
+                return {}
+        else:
+            logger.debug(f"Unknown format {file_path} - ExifTool not available, skipping")
     
     # Not an image or ExifTool not enabled
     return {}

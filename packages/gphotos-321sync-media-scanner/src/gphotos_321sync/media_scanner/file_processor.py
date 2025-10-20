@@ -121,9 +121,9 @@ def process_file_cpu_work(
         # Only try to extract resolution for images, not videos
         if not is_video_file(mime_type):
             try:
-                width, height = extract_resolution(file_path)
-                result['width'] = width
-                result['height'] = height
+                resolution = extract_resolution(file_path, use_exiftool)
+                if resolution:
+                    result['width'], result['height'] = resolution
             except Exception as e:
                 logger.debug(f"Resolution extraction failed for {file_path}: {e}")
                 # Not a critical error - continue processing

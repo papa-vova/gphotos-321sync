@@ -4,11 +4,11 @@ Comprehensive documentation of all test suites in the gphotos-321sync project.
 
 ## Summary
 
-**Total: 350 tests** (12 + 42 + 296)
+**Total: 354 tests** (12 + 42 + 300)
 
 - **gphotos-321sync-common:** 12 tests
 - **gphotos-321sync-takeout-extractor:** 42 tests
-- **gphotos-321sync-media-scanner:** 296 tests
+- **gphotos-321sync-media-scanner:** 300 tests
 
 ---
 
@@ -406,6 +406,19 @@ Tests for EXIF metadata extraction (8 tests).
 | 6 | `test_extract_exif_missing_file` | Non-existent file path | Empty dictionary | File doesn't exist | Returns empty dict on error |
 | 7 | `test_extract_exif_invalid_file` | File with garbage data | Empty dictionary | Invalid image data | Handles corrupted files |
 | 8 | `test_resolution_extraction_png` | PNG file (640×480) | Tuple (640, 480) | PNG format (no EXIF) | Tests resolution extraction for PNG format specifically. While `test_extract_exif_no_data` already tests JPEG without EXIF (fallback behavior), this test validates that PIL's `.size` property works correctly for PNG's different decoder/format. Ensures format-specific bugs don't break resolution extraction. Real-world: Google Photos exports contain PNGs (screenshots). Note: JPEG/HEIC have EXIF; PNG/GIF/WebP don't; videos use different standards. |
+
+### test_exif_warning_logging.py
+
+Tests for PIL warning logging behavior (4 tests).
+
+**Rationale**: Validates that PIL warnings (UserWarning for corrupt EXIF, DecompressionBombWarning for large images) are captured and logged as structured JSON entries instead of appearing as raw Python output. This ensures warnings are properly integrated into the logging system for monitoring and debugging.
+
+| # | Test | Input | Output | Conditions/Assumptions | Logic |
+|---|------|-------|--------|----------------------|-------|
+| 1 | `test_decompression_bomb_warning_logged` | Large image (10000×10000 = 100MP), threshold lowered to 50MP | Resolution extracted successfully, WARNING log entry with "DecompressionBombWarning" | Image exceeds threshold | Tests that DecompressionBombWarning is captured and logged as structured JSON at WARNING level. Temporarily lowers threshold to trigger warning. Verifies image is still processed successfully. |
+| 2 | `test_no_warnings_for_normal_image` | Normal image (800×600) | Resolution extracted, no warnings logged | Image below threshold | Tests that normal-sized images don't trigger any warnings. Validates warning system doesn't produce false positives. |
+| 3 | `test_warning_logging_includes_file_path` | Large image triggering warning | WARNING log includes file path | Warning triggered | Tests that warning log entries include the file path for debugging. Verifies structured logging includes context. |
+| 4 | `test_exif_extraction_with_warnings` | Large image (10000×10000), threshold lowered to 50MP | EXIF extracted (even if empty), warnings logged | Image exceeds threshold | Tests that EXIF extraction also captures and logs warnings properly. Verifies warning capture works in both extract_exif() and extract_resolution(). |
 
 ### test_exif_extractor_integration.py
 

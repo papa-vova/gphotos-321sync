@@ -437,18 +437,25 @@ PRAGMA temp_store=MEMORY;       -- Temp tables in RAM
 ### Tools
 
 - **EXIF extraction:**
-  - Pillow (PIL) for JPEG/PNG/HEIC/GIF/WebP/BMP (primary, covers 95%+ of exports)
-  - exiftool for RAW formats (DNG, CR2, NEF, ARW) - optional
+  - **Pillow (PIL)** - Always available, supports:
+    - JPEG, PNG, GIF, WebP, BMP, TIFF (primary, covers 95%+ of exports)
+  - **ExifTool** - Optional, required for:
+    - HEIC/HEIF (Apple photos) - without ExifTool, EXIF and resolution will not be extracted
+    - RAW formats (DNG, CR2, NEF, ARW, etc.) - without ExifTool, EXIF and resolution will not be extracted
   - Extract: timestamps, GPS coordinates, camera info, orientation, and all other available EXIF fields
-- **Image metadata:** Resolution (width × height) for all images
-- **Video metadata:** ffprobe for duration, resolution (width × height), and frame rate
+- **Image metadata:** Resolution (width × height) for all images (via PIL or ExifTool fallback)
+- **Video metadata:**
+  - **FFprobe** - Optional, required for:
+    - All video formats (MP4, MOV, AVI, MKV, 3GP, WebM, etc.)
+    - Extracts: duration, resolution (width × height), and frame rate
   - **Note:** ffprobe process spawn + I/O adds ~50-100ms per video (not 2ms CPU-only)
   - Videos reduce effective throughput; adjust M (process pool size) if video-heavy library
 - **MIME/content type detection:** `filetype` library (pure Python, reads magic bytes from file headers)
 - **Tool availability check:**
-  - ffprobe (optional): If missing, warn user about missing video metadata (duration, resolution, frame rate)
-  - exiftool (optional): If missing, warn user that RAW formats (DNG, CR2, NEF, ARW) will have missing EXIF data
+  - **ffprobe (optional):** If missing, warn user that video metadata (duration, resolution, frame rate) will not be extracted
+  - **exiftool (optional):** If missing, warn user that HEIC/HEIF and RAW formats will have missing EXIF data and resolution
   - User can proceed without either tool or cancel to install them
+  - Files are still cataloged even without these tools, but with limited metadata
 
 ### Metadata Precedence
 
