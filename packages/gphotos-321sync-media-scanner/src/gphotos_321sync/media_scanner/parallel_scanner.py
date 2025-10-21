@@ -7,10 +7,12 @@ Coordinates all parallel processing components:
 - Progress tracking
 """
 
+import json
 import logging
 import multiprocessing
 import threading
 import time
+from collections import defaultdict
 from datetime import datetime, timezone
 from multiprocessing import Pool
 from pathlib import Path
@@ -25,6 +27,7 @@ from .discovery import discover_files_with_stats
 from .parallel.queue_manager import QueueManager
 from .parallel.worker_thread import worker_thread_main
 from .parallel.writer_thread import writer_thread_main
+from .parallel_scanner_helpers import match_orphaned_sidecars, report_unmatched_files
 from .progress import ProgressTracker
 
 logger = logging.getLogger(__name__)
@@ -181,6 +184,30 @@ class ParallelScanner:
                 metadata_files_discovered=metadata_files_count,
                 media_files_with_metadata=media_with_metadata_count
             )
+            
+            # Phase 2.5: Content-based matching for orphaned sidecars
+            orphan_matches = match_orphaned_sidecars(
+                target_media_path=target_media_path,
+                paired_sidecars=discovery_result.paired_sidecars,
+                all_sidecars=discovery_result.all_sidecars,
+                all_media_files=files_to_process
+            )
+            
+            # Add newly paired files to processing list
+            if orphan_matches:
+                files_to_process.extend(orphan_matches)
+                media_files_count = len(files_to_process)
+                media_with_metadata_count = sum(1 for f in files_to_process if f.json_sidecar_path is not None)
+                logger.info(f"Updated totals after content-based matching: {media_files_count} media files, {media_with_metadata_count} with metadata")
+            
+            # Phase 2.6: Report unmatched files
+            report_unmatched_files(
+                scan_root=target_media_path,
+                all_sidecars=discovery_result.all_sidecars,
+                paired_sidecars=discovery_result.paired_sidecars | {f.json_sidecar_path for f in orphan_matches if f.json_sidecar_path},
+                all_media_files=files_to_process
+            )
+            
             if media_files_count > 0:
                 logger.info(f"Starting parallel processing: {{'processes': {self.worker_processes}, 'threads': {self.worker_threads}}}")
             
@@ -196,7 +223,7 @@ class ParallelScanner:
                 }
             
             # Phase 3: Parallel processing
-            logger.info("Phase 3: Processing files in parallel...")
+            logger.info("Phase 3: Processing media files in parallel...")
             phase_start = time.time()
             
             # CRITICAL: Close main connection before parallel processing

@@ -4,11 +4,11 @@ Comprehensive documentation of all test suites in the gphotos-321sync project.
 
 ## Summary
 
-**Total: 358 tests** (12 + 42 + 304)
+**Total: 368 tests** (12 + 42 + 314)
 
 - **gphotos-321sync-common:** 12 tests
 - **gphotos-321sync-takeout-extractor:** 42 tests
-- **gphotos-321sync-media-scanner:** 304 tests
+- **gphotos-321sync-media-scanner:** 314 tests
 
 ---
 
@@ -287,6 +287,25 @@ Tests for file discovery functionality (16 tests).
 | 14 | `test_discover_files_truncated_sidecar_patterns` | photo1.jpg + photo1.jpg.supplemen.json, photo2.jpg + photo2.jpg.suppl.json, photo3.jpg + photo3.jpg.supplemental-metadat.json, photo4.jpg + photo4.jpg.supplemental-metad.json, photo5.jpg + photo5.jpg.supplemental-me.json | All 5 photos paired with their truncated sidecars | Windows MAX_PATH truncation (Windows-only issue) | Tests that app handles full spectrum of Windows path truncation variants. When full path exceeds 260 chars, Windows truncates the filename. App must match all variants from `.supplemental-metadata.json` (27 chars) down to `.json` (5 chars). Tests intermediate truncations: `.supplemen.json`, `.suppl.json`, `.supplemental-metadat.json`, `.supplemental-metad.json`, `.supplemental-me.json`. |
 | 15 | `test_discover_files_tilde_duplicates` | IMG20240221145914.jpg + IMG20240221145914.jpg.supplemental-metadata.json, IMG20240221145914~2.jpg (no own sidecar), IMG20240221145914~3.jpg (no own sidecar), VID20240523214231~2.mp4 + VID20240523214231~2.mp4.supplemental-metadata.json | Tilde duplicates without own sidecars fall back to original's sidecar; tilde duplicates with own sidecars use their own | Google Takeout tilde suffix pattern (~2, ~3) | Tests handling of tilde suffix duplicates (alternative to parenthesis duplicates). When Google Takeout creates duplicates, it may use `filename~2.ext` instead of `filename(1).ext`. App tries exact match first, then falls back to original file's sidecar if duplicate has no own sidecar. |
 | 16 | `test_discover_files_alternative_json_pattern` | Screenshot_2024-01-14-14-13-33-16_948cd9899890cbd5c2798760b2b95377.jpg + Screenshot_2024-01-14-14-13-33-16_948cd9899890.json, original_0eb58adf-59c4-46d2-9420-73d42f7c8e88_FB_IMG_1713377637724.jpg + original_0eb58adf-59c4-46d2-9420-73d42f7c8e88_.json | Both files paired with .json sidecars (without .supplemental-metadata) | Very long filenames or UUID patterns | Tests alternative `.json` pattern (without `.supplemental-metadata` prefix). Used when media filename is extremely long or contains patterns like UUIDs. Google Takeout uses this pattern to avoid exceeding Windows MAX_PATH even for the sidecar filename. |
+
+### test_content_based_matching.py
+
+Tests for content-based sidecar matching (10 tests).
+
+**Rationale**: When filename-based matching fails (~4% of files), the scanner reads the JSON `title` field (which contains the original filename) and matches based on similarity. This handles Google Takeout bugs where duplicate numbering is inconsistent (e.g., sidecar has `(1)` but media file has `1(1)`). Also tests comprehensive orphan reporting with categorization and explanations.
+
+| # | Test | Input | Output | Conditions/Assumptions | Logic |
+|---|------|-------|--------|----------------------|-------|
+| 1 | `test_match_orphaned_sidecars_google_takeout_bug` | Media: Screenshot_...1(1).jpg, Sidecar: Screenshot_...(1).json with title="Screenshot_...12c5ac89e934e52a2f4f.jpg" | 1 match found, sidecar paired with media | Google Takeout duplicate numbering bug | Tests content-based matching handles Google Takeout bug where `(1)` in sidecar becomes `1(1)` in media filename. Reads JSON title field, calculates 85% similarity, pairs successfully. |
+| 2 | `test_match_orphaned_sidecars_high_similarity` | Media: photo_with_long_uuid_12345678.jpg, Sidecar: photo_with_long_uuid_1234.json with title containing full name | 1 match found | Similarity > 80% threshold | Tests that files with >80% similarity are matched via longest common prefix calculation |
+| 3 | `test_match_orphaned_sidecars_low_similarity` | Media: completely_different_name.jpg, Sidecar: another_file.json | 0 matches | Similarity < 80% threshold | Tests that files with <80% similarity are NOT matched to avoid false positives |
+| 4 | `test_match_orphaned_sidecars_skips_already_paired` | Media with existing sidecar, Orphaned sidecar with similar name | 0 matches | Media already has sidecar | Tests that content-based matching skips media files that already have sidecars (no re-pairing) |
+| 5 | `test_match_orphaned_sidecars_skips_system_files` | System files: print-subscriptions.json, shared_album_comments.json, user-generated-memory-titles.json | 0 matches | System JSON files | Tests that Google Takeout system files are correctly identified and skipped (not media sidecars) |
+| 6 | `test_report_unmatched_files_orphaned_sidecars` | Orphaned sidecar with no matching media | Warning logged with "Orphaned media sidecars" and filename | Orphaned sidecar exists | Tests that orphaned media sidecars are reported with explanations (media deleted, filename mismatch, Windows truncation) |
+| 7 | `test_report_unmatched_files_system_files` | System JSON file (print-subscriptions.json) | Info logged with "System JSON files" and filename | System file exists | Tests that system JSON files are reported separately with explanation (not media sidecars) |
+| 8 | `test_report_unmatched_files_media_without_sidecars` | Media file without sidecar | Info logged with "Media files without sidecars" count | Media without metadata | Tests that media files without sidecars are reported with explanation (normal for old files, imports, corrupted metadata) |
+| 9 | `test_report_unmatched_files_all_matched` | All files successfully paired | Success message logged "All files successfully matched" | No orphans | Tests that when all files are matched, a success message is logged instead of warnings |
+| 10 | `test_match_orphaned_sidecars_different_directories` | Orphaned sidecar in Album1, Media files in Album2 | 0 matches | Files in different directories | Tests that content-based matching only searches within same directory (no cross-directory matching) |
 
 ### test_file_processor.py
 

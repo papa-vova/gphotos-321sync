@@ -532,6 +532,25 @@ For files with tilde suffixes like `photo~2.jpg`, look for:
 
 **Rationale:** Google may create separate metadata for tilde duplicates or reuse the original's metadata.
 
+### Content-Based Matching (Phase 3)
+
+When filename-based matching fails, the scanner uses **content-based matching** as a fallback:
+
+1. **Read JSON `title` field** - Contains the original filename before truncation
+2. **Calculate similarity** - Longest common prefix between title and media filename
+3. **Match if similarity ≥ 80%** - Pairs files with high confidence
+
+**Example of Google Takeout Bug:**
+
+- **Sidecar**: `Screenshot_2022-04-21_abb9c8060a0a(1).json`
+- **Title in JSON**: `Screenshot_2022-04-21_abb9c8060a0a12c5ac89e934e52a2f4f.jpg`
+- **Media file**: `Screenshot_2022-04-21_abb9c8060a0a1(1).jpg`
+- **Similarity**: 85% → **Paired ✅**
+
+This handles Google Takeout's inconsistent duplicate numbering where `(1)` in the sidecar becomes `1(1)` in the media filename.
+
+**Performance:** Content-based matching only runs for orphaned sidecars (~4% of files), so it has minimal performance impact.
+
 ### Trailing Character Edge Cases
 
 Handle these filename variations:

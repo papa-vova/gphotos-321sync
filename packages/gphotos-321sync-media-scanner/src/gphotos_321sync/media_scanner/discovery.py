@@ -39,9 +39,13 @@ class DiscoveryResult:
     Attributes:
         files: List of discovered media files
         json_sidecar_count: Number of unique JSON sidecar files found
+        paired_sidecars: Set of sidecar paths that were successfully paired
+        all_sidecars: Set of all discovered sidecar paths (for orphan detection)
     """
     files: List[FileInfo]
     json_sidecar_count: int
+    paired_sidecars: set[Path]
+    all_sidecars: set[Path]
 
 
 def discover_files_with_stats(target_media_path: Path) -> DiscoveryResult:
@@ -54,19 +58,31 @@ def discover_files_with_stats(target_media_path: Path) -> DiscoveryResult:
         target_media_path: Target media directory to scan (ABSOLUTE path)
         
     Returns:
-        DiscoveryResult with files list and json_sidecar_count
+        DiscoveryResult with files list, sidecar counts, and tracking sets
     """
     files = list(discover_files(target_media_path))
     
-    # Count unique JSON sidecars
-    unique_sidecars = set()
+    # Track unique JSON sidecars (paired with media files)
+    paired_sidecars = set()
     for file_info in files:
         if file_info.json_sidecar_path:
-            unique_sidecars.add(file_info.json_sidecar_path)
+            paired_sidecars.add(file_info.json_sidecar_path)
+    
+    # Discover ALL JSON sidecars (including orphaned ones)
+    # This requires scanning the directory again, but only for JSON files
+    all_sidecars = set()
+    google_photos_path = target_media_path / "Takeout" / "Google Photos"
+    scan_root = google_photos_path if google_photos_path.exists() else target_media_path
+    
+    for json_path in scan_root.rglob("*.json"):
+        if json_path.name != "metadata.json":  # Skip album metadata
+            all_sidecars.add(json_path)
     
     return DiscoveryResult(
         files=files,
-        json_sidecar_count=len(unique_sidecars)
+        json_sidecar_count=len(paired_sidecars),
+        paired_sidecars=paired_sidecars,
+        all_sidecars=all_sidecars
     )
 
 
