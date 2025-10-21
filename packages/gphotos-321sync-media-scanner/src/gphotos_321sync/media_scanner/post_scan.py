@@ -155,6 +155,55 @@ def validate_scan(db_path: str, scan_run_id: str, scan_start_time: datetime) -> 
             'missing_albums': missing_albums_count,
         }
         
+        # Step 7: Validate scan_runs statistics against actual counts
+        cursor = conn.execute(
+            "SELECT * FROM scan_runs WHERE scan_run_id = ?",
+            (scan_run_id,)
+        )
+        scan_run = cursor.fetchone()
+        cursor.close()
+        
+        if scan_run:
+            # Check files_processed vs actual media_items count
+            cursor = conn.execute(
+                "SELECT COUNT(*) FROM media_items WHERE scan_run_id = ?",
+                (scan_run_id,)
+            )
+            actual_items_count = cursor.fetchone()[0]
+            cursor.close()
+            
+            reported_processed = scan_run['files_processed']
+            if reported_processed != actual_items_count:
+                logger.warning(
+                    f"Statistics mismatch: {{'scan_run_id': {scan_run_id!r}, "
+                    f"'files_processed': {reported_processed}, 'actual_items': {actual_items_count}, "
+                    f"'difference': {abs(reported_processed - actual_items_count)}}}"
+                )
+            
+            # Check albums_total vs actual albums count
+            cursor = conn.execute(
+                "SELECT COUNT(*) FROM albums WHERE scan_run_id = ?",
+                (scan_run_id,)
+            )
+            actual_albums_count = cursor.fetchone()[0]
+            cursor.close()
+            
+            reported_albums = scan_run['albums_total']
+            if reported_albums != actual_albums_count:
+                logger.warning(
+                    f"Albums mismatch: {{'scan_run_id': {scan_run_id!r}, "
+                    f"'albums_total': {reported_albums}, 'actual_albums': {actual_albums_count}, "
+                    f"'difference': {abs(reported_albums - actual_albums_count)}}}"
+                )
+            
+            # Add validation results to stats
+            validation_stats['statistics_validation'] = {
+                'files_processed_reported': reported_processed,
+                'files_processed_actual': actual_items_count,
+                'albums_total_reported': reported_albums,
+                'albums_total_actual': actual_albums_count,
+            }
+        
         logger.info(f"Completed post-scan validation: {validation_stats}")
         
         return validation_stats

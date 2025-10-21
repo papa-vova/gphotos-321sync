@@ -64,6 +64,8 @@ def writer_thread_main(
     
     total_written = 0
     total_errors = 0
+    total_new_files = 0
+    total_unchanged_files = 0
     batch = []
     
     try:
@@ -80,7 +82,11 @@ def writer_thread_main(
                     # Flush remaining batch
                     if batch:
                         _write_batch(batch, media_dal, error_dal, conn)
-                        total_written += len([r for r in batch if r["type"] in ("media_item", "file_seen")])
+                        new_items = len([r for r in batch if r["type"] == "media_item"])
+                        unchanged_items = len([r for r in batch if r["type"] == "file_seen"])
+                        total_new_files += new_items
+                        total_unchanged_files += unchanged_items
+                        total_written += new_items + unchanged_items
                         total_errors += len([r for r in batch if r["type"] == "error"])
                         batch.clear()
                     break
@@ -96,14 +102,18 @@ def writer_thread_main(
                     media_items = len([r for r in batch if r["type"] == "media_item"])
                     file_seen = len([r for r in batch if r["type"] == "file_seen"])
                     errors = len([r for r in batch if r["type"] == "error"])
+                    total_new_files += media_items
+                    total_unchanged_files += file_seen
                     total_written += media_items + file_seen  # Count both new and skipped files
                     total_errors += errors
                     
-                    # Update progress
+                    # Update progress (batch update to database)
                     if total_written % progress_interval == 0:
                         scan_run_dal.update_scan_run(
                             scan_run_id=scan_run_id,
                             files_processed=total_written,
+                            new_files=total_new_files,
+                            unchanged_files=total_unchanged_files,
                         )
                         # Use progress tracker if available (shows ETA and rate)
                         if progress_tracker:
@@ -122,7 +132,11 @@ def writer_thread_main(
                 # Queue is empty, check if we should flush partial batch
                 if batch and shutdown_event.is_set():
                     _write_batch(batch, media_dal, error_dal, conn)
-                    total_written += len([r for r in batch if r["type"] in ("media_item", "file_seen")])
+                    new_items = len([r for r in batch if r["type"] == "media_item"])
+                    unchanged_items = len([r for r in batch if r["type"] == "file_seen"])
+                    total_new_files += new_items
+                    total_unchanged_files += unchanged_items
+                    total_written += new_items + unchanged_items
                     total_errors += len([r for r in batch if r["type"] == "error"])
                     batch.clear()
                 continue
@@ -130,13 +144,19 @@ def writer_thread_main(
         # Flush any remaining items
         if batch:
             _write_batch(batch, media_dal, error_dal, conn)
-            total_written += len([r for r in batch if r["type"] in ("media_item", "file_seen")])
+            new_items = len([r for r in batch if r["type"] == "media_item"])
+            unchanged_items = len([r for r in batch if r["type"] == "file_seen"])
+            total_new_files += new_items
+            total_unchanged_files += unchanged_items
+            total_written += new_items + unchanged_items
             total_errors += len([r for r in batch if r["type"] == "error"])
         
-        # Final progress update
+        # Final progress update with all statistics
         scan_run_dal.update_scan_run(
             scan_run_id=scan_run_id,
             files_processed=total_written,
+            new_files=total_new_files,
+            unchanged_files=total_unchanged_files,
             error_files=total_errors,
         )
         
@@ -268,6 +288,8 @@ def writer_thread_with_retry(
     
     total_written = 0
     total_errors = 0
+    total_new_files = 0
+    total_unchanged_files = 0
     batch = []
     
     try:
@@ -280,7 +302,11 @@ def writer_thread_with_retry(
                         _write_batch_with_retry(
                             batch, media_dal, error_dal, conn, max_retries
                         )
-                        total_written += len([r for r in batch if r["type"] in ("media_item", "file_seen")])
+                        new_items = len([r for r in batch if r["type"] == "media_item"])
+                        unchanged_items = len([r for r in batch if r["type"] == "file_seen"])
+                        total_new_files += new_items
+                        total_unchanged_files += unchanged_items
+                        total_written += new_items + unchanged_items
                         total_errors += len([r for r in batch if r["type"] == "error"])
                     break
                 
@@ -291,15 +317,20 @@ def writer_thread_with_retry(
                         batch, media_dal, error_dal, conn, max_retries
                     )
                     
-                    media_items = len([r for r in batch if r["type"] in ("media_item", "file_seen")])
+                    media_items = len([r for r in batch if r["type"] == "media_item"])
+                    file_seen = len([r for r in batch if r["type"] == "file_seen"])
                     errors = len([r for r in batch if r["type"] == "error"])
-                    total_written += media_items
+                    total_new_files += media_items
+                    total_unchanged_files += file_seen
+                    total_written += media_items + file_seen
                     total_errors += errors
                     
                     if total_written % progress_interval == 0:
                         scan_run_dal.update_scan_run(
                             scan_run_id=scan_run_id,
                             files_processed=total_written,
+                            new_files=total_new_files,
+                            unchanged_files=total_unchanged_files,
                         )
                         logger.info(
                             f"Progress: {{'files_processed': {total_written}, 'errors': {total_errors}}}"
@@ -314,7 +345,11 @@ def writer_thread_with_retry(
                     _write_batch_with_retry(
                         batch, media_dal, error_dal, conn, max_retries
                     )
-                    total_written += len([r for r in batch if r["type"] in ("media_item", "file_seen")])
+                    new_items = len([r for r in batch if r["type"] == "media_item"])
+                    unchanged_items = len([r for r in batch if r["type"] == "file_seen"])
+                    total_new_files += new_items
+                    total_unchanged_files += unchanged_items
+                    total_written += new_items + unchanged_items
                     total_errors += len([r for r in batch if r["type"] == "error"])
                     batch.clear()
                 continue
@@ -323,12 +358,18 @@ def writer_thread_with_retry(
             _write_batch_with_retry(
                 batch, media_dal, error_dal, conn, max_retries
             )
-            total_written += len([r for r in batch if r["type"] in ("media_item", "file_seen")])
+            new_items = len([r for r in batch if r["type"] == "media_item"])
+            unchanged_items = len([r for r in batch if r["type"] == "file_seen"])
+            total_new_files += new_items
+            total_unchanged_files += unchanged_items
+            total_written += new_items + unchanged_items
             total_errors += len([r for r in batch if r["type"] == "error"])
         
         scan_run_dal.update_scan_run(
             scan_run_id=scan_run_id,
             files_processed=total_written,
+            new_files=total_new_files,
+            unchanged_files=total_unchanged_files,
             error_files=total_errors,
         )
         

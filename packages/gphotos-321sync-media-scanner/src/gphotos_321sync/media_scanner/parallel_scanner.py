@@ -149,6 +149,12 @@ class ParallelScanner:
             phase_timings['album_discovery'] = time.time() - phase_start
             logger.info(f"Discovered {album_count} albums: {{'duration_seconds': {phase_timings['album_discovery']:.1f}}}")
             
+            # Update scan_runs statistics for album discovery
+            scan_run_dal.update_scan_run(
+                scan_run_id=scan_run_id,
+                albums_total=album_count
+            )
+            
             # Phase 2: File discovery
             logger.info("Phase 2: Discovering files...")
             logger.info("Scanning directory tree for media files and JSON sidecars...")
@@ -156,9 +162,22 @@ class ParallelScanner:
             phase_start = time.time()
             files_to_process = list(discover_files(target_media_path))
             total_files = len(files_to_process)
+            
+            # Count media files vs metadata files (JSON sidecars)
+            media_files_count = total_files  # All discovered files are media files
+            metadata_files_count = sum(1 for f in files_to_process if f.json_sidecar_path is not None)
+            
             phase_timings['file_discovery'] = time.time() - phase_start
             
             logger.info(f"Discovered {total_files} files: {{'duration_seconds': {phase_timings['file_discovery']:.1f}}}")
+            
+            # Update scan_runs statistics for file discovery
+            scan_run_dal.update_scan_run(
+                scan_run_id=scan_run_id,
+                total_files_discovered=total_files,
+                media_files_discovered=media_files_count,
+                metadata_files_discovered=metadata_files_count
+            )
             if total_files > 0:
                 logger.info(f"Starting parallel processing: {{'processes': {self.worker_processes}, 'threads': {self.worker_threads}}}")
             
