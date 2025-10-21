@@ -156,16 +156,16 @@ def coordinate_metadata(
                 with open(file_info.json_sidecar_path, 'rb') as f:
                     sidecar_fingerprint = hashlib.sha256(f.read()).hexdigest()
             except Exception as e:
-                logger.warning(f"Failed to calculate sidecar fingerprint: {{'path': {file_info.relative_path!r}, 'error': {str(e)!r}}}")
+                logger.warning(f"Failed to calculate sidecar fingerprint: {{'path': {str(file_info.relative_path)!r}, 'error': {str(e)!r}}}")
         
         # 2. Parse JSON sidecar if present (I/O operation)
         json_metadata = {}
         if file_info.json_sidecar_path:
             try:
                 json_metadata = parse_json_sidecar(file_info.json_sidecar_path)
-                logger.debug(f"Parsed JSON sidecar: {{'path': {file_info.relative_path!r}}}")
+                logger.debug(f"Parsed JSON sidecar: {{'path': {str(file_info.relative_path)!r}}}")
             except (ParseError, Exception) as e:
-                logger.warning(f"Failed to parse JSON sidecar: {{'path': {file_info.relative_path!r}, 'error': {str(e)!r}}}")
+                logger.warning(f"Failed to parse JSON sidecar: {{'path': {str(file_info.relative_path)!r}, 'error': {str(e)!r}}}")
                 # Continue without JSON metadata
         
         # 2. Extract data from metadata extraction result
@@ -181,7 +181,7 @@ def coordinate_metadata(
                 video_data=video_data
             )
         except Exception as e:
-            logger.error(f"Failed to aggregate metadata: {{'path': {file_info.relative_path!r}, 'error': {str(e)!r}}}", exc_info=True)
+            logger.error(f"Failed to aggregate metadata: {{'path': {str(file_info.relative_path)!r}, 'error': {str(e)!r}}}", exc_info=True)
             # Use empty aggregated metadata as fallback
             aggregated = {}
         
@@ -195,7 +195,7 @@ def coordinate_metadata(
                 file_size=file_info.file_size
             )
         except Exception as e:
-            logger.error(f"Failed to generate media_item_id: {{'path': {file_info.relative_path!r}, 'error': {str(e)!r}}}", exc_info=True)
+            logger.error(f"Failed to generate media_item_id: {{'path': {str(file_info.relative_path)!r}, 'error': {str(e)!r}}}", exc_info=True)
             # Generate fallback UUID based on file path only
             media_item_id = str(uuid.uuid5(MEDIA_ITEM_NAMESPACE, file_info.relative_path))
         

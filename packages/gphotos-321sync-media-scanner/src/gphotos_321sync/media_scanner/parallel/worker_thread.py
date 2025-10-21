@@ -44,6 +44,7 @@ def worker_thread_main(
     process_pool: Pool,
     db_path: str,
     scan_run_id: str,
+    scan_start_time: str,
     use_exiftool: bool,
     use_ffprobe: bool,
     shutdown_event: Any,
@@ -63,6 +64,7 @@ def worker_thread_main(
         process_pool: Multiprocessing pool for CPU work
         db_path: Path to database for checking existing files
         scan_run_id: Current scan run UUID
+        scan_start_time: ISO format timestamp when scan started (for detecting new vs changed files)
         use_exiftool: Whether to use exiftool for EXIF extraction
         use_ffprobe: Whether to use ffprobe for video metadata
         shutdown_event: Event to signal shutdown
@@ -126,7 +128,7 @@ def worker_thread_main(
                     ):
                         # File is unchanged - skip expensive processing
                         # Send to writer thread to batch update scan_run_id and last_seen_timestamp
-                        logger.debug(f"Skipping unchanged file: {{'path': {file_info.relative_path!r}}}")
+                        logger.debug(f"Skipping unchanged file: {{'path': {str(file_info.relative_path)!r}}}")
                         
                         from datetime import datetime, timezone
                         results_queue.put({
@@ -140,11 +142,17 @@ def worker_thread_main(
                         # Don't call task_done() here - it's in finally block
                         continue
                     
-                    # File is new or changed - check if it exists in database
+                    # File is new or changed - check if it exists in database from a PREVIOUS scan
+                    # Use first_seen_timestamp to determine if file is truly new or changed
+                    # (scan_run_id is unreliable because writer thread updates it concurrently)
                     existing_item = media_dal.get_media_item_by_path(normalized_path)
-                    is_changed = existing_item is not None
+                    is_changed = (
+                        existing_item is not None 
+                        and existing_item.get('first_seen_timestamp') is not None
+                        and existing_item.get('first_seen_timestamp') < scan_start_time
+                    )
                     
-                    logger.debug(f"Processing {'changed' if is_changed else 'new'} file: {{'path': {file_info.relative_path!r}}}")
+                    logger.debug(f"Processing {'changed' if is_changed else 'new'} file: {{'path': {str(file_info.relative_path)!r}}}")
                     
                     # Submit CPU work to process pool
                     cpu_future = process_pool.apply_async(

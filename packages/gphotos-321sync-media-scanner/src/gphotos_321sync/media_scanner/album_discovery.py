@@ -72,7 +72,7 @@ def parse_album_metadata(metadata_path: Path) -> dict:
                 timestamp_data = data['date']
                 if isinstance(timestamp_data, dict) and 'timestamp' in timestamp_data:
                     timestamp_str = timestamp_data['timestamp']
-                    metadata['creation_timestamp'] = datetime.fromtimestamp(int(timestamp_str))
+                    metadata['creation_timestamp'] = datetime.fromtimestamp(int(timestamp_str), tz=timezone.utc)
             except (ValueError, KeyError, TypeError) as e:
                 logger.warning(f"Failed to parse creation timestamp: {{'path': {str(metadata_path)!r}, 'error': {str(e)!r}}}")
         

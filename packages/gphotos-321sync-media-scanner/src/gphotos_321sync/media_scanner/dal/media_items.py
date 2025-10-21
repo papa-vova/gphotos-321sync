@@ -3,7 +3,7 @@
 import logging
 import uuid
 from typing import Optional, Dict, Any, List
-from datetime import datetime
+from datetime import datetime, timezone
 
 from ..database import DatabaseConnection
 from ..metadata_coordinator import MediaItemRecord
@@ -50,6 +50,9 @@ class MediaItemDAL:
             logger.warning(f"Invalid exif_orientation for {relative_path}: {{'value': {exif_orientation}, 'action': 'setting to None'}}")
             exif_orientation = None
         
+        # Set timestamps explicitly with timezone-aware datetime
+        now_utc = datetime.now(timezone.utc).isoformat()
+        
         cursor = self.db.execute(
             """
             INSERT INTO media_items (
@@ -57,6 +60,7 @@ class MediaItemDAL:
                 file_size, crc32, content_fingerprint, sidecar_fingerprint,
                 width, height, duration_seconds, frame_rate,
                 capture_timestamp, scan_run_id, status,
+                first_seen_timestamp, last_seen_timestamp,
                 original_media_item_id, live_photo_pair_id,
                 exif_datetime_original, exif_datetime_digitized,
                 exif_gps_latitude, exif_gps_longitude, exif_gps_altitude,
@@ -71,8 +75,8 @@ class MediaItemDAL:
             )
             VALUES (
                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                ?, ?, ?, ?, ?, ?
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?, ?, ?
             )
             """,
             (
@@ -92,6 +96,8 @@ class MediaItemDAL:
                 item.capture_timestamp,
                 item.scan_run_id,
                 item.status,
+                now_utc,  # first_seen_timestamp
+                now_utc,  # last_seen_timestamp
                 None,  # original_media_item_id (not in MediaItemRecord yet)
                 None,  # live_photo_pair_id (not in MediaItemRecord yet)
                 item.exif_datetime_original,
@@ -271,21 +277,23 @@ class MediaItemDAL:
     
     def mark_seen(self, media_item_id: str, scan_run_id: str):
         """
-        Mark media item as seen in current scan (update scan_run_id and timestamp).
+        Mark media item as seen in current scan with explicit UTC timestamp.
         
         Args:
             media_item_id: Media item ID
             scan_run_id: Current scan run ID
         """
+        now_utc = datetime.now(timezone.utc).isoformat()
+        
         cursor = self.db.execute(
             """
             UPDATE media_items
             SET scan_run_id = ?,
-                last_seen_timestamp = CURRENT_TIMESTAMP,
+                last_seen_timestamp = ?,
                 status = 'present'
             WHERE media_item_id = ?
             """,
-            (scan_run_id, media_item_id)
+            (scan_run_id, now_utc, media_item_id)
         )
         cursor.close()
     

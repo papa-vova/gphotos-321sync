@@ -235,7 +235,7 @@ class ParallelScanner:
             self._initialize_components(media_files_count)
             
             # Start worker threads and writer thread
-            self._start_workers(scan_run_id)
+            self._start_workers(scan_run_id, scan_start_time)
             
             # Populate work queue
             logger.info("Submitting files to processing queue...")
@@ -324,8 +324,13 @@ class ParallelScanner:
         # Progress tracker
         self.progress_tracker = ProgressTracker(total_files=total_files)
     
-    def _start_workers(self, scan_run_id: str) -> None:
-        """Start worker threads and writer thread."""
+    def _start_workers(self, scan_run_id: str, scan_start_time: datetime) -> None:
+        """Start worker threads and writer thread.
+        
+        Args:
+            scan_run_id: Current scan run UUID
+            scan_start_time: Timezone-aware datetime when scan started
+        """
         work_queue, results_queue = (
             self.queue_manager.work_queue,
             self.queue_manager.results_queue,
@@ -342,6 +347,7 @@ class ParallelScanner:
                     self.process_pool,
                     str(self.db_path),  # Pass db_path for early-exit checks
                     scan_run_id,
+                    scan_start_time.isoformat(),  # Pass scan start time for new vs changed detection
                     self.use_exiftool,
                     self.use_ffprobe,
                     self.shutdown_event,

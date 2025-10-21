@@ -2,9 +2,9 @@
 -- Version: 001
 -- Description: Initial schema for media scanning and cataloging
 --
--- TIMEZONE POLICY: All timestamps in this database use UTC.
--- SQLite's CURRENT_TIMESTAMP returns UTC by default.
--- Application code MUST use datetime.utcnow() when comparing or setting timestamps.
+-- TIMEZONE POLICY: All timestamps in this database use UTC with timezone info.
+-- Application code MUST use datetime.now(timezone.utc) for ALL timestamp operations.
+-- DO NOT use SQLite's CURRENT_TIMESTAMP (naive datetime) - always set timestamps explicitly from Python.
 
 -- Schema version tracking
 CREATE TABLE IF NOT EXISTS schema_version (

@@ -1,6 +1,7 @@
 """Data Access Layer for processing_errors table."""
 
 import logging
+from datetime import datetime, timezone
 from typing import List, Dict, Any
 
 from ..database import DatabaseConnection
@@ -42,15 +43,17 @@ class ProcessingErrorDAL:
             error_category: Category ('permission_denied', 'corrupted', 'io_error', 'parse_error', 'unsupported_format')
             error_message: Detailed error message
         """
+        now_utc = datetime.now(timezone.utc).isoformat()
+        
         cursor = self.db.execute(
             """
             INSERT INTO processing_errors (
                 scan_run_id, relative_path, error_type,
-                error_category, error_message
+                error_category, error_message, timestamp
             )
-            VALUES (?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (scan_run_id, relative_path, error_type, error_category, error_message)
+            (scan_run_id, relative_path, error_type, error_category, error_message, now_utc)
         )
         cursor.close()
         
@@ -163,13 +166,16 @@ class ProcessingErrorDAL:
         if not errors:
             return 0
         
+        now_utc = datetime.now(timezone.utc).isoformat()
+        
         data = [
             (
                 error['scan_run_id'],
                 error['relative_path'],
                 error['error_type'],
                 error['error_category'],
-                error['error_message']
+                error['error_message'],
+                now_utc
             )
             for error in errors
         ]
@@ -178,9 +184,9 @@ class ProcessingErrorDAL:
             """
             INSERT INTO processing_errors (
                 scan_run_id, relative_path, error_type,
-                error_category, error_message
+                error_category, error_message, timestamp
             )
-            VALUES (?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
             data
         )

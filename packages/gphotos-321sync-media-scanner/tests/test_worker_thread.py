@@ -193,6 +193,7 @@ class TestWorkerThreadMain:
                     mock_process_pool,
                     str(test_db),
                     "scan-789",
+                    "2025-01-01T00:00:00+00:00",  # scan_start_time
                     False,
                     False,
                     shutdown_event,
@@ -229,7 +230,7 @@ class TestWorkerThreadMain:
         # Run worker thread in actual thread
         thread = threading.Thread(
             target=worker_thread_main,
-            args=(1, work_queue, results_queue, mock_process_pool, str(test_db), "scan-789", False, False, shutdown_event),
+            args=(1, work_queue, results_queue, mock_process_pool, str(test_db), "scan-789", "2025-01-01T00:00:00+00:00", False, False, shutdown_event),
         )
         thread.start()
         thread.join(timeout=2.0)
@@ -255,7 +256,7 @@ class TestWorkerThreadMain:
         # Run worker thread in actual thread
         thread = threading.Thread(
             target=worker_thread_main,
-            args=(1, work_queue, results_queue, mock_process_pool, str(test_db), "scan-789", False, False, shutdown_event),
+            args=(1, work_queue, results_queue, mock_process_pool, str(test_db), "scan-789", "2025-01-01T00:00:00+00:00", False, False, shutdown_event),
         )
         thread.start()
         thread.join(timeout=2.0)
@@ -305,7 +306,7 @@ class TestWorkerThreadMain:
             
             thread = threading.Thread(
                 target=worker_thread_main,
-                args=(1, work_queue, results_queue, mock_process_pool, str(test_db), "scan-789", False, False, shutdown_event),
+                args=(1, work_queue, results_queue, mock_process_pool, str(test_db), "scan-789", "2025-01-01T00:00:00+00:00", False, False, shutdown_event),
             )
             thread.start()
             thread.join(timeout=2.0)
@@ -341,7 +342,7 @@ class TestWorkerThreadMain:
             
             thread = threading.Thread(
                 target=worker_thread_main,
-                args=(1, work_queue, results_queue, mock_process_pool, str(test_db), "scan-789", False, False, shutdown_event),
+                args=(1, work_queue, results_queue, mock_process_pool, str(test_db), "scan-789", "2025-01-01T00:00:00+00:00", False, False, shutdown_event),
             )
             thread.start()
             thread.join(timeout=2.0)

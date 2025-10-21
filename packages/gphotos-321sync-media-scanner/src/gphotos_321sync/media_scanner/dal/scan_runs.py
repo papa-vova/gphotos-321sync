@@ -2,7 +2,7 @@
 
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Dict, Any
 
 from ..database import DatabaseConnection
@@ -28,19 +28,20 @@ class ScanRunDAL:
     
     def create_scan_run(self) -> str:
         """
-        Create a new scan run.
+        Create a new scan run with explicit UTC timestamp.
         
         Returns:
             scan_run_id (UUID4 string)
         """
         scan_run_id = str(uuid.uuid4())
+        start_timestamp = datetime.now(timezone.utc).isoformat()
         
         cursor = self.db.execute(
             """
-            INSERT INTO scan_runs (scan_run_id, status)
-            VALUES (?, 'running')
+            INSERT INTO scan_runs (scan_run_id, status, start_timestamp)
+            VALUES (?, 'running', ?)
             """,
-            (scan_run_id,)
+            (scan_run_id, start_timestamp)
         )
         cursor.close()
         self.db.commit()
@@ -75,29 +76,31 @@ class ScanRunDAL:
     
     def complete_scan_run(self, scan_run_id: str, status: str = 'completed'):
         """
-        Mark scan run as completed or failed.
+        Mark scan run as completed or failed with explicit UTC timestamp.
         
         Args:
             scan_run_id: Scan run ID
             status: Final status ('completed' or 'failed')
         """
+        end_timestamp = datetime.now(timezone.utc).isoformat()
+        
         cursor = self.db.execute(
             """
             UPDATE scan_runs
             SET status = ?,
-                end_timestamp = CURRENT_TIMESTAMP,
+                end_timestamp = ?,
                 duration_seconds = (
-                    julianday(CURRENT_TIMESTAMP) - julianday(start_timestamp)
+                    julianday(?) - julianday(start_timestamp)
                 ) * 86400,
                 files_per_second = CASE
                     WHEN files_processed > 0 THEN
                         CAST(files_processed AS REAL) / 
-                        ((julianday(CURRENT_TIMESTAMP) - julianday(start_timestamp)) * 86400)
+                        ((julianday(?) - julianday(start_timestamp)) * 86400)
                     ELSE 0
                 END
             WHERE scan_run_id = ?
             """,
-            (status, scan_run_id)
+            (status, end_timestamp, end_timestamp, end_timestamp, scan_run_id)
         )
         cursor.close()
         self.db.commit()

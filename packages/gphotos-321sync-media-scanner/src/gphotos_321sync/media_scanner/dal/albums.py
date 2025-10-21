@@ -85,7 +85,8 @@ class AlbumDAL:
             
             new_creation_timestamp = album.get('creation_timestamp')
             if new_creation_timestamp is not None and new_creation_timestamp != existing.get('creation_timestamp'):
-                fields_to_update['creation_timestamp'] = new_creation_timestamp
+                # Convert datetime to ISO format string for storage
+                fields_to_update['creation_timestamp'] = new_creation_timestamp.isoformat() if isinstance(new_creation_timestamp, datetime) else new_creation_timestamp
             
             new_access_level = album.get('access_level')
             if new_access_level is not None and new_access_level != existing.get('access_level'):
@@ -141,6 +142,9 @@ class AlbumDAL:
             status: Album status
             scan_run_id: Scan run ID
         """
+        # Convert datetime to ISO format string for storage
+        creation_timestamp_str = creation_timestamp.isoformat() if isinstance(creation_timestamp, datetime) else creation_timestamp
+        
         cursor = self.db.execute(
             """
             INSERT INTO albums (
@@ -154,7 +158,7 @@ class AlbumDAL:
                 album_folder_path,
                 title,
                 description,
-                creation_timestamp,
+                creation_timestamp_str,
                 access_level,
                 status,
                 scan_run_id
