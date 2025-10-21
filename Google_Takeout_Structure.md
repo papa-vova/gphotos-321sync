@@ -148,7 +148,11 @@ One `metadata.json` file exists per album/collection folder.
 
 ### Duplicates
 
-Files with identical names get numeric suffixes:
+#### Google Photos Duplicates
+
+Files with identical names in Google Photos get numeric or tilde suffixes:
+
+**Numeric suffix pattern:**
 
 ```text
 image.png
@@ -156,7 +160,7 @@ image(1).png
 image(2).png
 ```
 
-**Alternative duplicate pattern (tilde suffix):**
+**Tilde suffix pattern:**
 
 ```text
 IMG20240221145914.jpg
@@ -164,7 +168,7 @@ IMG20240221145914~2.jpg
 IMG20240221145914~3.jpg
 ```
 
-**Purpose:** Handles filename conflicts when multiple files have the same name.
+**Purpose:** Handles filename conflicts when multiple files have the same name in Google Photos.
 
 **Important:** Each duplicate has its own metadata file:
 
@@ -173,6 +177,32 @@ IMG20240221145914~3.jpg
 - `image(2).png.supplemental-metadata.json`
 - `IMG20240221145914.jpg.supplemental-metadata.json`
 - `IMG20240221145914~2.jpg.supplemental-metadata.json`
+
+#### Windows Extraction Duplicates
+
+When Google Takeout is extracted **multiple times** to the same location, Windows adds `(N)` suffixes:
+
+**Media files:**
+
+```text
+image.png
+image(1).png
+image(2).png
+```
+
+**Sidecar files:**
+
+```text
+image.png.supplemental-metadata.json
+image.png.supplemental-metadata(1).json
+image.png.supplemental-metadata(2).json
+```
+
+**Critical difference:** The `(N)` appears in **different positions**:
+- Media: `image(1).png` - before extension
+- Sidecar: `image.png.supplemental-metadata(1).json` - before `.json`
+
+This requires special handling in the matching algorithm (see JSON Sidecar File Matching Logic section).
 
 ## File Naming Patterns
 
@@ -487,91 +517,114 @@ IMG20240221145914~3.jpg
 
 ## JSON Sidecar File Matching Logic
 
-When building a sync tool, you need to match media files to their JSON metadata files. Google uses several naming patterns:
+The scanner uses a **three-phase approach** to match media files with their JSON sidecars:
 
-### Standard Patterns
+1. **Phase 1: Filename-based matching (happy path + heuristics)**
+2. **Phase 2: Fallback patterns (edited files, tilde duplicates)**
+3. **Phase 3: Content-based matching (orphaned sidecars)**
 
-For a media file `photo.jpg`, look for:
+### Phase 1: Filename-Based Matching
 
-1. `photo.jpg.supplemental-metadata.json` (most common)
-2. `photo.jpg.supplemental-metadat.json` (truncated)
-3. `photo.jpg.supplemental-metad.json` (truncated)
-4. `photo.jpg.supplemental-me.json` (truncated)
-5. `photo.jpg.supplemen.json` (truncated)
-6. `photo.jpg.suppl.json` (truncated)
-7. `photo.json` (alternative pattern for long filenames)
+#### Happy Path (Standard Pattern)
 
-**Note:** Pattern #7 (`.json` without `.supplemental-metadata`) is used when the full filename is very long or contains special patterns like UUIDs.
+For a media file `photo.jpg`, look for `photo.jpg.supplemental-metadata.json`
 
-### Edited Files
+**Logging:** DEBUG level with `filename` and `media_file`
 
-For edited files like `photo-edited.jpg`:
+#### Heuristic Patterns
 
-- **Strip the `-edited` suffix**
-- Look for the original file's JSON: `photo.jpg.supplemental-metadata.json` or `photo.json`
-- **Rationale:** Google Photos doesn't create separate JSON files for edited versions
+All heuristic matches are logged at **WARNING level** with `filename`, `heuristic` code, and `media_file`.
+
+**A. Windows Duplicate Suffix**
+
+When Google Takeout is extracted multiple times, Windows adds `(N)` suffixes:
+
+- Sidecar: `image.png.supplemental-metadata(1).json`
+- Media: `image(1).png`
+
+**Important:** The `(N)` appears in different positions!
+
+Heuristic codes:
+- `happy_path+windows_duplicate_suffix` - Standard pattern with duplicate suffix
+- `truncated_*+windows_duplicate_suffix` - Truncated pattern with duplicate suffix
+
+**B. Truncated Extensions (Windows MAX_PATH)**
+
+Due to 260-character path limit:
+
+| Pattern | Heuristic Code |
+|---------|----------------|
+| `.supplemental-metadat.json` | `truncated_supplemental_metadat` |
+| `.supplemental-metad.json` | `truncated_supplemental_metad` |
+| `.supplemental-meta.json` | `truncated_supplemental_meta` |
+| `.supplemental-me.json` | `truncated_supplemental_me` |
+| `.supplemental-*.json` | `truncated_supplemental_other` |
+| `.supplemen.json` | `truncated_supplemen` |
+| `.suppleme.json` | `truncated_suppleme` |
+| `.supplem.json` | `truncated_supplem` |
+| `.supple.json` | `truncated_supple` |
+| `.suppl.json` | `truncated_suppl` |
+| `.supp.json` | `truncated_supp` |
+| `.sup.json` | `truncated_sup` |
+| `.su.json` | `truncated_su` |
+| `.s.json` | `truncated_s` |
+
+**C. Plain JSON Extension**
+
+Pattern: `filename.json` (without `.supplemental-*`)
+
+Used when sidecar filename itself is truncated due to very long media filenames.
+
+Heuristic code: `plain_json_extension`
+
+Example: `Screenshot_2024-01-14-14-13-33-16_948cd9899890.json` → `Screenshot_2024-01-14-14-13-33-16_948cd9899890cbd5c2798760b2b95377.jpg`
+
+**Unmatched Sidecars**
+
+Sidecars that cannot be matched in Phase 1 are logged at **WARNING level** with `filename` only.
+
+### Phase 2: Fallback Patterns
+
+#### Edited Files
+
+For `photo-edited.jpg`:
+- Strip `-edited` suffix
+- Look for `photo.jpg.supplemental-metadata.json`
+
+**Rationale:** Google Photos doesn't create separate JSON files for edited versions.
+
+#### Tilde Suffix Duplicates
+
+For `photo~2.jpg`:
+1. Try exact match: `photo~2.jpg.supplemental-metadata.json`
+2. Fall back to original: `photo.jpg.supplemental-metadata.json`
+
+### Phase 3: Content-Based Matching
+
+For remaining orphaned sidecars:
+
+1. **Read JSON `title` field** - Contains original filename
+2. **Calculate similarity** - Longest common prefix
+3. **Match if similarity ≥ 80% AND common prefix ≥ 20 chars**
 
 **Example:**
+- Sidecar: `Screenshot_2022-04-21_abb9c8060a0a(1).json`
+- Title in JSON: `Screenshot_2022-04-21_abb9c8060a0a12c5ac89e934e52a2f4f.jpg`
+- Media file: `Screenshot_2022-04-21_abb9c8060a0a1(1).jpg`
+- Similarity: 85% → **Paired ✅**
 
-- `IMG_20200920_131207-edited.jpg` → uses `IMG_20200920_131207.jpg.supplemental-metadata.json`
+**Performance:** Only runs for ~4% of files (orphaned sidecars).
 
-### Numbered Duplicates
+### Important Notes
 
-For files with numeric suffixes like `photo(1).jpg`, look for:
+**Title Field Behavior:**
 
-1. `photo(1).jpg.supplemental-metadata.json`
-2. `photo(1).json`
-3. `photo.jpg(1).json` ← **Special case:** Google's inconsistent naming
+When files have Windows duplicate suffixes `(N)`, the JSON `title` field may be **identical** for all duplicates:
+- `filename.ext` → `"title": "filename.ext"`
+- `filename(1).ext` → `"title": "filename.ext"` (same!)
+- `filename(2).ext` → `"title": "filename.ext"` (same!)
 
-### Tilde Suffix Duplicates
-
-For files with tilde suffixes like `photo~2.jpg`, look for:
-
-1. `photo~2.jpg.supplemental-metadata.json` (exact match)
-2. `photo.jpg.supplemental-metadata.json` (original file's sidecar)
-
-**Rationale:** Google may create separate metadata for tilde duplicates or reuse the original's metadata.
-
-### Content-Based Matching (Phase 3)
-
-When filename-based matching fails, the scanner uses **content-based matching** as a fallback:
-
-1. **Read JSON `title` field** - Contains the original filename before truncation
-2. **Calculate similarity** - Longest common prefix between title and media filename
-3. **Match if similarity ≥ 80%** - Pairs files with high confidence
-
-**Example of Google Takeout Bug:**
-
-- **Sidecar**: `Screenshot_2022-04-21_abb9c8060a0a(1).json`
-- **Title in JSON**: `Screenshot_2022-04-21_abb9c8060a0a12c5ac89e934e52a2f4f.jpg`
-- **Media file**: `Screenshot_2022-04-21_abb9c8060a0a1(1).jpg`
-- **Similarity**: 85% → **Paired ✅**
-
-This handles Google Takeout's inconsistent duplicate numbering where `(1)` in the sidecar becomes `1(1)` in the media filename.
-
-**Performance:** Content-based matching only runs for orphaned sidecars (~4% of files), so it has minimal performance impact.
-
-### Trailing Character Edge Cases
-
-Handle these filename variations:
-
-- `filename_n-.jpg` → looks for `filename_n.json`
-- `filename_n.jpg` → looks for `filename_.json`
-- `filename_.jpg` → looks for `filename.json`
-
-### Truncated Metadata Filenames
-
-Due to Windows path length limits, metadata filenames may be truncated:
-
-- `.supplemental-metadata.json` (full, 27 chars)
-- `.supplemental-metadat.json` (truncated, 25 chars)
-- `.supplemental-metad.json` (truncated, 22 chars)
-- `.supplemental-me.json` (truncated, 18 chars)
-- `.supplemen.json` (truncated, 15 chars)
-- `.suppl.json` (truncated, 11 chars)
-- `.json` (alternative pattern, 5 chars)
-
-**Matching strategy:** Try all variants when looking for metadata files. Start with the full pattern and work down to shorter variants.
+This is why filename-based matching (Phase 1) is critical for duplicates.
 
 ## Statistics (from example export)
 

@@ -83,11 +83,13 @@ def writer_thread_main(
                     # Flush remaining batch
                     if batch:
                         _write_batch(batch, media_dal, error_dal, conn)
-                        new_items = len([r for r in batch if r["type"] == "media_item"])
+                        new_items = len([r for r in batch if r["type"] == "media_item" and not r.get("is_changed", False)])
+                        changed_items = len([r for r in batch if r["type"] == "media_item" and r.get("is_changed", False)])
                         unchanged_items = len([r for r in batch if r["type"] == "file_seen"])
                         total_new_files += new_items
+                        total_changed_files += changed_items
                         total_unchanged_files += unchanged_items
-                        total_written += new_items + unchanged_items
+                        total_written += new_items + changed_items + unchanged_items
                         total_errors += len([r for r in batch if r["type"] == "error"])
                         batch.clear()
                     break
@@ -136,11 +138,13 @@ def writer_thread_main(
                 # Queue is empty, check if we should flush partial batch
                 if batch and shutdown_event.is_set():
                     _write_batch(batch, media_dal, error_dal, conn)
-                    new_items = len([r for r in batch if r["type"] == "media_item"])
+                    new_items = len([r for r in batch if r["type"] == "media_item" and not r.get("is_changed", False)])
+                    changed_items = len([r for r in batch if r["type"] == "media_item" and r.get("is_changed", False)])
                     unchanged_items = len([r for r in batch if r["type"] == "file_seen"])
                     total_new_files += new_items
+                    total_changed_files += changed_items
                     total_unchanged_files += unchanged_items
-                    total_written += new_items + unchanged_items
+                    total_written += new_items + changed_items + unchanged_items
                     total_errors += len([r for r in batch if r["type"] == "error"])
                     batch.clear()
                 continue
@@ -311,6 +315,7 @@ def writer_thread_with_retry(
     total_errors = 0
     total_new_files = 0
     total_unchanged_files = 0
+    total_changed_files = 0
     batch = []
     
     try:
@@ -323,11 +328,13 @@ def writer_thread_with_retry(
                         _write_batch_with_retry(
                             batch, media_dal, error_dal, conn, max_retries
                         )
-                        new_items = len([r for r in batch if r["type"] == "media_item"])
+                        new_items = len([r for r in batch if r["type"] == "media_item" and not r.get("is_changed", False)])
+                        changed_items = len([r for r in batch if r["type"] == "media_item" and r.get("is_changed", False)])
                         unchanged_items = len([r for r in batch if r["type"] == "file_seen"])
                         total_new_files += new_items
+                        total_changed_files += changed_items
                         total_unchanged_files += unchanged_items
-                        total_written += new_items + unchanged_items
+                        total_written += new_items + changed_items + unchanged_items
                         total_errors += len([r for r in batch if r["type"] == "error"])
                     break
                 
@@ -366,11 +373,13 @@ def writer_thread_with_retry(
                     _write_batch_with_retry(
                         batch, media_dal, error_dal, conn, max_retries
                     )
-                    new_items = len([r for r in batch if r["type"] == "media_item"])
+                    new_items = len([r for r in batch if r["type"] == "media_item" and not r.get("is_changed", False)])
+                    changed_items = len([r for r in batch if r["type"] == "media_item" and r.get("is_changed", False)])
                     unchanged_items = len([r for r in batch if r["type"] == "file_seen"])
                     total_new_files += new_items
+                    total_changed_files += changed_items
                     total_unchanged_files += unchanged_items
-                    total_written += new_items + unchanged_items
+                    total_written += new_items + changed_items + unchanged_items
                     total_errors += len([r for r in batch if r["type"] == "error"])
                     batch.clear()
                 continue
@@ -379,17 +388,20 @@ def writer_thread_with_retry(
             _write_batch_with_retry(
                 batch, media_dal, error_dal, conn, max_retries
             )
-            new_items = len([r for r in batch if r["type"] == "media_item"])
+            new_items = len([r for r in batch if r["type"] == "media_item" and not r.get("is_changed", False)])
+            changed_items = len([r for r in batch if r["type"] == "media_item" and r.get("is_changed", False)])
             unchanged_items = len([r for r in batch if r["type"] == "file_seen"])
             total_new_files += new_items
+            total_changed_files += changed_items
             total_unchanged_files += unchanged_items
-            total_written += new_items + unchanged_items
+            total_written += new_items + changed_items + unchanged_items
             total_errors += len([r for r in batch if r["type"] == "error"])
         
         scan_run_dal.update_scan_run(
             scan_run_id=scan_run_id,
             files_processed=total_written,
             new_files=total_new_files,
+            changed_files=total_changed_files,
             unchanged_files=total_unchanged_files,
             error_files=total_errors,
         )

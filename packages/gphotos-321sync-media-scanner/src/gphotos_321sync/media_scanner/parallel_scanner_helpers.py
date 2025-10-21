@@ -174,46 +174,54 @@ def report_unmatched_files(
     google_photos_path = scan_root / "Takeout" / "Google Photos"
     path_root = google_photos_path if google_photos_path.exists() else scan_root
     
-    # Log summary
+    # Log structured summary
     if media_sidecars_orphaned or system_files or media_without_sidecars > 0:
-        logger.info("")
-        logger.info("="*80)
-        logger.info("UNMATCHED FILES REPORT")
-        logger.info("="*80)
-        
+        # Log orphaned media sidecars with structured data
         if media_sidecars_orphaned:
-            logger.warning(f"\n⚠️  Orphaned media sidecars: {len(media_sidecars_orphaned)} files")
-            logger.warning("   These are JSON sidecars with no matching media file.")
-            logger.warning("   Possible causes:")
-            logger.warning("     - Media file was deleted from Google Photos")
-            logger.warning("     - Filename mismatch due to Windows path truncation")
-            logger.warning("     - Google Takeout export inconsistency")
-            logger.warning("")
-            logger.warning("   Files:")
+            sample_files = []
             for sidecar in sorted(media_sidecars_orphaned)[:10]:
                 try:
-                    rel_path = sidecar.relative_to(path_root)
-                    logger.warning(f"     - {rel_path}")
+                    rel_path = str(sidecar.relative_to(path_root))
+                    sample_files.append(rel_path)
                 except ValueError:
-                    logger.warning(f"     - {sidecar.name}")
+                    sample_files.append(sidecar.name)
             
-            if len(media_sidecars_orphaned) > 10:
-                logger.warning(f"     ... and {len(media_sidecars_orphaned) - 10} more")
+            logger.warning(
+                "Orphaned media sidecars detected",
+                extra={
+                    "count": len(media_sidecars_orphaned),
+                    "sample_files": sample_files,
+                    "total_samples": min(10, len(media_sidecars_orphaned)),
+                    "possible_causes": [
+                        "Media file deleted from Google Photos",
+                        "Filename mismatch due to Windows path truncation",
+                        "Google Takeout export inconsistency"
+                    ]
+                }
+            )
         
+        # Log system files with structured data
         if system_files:
-            logger.info(f"\nℹ️  System JSON files (not media sidecars): {len(system_files)} files")
-            logger.info("   These are Google Takeout system files, not media metadata.")
-            for sf in sorted(system_files):
-                logger.info(f"     - {sf.name}")
+            logger.info(
+                "System JSON files found (not media sidecars)",
+                extra={
+                    "count": len(system_files),
+                    "files": [sf.name for sf in sorted(system_files)]
+                }
+            )
         
+        # Log media without sidecars with structured data
         if media_without_sidecars > 0:
-            logger.info(f"\nℹ️  Media files without sidecars: {media_without_sidecars} files")
-            logger.info("   This is normal for:")
-            logger.info("     - Files uploaded before Google Photos added metadata export")
-            logger.info("     - Files imported from other sources")
-            logger.info("     - Files with corrupted or missing metadata")
-        
-        logger.info("")
-        logger.info("="*80)
+            logger.info(
+                "Media files without sidecars",
+                extra={
+                    "count": media_without_sidecars,
+                    "normal_reasons": [
+                        "Files uploaded before Google Photos added metadata export",
+                        "Files imported from other sources",
+                        "Files with corrupted or missing metadata"
+                    ]
+                }
+            )
     else:
-        logger.info("\n✅ All files successfully matched - no orphans detected")
+        logger.info("All files successfully matched - no orphans detected")

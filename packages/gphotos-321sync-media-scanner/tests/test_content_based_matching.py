@@ -205,9 +205,13 @@ def test_report_unmatched_files_orphaned_sidecars(tmp_path, caplog):
         all_media_files=[]
     )
     
-    # Check that orphan was logged
+    # Check that orphan was logged with structured data
     assert any("Orphaned media sidecars" in record.message for record in caplog.records)
-    assert any("orphaned.jpg.json" in record.message for record in caplog.records)
+    # Check structured logging extra fields
+    orphan_records = [r for r in caplog.records if "Orphaned media sidecars" in r.message]
+    assert len(orphan_records) == 1
+    assert orphan_records[0].count == 1
+    assert "orphaned.jpg.json" in orphan_records[0].sample_files[0]
 
 
 def test_report_unmatched_files_system_files(tmp_path, caplog):
@@ -226,9 +230,13 @@ def test_report_unmatched_files_system_files(tmp_path, caplog):
         all_media_files=[]
     )
     
-    # Check that system file was logged
+    # Check that system file was logged with structured data
     assert any("System JSON files" in record.message for record in caplog.records)
-    assert any("print-subscriptions.json" in record.message for record in caplog.records)
+    # Check structured logging extra fields
+    system_records = [r for r in caplog.records if "System JSON files" in r.message]
+    assert len(system_records) == 1
+    assert system_records[0].count == 1
+    assert "print-subscriptions.json" in system_records[0].files
 
 
 def test_report_unmatched_files_media_without_sidecars(tmp_path, caplog):

@@ -305,3 +305,49 @@ def test_discover_files_alternative_json_pattern(tmp_path):
     
     assert files["original_0eb58adf-59c4-46d2-9420-73d42f7c8e88_FB_IMG_1713377637724.jpg"].json_sidecar_path is not None
     assert files["original_0eb58adf-59c4-46d2-9420-73d42f7c8e88_FB_IMG_1713377637724.jpg"].json_sidecar_path.name == "original_0eb58adf-59c4-46d2-9420-73d42f7c8e88_.json"
+
+
+def test_discover_files_windows_duplicate_suffix(tmp_path):
+    """Test discovery of files with Windows duplicate suffix (N) pattern.
+    
+    When Google Takeout is extracted multiple times to the same location,
+    Windows adds (1), (2), etc. suffixes to duplicate files.
+    For sidecars: filename.ext.supplemental-metadata(1).json
+    For media: filename(1).ext
+    """
+    album = tmp_path / "Album"
+    album.mkdir()
+    
+    # Create original files
+    (album / "image.png").write_text("fake png")
+    (album / "image.png.supplemental-metadata.json").write_text('{"title": "Image"}')
+    
+    # Create duplicate files with (1) suffix
+    (album / "image(1).png").write_text("fake png duplicate")
+    (album / "image.png.supplemental-metadata(1).json").write_text('{"title": "Image Duplicate"}')
+    
+    # Create files with (2) suffix
+    (album / "photo(2).jpg").write_text("fake jpeg")
+    (album / "photo.jpg.supplemental-metadata(2).json").write_text('{"title": "Photo 2"}')
+    
+    # Create files with truncated sidecar and duplicate suffix
+    (album / "Screenshot_20211104-110347(1).jpg").write_text("fake screenshot")
+    (album / "Screenshot_20211104-110347.jpg.supplemental-me(1).json").write_text('{"title": "Screenshot"}')
+    
+    files = {f.file_path.name: f for f in discover_files(tmp_path)}
+    
+    # Original files should be paired
+    assert files["image.png"].json_sidecar_path is not None
+    assert files["image.png"].json_sidecar_path.name == "image.png.supplemental-metadata.json"
+    
+    # Duplicate files with (1) suffix should be paired with their (1) sidecars
+    assert files["image(1).png"].json_sidecar_path is not None
+    assert files["image(1).png"].json_sidecar_path.name == "image.png.supplemental-metadata(1).json"
+    
+    # Files with (2) suffix should be paired
+    assert files["photo(2).jpg"].json_sidecar_path is not None
+    assert files["photo(2).jpg"].json_sidecar_path.name == "photo.jpg.supplemental-metadata(2).json"
+    
+    # Truncated sidecar with duplicate suffix should be paired
+    assert files["Screenshot_20211104-110347(1).jpg"].json_sidecar_path is not None
+    assert files["Screenshot_20211104-110347(1).jpg"].json_sidecar_path.name == "Screenshot_20211104-110347.jpg.supplemental-me(1).json"
