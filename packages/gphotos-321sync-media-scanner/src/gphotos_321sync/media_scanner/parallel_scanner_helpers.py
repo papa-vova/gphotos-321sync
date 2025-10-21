@@ -4,6 +4,7 @@ import json
 import logging
 from collections import defaultdict
 from pathlib import Path
+from typing import Optional
 
 from .discovery import FileInfo
 
@@ -15,25 +16,29 @@ def match_orphaned_sidecars(
     paired_sidecars: set[Path],
     all_sidecars: set[Path],
     all_media_files: list[FileInfo]
-) -> list[FileInfo]:
+) -> int:
     """Match orphaned sidecars using content-based matching.
     
     Phase 3: For sidecars that couldn't be paired via filename patterns,
     read the JSON 'title' field and match based on content similarity.
     
+    IMPORTANT: This function modifies the FileInfo objects in-place by updating
+    their json_sidecar_path attribute. It does NOT create new FileInfo objects
+    to avoid duplicate processing.
+    
     Args:
         target_media_path: Root scan directory
         paired_sidecars: Set of sidecars already paired
         all_sidecars: Set of all discovered sidecars
-        all_media_files: List of all discovered media files
+        all_media_files: List of all discovered media files (modified in-place)
         
     Returns:
-        List of FileInfo objects for newly paired files
+        Number of additional pairs found
     """
     orphaned_sidecars = all_sidecars - paired_sidecars
     
     if not orphaned_sidecars:
-        return []
+        return 0
     
     logger.info(f"Phase 3: Content-based matching for {len(orphaned_sidecars)} orphaned sidecars...")
     
@@ -49,7 +54,6 @@ def match_orphaned_sidecars(
         'user-generated-memory-titles.json'
     }
     
-    newly_paired = []
     content_based_matches = 0
     
     for sidecar_path in orphaned_sidecars:
@@ -104,21 +108,27 @@ def match_orphaned_sidecars(
                         best_match = file_info
             
             if best_match:
-                # Create new FileInfo with sidecar attached
-                updated_file_info = FileInfo(
-                    file_path=best_match.file_path,
-                    relative_path=best_match.relative_path,
-                    album_folder_path=best_match.album_folder_path,
-                    json_sidecar_path=sidecar_path,
-                    file_size=best_match.file_size
-                )
-                newly_paired.append(updated_file_info)
-                content_based_matches += 1
-                
-                logger.debug(
-                    f"Content-based match: {sidecar_path.name} -> {best_match.file_path.name} "
-                    f"(similarity: {best_score:.1%})"
-                )
+                # Handle sidecar precedence: ALWAYS prefer filename-based matches
+                if best_match.json_sidecar_path is None:
+                    # No existing sidecar - attach this one
+                    best_match.json_sidecar_path = sidecar_path
+                    content_based_matches += 1
+                    
+                    logger.debug(
+                        f"Content-based match: {sidecar_path.name} -> {best_match.file_path.name} "
+                        f"(similarity: {best_score:.1%})"
+                    )
+                else:
+                    # File already has a sidecar from filename-based matching
+                    # ALWAYS keep the filename-based match as it's more reliable and likely
+                    # has richer metadata (geodata, views, people tags, etc.)
+                    # Log as WARNING so user can investigate potential data loss
+                    logger.warning(
+                        f"Multiple sidecars found for same file - keeping filename-based match: "
+                        f"{{'media_file': {best_match.file_path.name!r}, "
+                        f"'keeping': {best_match.json_sidecar_path.name!r}, "
+                        f"'ignoring': {sidecar_path.name!r}}}"
+                    )
         
         except json.JSONDecodeError:
             logger.warning(f"Failed to parse JSON: {sidecar_path.name}")
@@ -130,7 +140,7 @@ def match_orphaned_sidecars(
     else:
         logger.info("Content-based matching complete: no additional pairs found")
     
-    return newly_paired
+    return content_based_matches
 
 
 def report_unmatched_files(

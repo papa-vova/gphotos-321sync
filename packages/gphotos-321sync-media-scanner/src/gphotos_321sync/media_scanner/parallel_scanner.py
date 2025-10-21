@@ -186,25 +186,26 @@ class ParallelScanner:
             )
             
             # Phase 2.5: Content-based matching for orphaned sidecars
-            orphan_matches = match_orphaned_sidecars(
+            # IMPORTANT: This modifies files_to_process in-place, does NOT add new items
+            orphan_match_count = match_orphaned_sidecars(
                 target_media_path=target_media_path,
                 paired_sidecars=discovery_result.paired_sidecars,
                 all_sidecars=discovery_result.all_sidecars,
                 all_media_files=files_to_process
             )
             
-            # Add newly paired files to processing list
-            if orphan_matches:
-                files_to_process.extend(orphan_matches)
-                media_files_count = len(files_to_process)
+            # Update statistics (file count unchanged, but metadata count may increase)
+            if orphan_match_count > 0:
                 media_with_metadata_count = sum(1 for f in files_to_process if f.json_sidecar_path is not None)
                 logger.info(f"Updated totals after content-based matching: {media_files_count} media files, {media_with_metadata_count} with metadata")
             
             # Phase 2.6: Report unmatched files
+            # Rebuild paired_sidecars set to include content-based matches
+            all_paired_sidecars = discovery_result.paired_sidecars | {f.json_sidecar_path for f in files_to_process if f.json_sidecar_path}
             report_unmatched_files(
                 scan_root=target_media_path,
                 all_sidecars=discovery_result.all_sidecars,
-                paired_sidecars=discovery_result.paired_sidecars | {f.json_sidecar_path for f in orphan_matches if f.json_sidecar_path},
+                paired_sidecars=all_paired_sidecars,
                 all_media_files=files_to_process
             )
             

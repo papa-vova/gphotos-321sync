@@ -136,6 +136,7 @@ class TestValidateScan:
         # Use UTC timezone-aware datetime
         scan_start_time = datetime.now(timezone.utc)
         new_scan_run_id = scan_run_dal.create_scan_run()
+        # Note: create_scan_run() commits automatically
         
         conn.close()
         
@@ -174,11 +175,13 @@ class TestValidateScan:
             'album_folder_path': album_folder_path,
             'scan_run_id': old_scan_run_id,
         })
+        # Note: upsert_album() commits automatically
         
         # Create new scan run (capture start time BEFORE creating scan)
         # Use UTC timezone-aware datetime
         scan_start_time = datetime.now(timezone.utc)
         new_scan_run_id = scan_run_dal.create_scan_run()
+        # Note: create_scan_run() commits automatically
         
         conn.close()
         

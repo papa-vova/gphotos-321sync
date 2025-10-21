@@ -217,11 +217,25 @@ def _write_batch(
                 
                 if is_changed:
                     # File exists but changed - update it
-                    # Use INSERT OR REPLACE to update all fields
+                    # Use DELETE + INSERT to update all fields
                     try:
                         # Delete old record and insert new one (simpler than updating all fields)
                         conn.execute("DELETE FROM media_items WHERE relative_path = ?", (record.relative_path,))
                         media_dal.insert_media_item(record)
+                    except sqlite3.IntegrityError as e:
+                        # Handle duplicate path gracefully - this can happen if the same file
+                        # is processed multiple times in the same scan (race condition)
+                        if "UNIQUE constraint failed: media_items.relative_path" in str(e):
+                            logger.warning(
+                                f"Skipping duplicate changed file (already updated): {{'path': {record.relative_path!r}, 'media_item_id': {record.media_item_id!r}}}"
+                            )
+                            # Note: We already deleted the old record, but since this is a duplicate
+                            # within the same scan, another worker thread must have already inserted
+                            # the updated version. This is acceptable - the file is updated.
+                        else:
+                            # Other integrity errors should still fail
+                            logger.error(f"Failed to update changed file: {{'path': {record.relative_path!r}, 'error': {str(e)!r}}}")
+                            raise
                     except Exception as e:
                         logger.error(f"Failed to update changed file: {{'path': {record.relative_path!r}, 'error': {str(e)!r}}}")
                         raise

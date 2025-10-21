@@ -42,17 +42,17 @@ def test_match_orphaned_sidecars_google_takeout_bug(tmp_path):
     )
     
     # Test content-based matching
-    orphan_matches = match_orphaned_sidecars(
+    matches_count = match_orphaned_sidecars(
         target_media_path=tmp_path,
         paired_sidecars=set(),
         all_sidecars={sidecar_file},
         all_media_files=[file_info]
     )
     
-    # Should find a match
-    assert len(orphan_matches) == 1
-    assert orphan_matches[0].file_path == media_file
-    assert orphan_matches[0].json_sidecar_path == sidecar_file
+    # Should find a match (function modifies file_info in-place)
+    assert matches_count == 1
+    assert file_info.file_path == media_file
+    assert file_info.json_sidecar_path == sidecar_file
 
 
 def test_match_orphaned_sidecars_high_similarity(tmp_path):
@@ -80,7 +80,7 @@ def test_match_orphaned_sidecars_high_similarity(tmp_path):
         file_size=len("fake photo")
     )
     
-    orphan_matches = match_orphaned_sidecars(
+    matches_count = match_orphaned_sidecars(
         target_media_path=tmp_path,
         paired_sidecars=set(),
         all_sidecars={sidecar_file},
@@ -88,8 +88,8 @@ def test_match_orphaned_sidecars_high_similarity(tmp_path):
     )
     
     # Should match (similarity > 80%)
-    assert len(orphan_matches) == 1
-    assert orphan_matches[0].json_sidecar_path == sidecar_file
+    assert matches_count == 1
+    assert file_info.json_sidecar_path == sidecar_file
 
 
 def test_match_orphaned_sidecars_low_similarity(tmp_path):
@@ -117,7 +117,7 @@ def test_match_orphaned_sidecars_low_similarity(tmp_path):
         file_size=len("fake photo")
     )
     
-    orphan_matches = match_orphaned_sidecars(
+    matches_count = match_orphaned_sidecars(
         target_media_path=tmp_path,
         paired_sidecars=set(),
         all_sidecars={sidecar_file},
@@ -125,7 +125,8 @@ def test_match_orphaned_sidecars_low_similarity(tmp_path):
     )
     
     # Should NOT match (similarity < 80%)
-    assert len(orphan_matches) == 0
+    assert matches_count == 0
+    assert file_info.json_sidecar_path is None
 
 
 def test_match_orphaned_sidecars_skips_already_paired(tmp_path):
@@ -151,7 +152,7 @@ def test_match_orphaned_sidecars_skips_already_paired(tmp_path):
         file_size=len("fake photo")
     )
     
-    orphan_matches = match_orphaned_sidecars(
+    matches_count = match_orphaned_sidecars(
         target_media_path=tmp_path,
         paired_sidecars={existing_sidecar},
         all_sidecars={existing_sidecar, orphan_sidecar},
@@ -159,7 +160,8 @@ def test_match_orphaned_sidecars_skips_already_paired(tmp_path):
     )
     
     # Should NOT match (file already has sidecar)
-    assert len(orphan_matches) == 0
+    assert matches_count == 0
+    assert file_info.json_sidecar_path == existing_sidecar
 
 
 def test_match_orphaned_sidecars_skips_system_files(tmp_path):
@@ -175,7 +177,7 @@ def test_match_orphaned_sidecars_skips_system_files(tmp_path):
         tmp_path / "user-generated-memory-titles.json"
     }
     
-    orphan_matches = match_orphaned_sidecars(
+    matches_count = match_orphaned_sidecars(
         target_media_path=tmp_path,
         paired_sidecars=set(),
         all_sidecars=system_files,
@@ -183,7 +185,7 @@ def test_match_orphaned_sidecars_skips_system_files(tmp_path):
     )
     
     # Should skip all system files
-    assert len(orphan_matches) == 0
+    assert matches_count == 0
 
 
 def test_report_unmatched_files_orphaned_sidecars(tmp_path, caplog):
