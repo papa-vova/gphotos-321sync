@@ -4,11 +4,11 @@ Comprehensive documentation of all test suites in the gphotos-321sync project.
 
 ## Summary
 
-**Total: 353 tests** (12 + 42 + 299)
+**Total: 358 tests** (12 + 42 + 304)
 
 - **gphotos-321sync-common:** 12 tests
 - **gphotos-321sync-takeout-extractor:** 42 tests
-- **gphotos-321sync-media-scanner:** 299 tests
+- **gphotos-321sync-media-scanner:** 304 tests
 
 ---
 
@@ -640,3 +640,17 @@ Tests for writer thread database operations (7 tests).
 | 1 | `test_initial_scan` | Minimal Takeout (2 albums, 3 files) | 2 albums created, 3 items processed, fingerprints computed | Initial scan | Verifies end-to-end initial scan workflow |
 | 2 | `test_rescan_with_no_changes` | Rescan same Takeout (no changes) | 0 files processed, all skipped via fingerprints, albums updated not duplicated | Rescan optimization | Tests fingerprint-based skip optimization works correctly |
 | 3 | `test_rescan_with_many_threads` | Rescan with 16 threads on 3 files | Scan completes without ValueError | **Tests queue sentinel fix** | Specifically tests the queue sentinel handling bug fix - many threads, few files triggers race condition |
+
+### test_changed_files.py
+
+Tests for changed file detection and tracking (5 tests).
+
+**Purpose**: Verifies that the scanner correctly distinguishes between new, unchanged, and changed files during rescans. Changed files are detected via fingerprint comparison (both content and sidecar) and properly updated in the database.
+
+| # | Test | Input | Output | Conditions/Assumptions | Logic |
+|---|------|-------|--------|----------------------|-------|
+| 1 | `test_unchanged_file_detection` | File in DB with matching fingerprint | check_file_unchanged returns True | File content unchanged | Verifies unchanged files are correctly identified |
+| 2 | `test_changed_file_detection` | File in DB, content modified | check_file_unchanged returns False | File content changed | Verifies changed files are detected via fingerprint mismatch |
+| 3 | `test_changed_file_with_sidecar` | File in DB, sidecar JSON modified | check_file_unchanged returns False | Sidecar content changed | Verifies sidecar changes are detected (both content and sidecar fingerprints checked) |
+| 4 | `test_changed_file_update` | Changed file processed | Old record deleted, new record inserted with updated fingerprint and scan_run_id | Changed file workflow | Tests DELETE + INSERT update strategy for changed files |
+| 5 | `test_new_file_detection` | Path not in database | get_media_item_by_path returns None | File doesn't exist in DB | Verifies new files are correctly identified |

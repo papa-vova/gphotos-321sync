@@ -335,6 +335,7 @@ CREATE INDEX idx_errors_path ON processing_errors(relative_path);
 - `total_files_discovered` - Total files found on disk
 - `media_files_discovered` - Media files (photos/videos)
 - `metadata_files_discovered` - JSON sidecar files
+- `media_files_with_metadata` - Media files that have associated JSON sidecars
 - `files_processed` - Count of files processed
 - `new_files` - Files added since last scan
 - `unchanged_files` - Files skipped (path+size match)
@@ -343,7 +344,6 @@ CREATE INDEX idx_errors_path ON processing_errors(relative_path);
 - `error_files` - Files that failed to process
 - `inconsistent_files` - Files with current scan_run_id but old timestamp
 - `albums_total` - Total number of albums
-- `files_in_albums` - Files associated with albums
 
 **Performance:**
 
@@ -699,7 +699,6 @@ for result in pool.imap_unordered(cpu_work, work_batch, chunksize=10):
   "error_files": 50,
   "inconsistent_files": 0,
   "albums_total": 450,
-  "files_in_albums": 85000,
   "files_per_second": 37.0,
   "error_breakdown": {
     "permission_denied": 25,

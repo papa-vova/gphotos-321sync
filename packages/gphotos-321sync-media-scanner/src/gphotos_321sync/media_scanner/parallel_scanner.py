@@ -21,7 +21,7 @@ from .dal.albums import AlbumDAL
 from .dal.media_items import MediaItemDAL
 from .dal.scan_runs import ScanRunDAL
 from .database import DatabaseConnection
-from .discovery import discover_files
+from .discovery import discover_files_with_stats
 from .parallel.queue_manager import QueueManager
 from .parallel.worker_thread import worker_thread_main
 from .parallel.writer_thread import writer_thread_main
@@ -160,28 +160,31 @@ class ParallelScanner:
             logger.info("Scanning directory tree for media files and JSON sidecars...")
             logger.debug("Building file list (this may take a while for large libraries)...")
             phase_start = time.time()
-            files_to_process = list(discover_files(target_media_path))
-            total_files = len(files_to_process)
+            discovery_result = discover_files_with_stats(target_media_path)
+            files_to_process = discovery_result.files
             
-            # Count media files vs metadata files (JSON sidecars)
-            media_files_count = total_files  # All discovered files are media files
-            metadata_files_count = sum(1 for f in files_to_process if f.json_sidecar_path is not None)
+            # Count media files, JSON sidecars, and media files with sidecars
+            media_files_count = len(files_to_process)  # Media files only (discover_files skips JSONs)
+            metadata_files_count = discovery_result.json_sidecar_count  # Unique JSON sidecar files
+            media_with_metadata_count = sum(1 for f in files_to_process if f.json_sidecar_path is not None)  # Media files that have sidecars
+            total_files = media_files_count + metadata_files_count  # Total = media + JSON sidecars
             
             phase_timings['file_discovery'] = time.time() - phase_start
             
-            logger.info(f"Discovered {total_files} files: {{'duration_seconds': {phase_timings['file_discovery']:.1f}}}")
+            logger.info(f"Discovered {total_files} total files ({media_files_count} media, {metadata_files_count} JSON sidecars, {media_with_metadata_count} media with metadata): {{'duration_seconds': {phase_timings['file_discovery']:.1f}}}")
             
             # Update scan_runs statistics for file discovery
             scan_run_dal.update_scan_run(
                 scan_run_id=scan_run_id,
                 total_files_discovered=total_files,
                 media_files_discovered=media_files_count,
-                metadata_files_discovered=metadata_files_count
+                metadata_files_discovered=metadata_files_count,
+                media_files_with_metadata=media_with_metadata_count
             )
-            if total_files > 0:
+            if media_files_count > 0:
                 logger.info(f"Starting parallel processing: {{'processes': {self.worker_processes}, 'threads': {self.worker_threads}}}")
             
-            if total_files == 0:
+            if media_files_count == 0:
                 logger.warning("No files found to process")
                 scan_run_dal.complete_scan_run(scan_run_id, "completed")
                 db_conn.close()
@@ -201,8 +204,8 @@ class ParallelScanner:
             db_conn.close()  # Close via DatabaseConnection to clear cached connection
             logger.debug("Closed main database connection before parallel processing")
             
-            # Initialize components
-            self._initialize_components(total_files)
+            # Initialize components (track progress for media files only)
+            self._initialize_components(media_files_count)
             
             # Start worker threads and writer thread
             self._start_workers(scan_run_id)

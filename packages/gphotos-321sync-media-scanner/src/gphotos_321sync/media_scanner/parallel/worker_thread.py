@@ -140,8 +140,11 @@ def worker_thread_main(
                         # Don't call task_done() here - it's in finally block
                         continue
                     
-                    # File is new or changed - do full processing
-                    logger.debug(f"Processing changed/new file: {{'path': {file_info.relative_path!r}}}")
+                    # File is new or changed - check if it exists in database
+                    existing_item = media_dal.get_media_item_by_path(normalized_path)
+                    is_changed = existing_item is not None
+                    
+                    logger.debug(f"Processing {'changed' if is_changed else 'new'} file: {{'path': {file_info.relative_path!r}}}")
                     
                     # Submit CPU work to process pool
                     cpu_future = process_pool.apply_async(
@@ -182,6 +185,7 @@ def worker_thread_main(
                         results_queue.put({
                             "type": "media_item",
                             "record": media_item_record,
+                            "is_changed": is_changed,
                         })
                         processed_count += 1
                         

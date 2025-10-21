@@ -66,6 +66,7 @@ def writer_thread_main(
     total_errors = 0
     total_new_files = 0
     total_unchanged_files = 0
+    total_changed_files = 0
     batch = []
     
     try:
@@ -99,12 +100,14 @@ def writer_thread_main(
                     _write_batch(batch, media_dal, error_dal, conn)
                     
                     # Update counters
-                    media_items = len([r for r in batch if r["type"] == "media_item"])
+                    new_items = len([r for r in batch if r["type"] == "media_item" and not r.get("is_changed", False)])
+                    changed_items = len([r for r in batch if r["type"] == "media_item" and r.get("is_changed", False)])
                     file_seen = len([r for r in batch if r["type"] == "file_seen"])
                     errors = len([r for r in batch if r["type"] == "error"])
-                    total_new_files += media_items
+                    total_new_files += new_items
+                    total_changed_files += changed_items
                     total_unchanged_files += file_seen
-                    total_written += media_items + file_seen  # Count both new and skipped files
+                    total_written += new_items + changed_items + file_seen
                     total_errors += errors
                     
                     # Update progress (batch update to database)
@@ -113,6 +116,7 @@ def writer_thread_main(
                             scan_run_id=scan_run_id,
                             files_processed=total_written,
                             new_files=total_new_files,
+                            changed_files=total_changed_files,
                             unchanged_files=total_unchanged_files,
                         )
                         # Use progress tracker if available (shows ETA and rate)
@@ -144,11 +148,13 @@ def writer_thread_main(
         # Flush any remaining items
         if batch:
             _write_batch(batch, media_dal, error_dal, conn)
-            new_items = len([r for r in batch if r["type"] == "media_item"])
+            new_items = len([r for r in batch if r["type"] == "media_item" and not r.get("is_changed", False)])
+            changed_items = len([r for r in batch if r["type"] == "media_item" and r.get("is_changed", False)])
             unchanged_items = len([r for r in batch if r["type"] == "file_seen"])
             total_new_files += new_items
+            total_changed_files += changed_items
             total_unchanged_files += unchanged_items
-            total_written += new_items + unchanged_items
+            total_written += new_items + changed_items + unchanged_items
             total_errors += len([r for r in batch if r["type"] == "error"])
         
         # Final progress update with all statistics
@@ -156,6 +162,7 @@ def writer_thread_main(
             scan_run_id=scan_run_id,
             files_processed=total_written,
             new_files=total_new_files,
+            changed_files=total_changed_files,
             unchanged_files=total_unchanged_files,
             error_files=total_errors,
         )
@@ -200,19 +207,33 @@ def _write_batch(
         
         for result in batch:
             if result["type"] == "media_item":
-                # Insert media item (no commit - we batch commit at the end)
+                # Insert or update media item (no commit - we batch commit at the end)
                 record = result["record"]
-                try:
-                    media_dal.insert_media_item(record)
-                except sqlite3.IntegrityError as e:
-                    # Handle duplicate path gracefully - log and skip
-                    if "UNIQUE constraint failed: media_items.relative_path" in str(e):
-                        logger.warning(
-                            f"Skipping duplicate path: {{'path': {record.relative_path!r}, 'media_item_id': {record.media_item_id!r}}}"
-                        )
-                    else:
-                        # Other integrity errors should still fail
+                is_changed = result.get("is_changed", False)
+                
+                if is_changed:
+                    # File exists but changed - update it
+                    # Use INSERT OR REPLACE to update all fields
+                    try:
+                        # Delete old record and insert new one (simpler than updating all fields)
+                        conn.execute("DELETE FROM media_items WHERE relative_path = ?", (record.relative_path,))
+                        media_dal.insert_media_item(record)
+                    except Exception as e:
+                        logger.error(f"Failed to update changed file: {{'path': {record.relative_path!r}, 'error': {str(e)!r}}}")
                         raise
+                else:
+                    # New file - insert it
+                    try:
+                        media_dal.insert_media_item(record)
+                    except sqlite3.IntegrityError as e:
+                        # Handle duplicate path gracefully - log and skip
+                        if "UNIQUE constraint failed: media_items.relative_path" in str(e):
+                            logger.warning(
+                                f"Skipping duplicate path: {{'path': {record.relative_path!r}, 'media_item_id': {record.media_item_id!r}}}"
+                            )
+                        else:
+                            # Other integrity errors should still fail
+                            raise
                 
             elif result["type"] == "file_seen":
                 # Collect for batch update

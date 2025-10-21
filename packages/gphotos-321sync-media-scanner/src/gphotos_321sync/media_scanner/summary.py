@@ -77,7 +77,6 @@ def generate_summary(db_path: str, scan_run_id: str) -> Dict[str, Any]:
             },
             'albums': {
                 'total': scan_run['albums_total'],
-                'files_in_albums': scan_run['files_in_albums'],
                 'present': album_stats['present'],
                 'missing': album_stats['missing'],
                 'error': album_stats['error'],
@@ -272,7 +271,6 @@ def format_summary_human_readable(summary: Dict[str, Any]) -> str:
     lines.append("-" * 70)
     albums = summary['albums']
     lines.append(f"Total albums:        {albums['total']:>8,}")
-    lines.append(f"Files in albums:     {albums['files_in_albums']:>8,}")
     lines.append(f"Present albums:      {albums['present']:>8,}")
     lines.append(f"Missing albums:      {albums['missing']:>8,}")
     lines.append(f"Error albums:        {albums['error']:>8,}")

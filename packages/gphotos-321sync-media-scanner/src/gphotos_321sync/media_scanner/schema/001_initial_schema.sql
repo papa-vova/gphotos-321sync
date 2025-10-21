@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS scan_runs (
     total_files_discovered INTEGER DEFAULT 0 CHECK(total_files_discovered >= 0),
     media_files_discovered INTEGER DEFAULT 0 CHECK(media_files_discovered >= 0),
     metadata_files_discovered INTEGER DEFAULT 0 CHECK(metadata_files_discovered >= 0),
+    media_files_with_metadata INTEGER DEFAULT 0 CHECK(media_files_with_metadata >= 0),
     files_processed INTEGER DEFAULT 0 CHECK(files_processed >= 0),
     new_files INTEGER DEFAULT 0 CHECK(new_files >= 0),
     unchanged_files INTEGER DEFAULT 0 CHECK(unchanged_files >= 0),
@@ -31,7 +32,6 @@ CREATE TABLE IF NOT EXISTS scan_runs (
     error_files INTEGER DEFAULT 0 CHECK(error_files >= 0),
     inconsistent_files INTEGER DEFAULT 0 CHECK(inconsistent_files >= 0),
     albums_total INTEGER DEFAULT 0 CHECK(albums_total >= 0),
-    files_in_albums INTEGER DEFAULT 0 CHECK(files_in_albums >= 0),
     
     -- Performance
     duration_seconds REAL CHECK(duration_seconds IS NULL OR duration_seconds >= 0),

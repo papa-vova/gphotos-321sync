@@ -65,7 +65,6 @@ def populated_db(test_db):
         error_files=2,
         inconsistent_files=0,
         albums_total=5,
-        files_in_albums=80,
     )
     
     # Create albums
@@ -216,7 +215,6 @@ class TestGenerateSummary:
         
         albums = summary['albums']
         assert albums['total'] == 5
-        assert albums['files_in_albums'] == 80
         assert albums['present'] == 5
         assert albums['missing'] == 0
         assert albums['error'] == 0

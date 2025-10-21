@@ -7,7 +7,7 @@ import logging
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterator, Optional
+from typing import Iterator, Optional, List
 
 from .path_utils import should_scan_file
 
@@ -30,6 +30,44 @@ class FileInfo:
     album_folder_path: Path
     json_sidecar_path: Optional[Path]
     file_size: int
+
+
+@dataclass
+class DiscoveryResult:
+    """Result of file discovery operation.
+    
+    Attributes:
+        files: List of discovered media files
+        json_sidecar_count: Number of unique JSON sidecar files found
+    """
+    files: List[FileInfo]
+    json_sidecar_count: int
+
+
+def discover_files_with_stats(target_media_path: Path) -> DiscoveryResult:
+    """Discover all media files and return statistics.
+    
+    This is a wrapper around discover_files() that collects all results
+    and returns both the files and the count of unique JSON sidecars.
+    
+    Args:
+        target_media_path: Target media directory to scan (ABSOLUTE path)
+        
+    Returns:
+        DiscoveryResult with files list and json_sidecar_count
+    """
+    files = list(discover_files(target_media_path))
+    
+    # Count unique JSON sidecars
+    unique_sidecars = set()
+    for file_info in files:
+        if file_info.json_sidecar_path:
+            unique_sidecars.add(file_info.json_sidecar_path)
+    
+    return DiscoveryResult(
+        files=files,
+        json_sidecar_count=len(unique_sidecars)
+    )
 
 
 def discover_files(target_media_path: Path) -> Iterator[FileInfo]:
