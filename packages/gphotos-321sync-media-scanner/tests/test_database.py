@@ -80,9 +80,9 @@ def test_scan_run_dal(migrated_db):
     assert scan_run['status'] == 'running'
     
     # Update scan run
-    dal.update_scan_run(scan_run_id, files_processed=100)
+    dal.update_scan_run(scan_run_id, media_files_processed=100)
     scan_run = dal.get_scan_run(scan_run_id)
-    assert scan_run['files_processed'] == 100
+    assert scan_run['media_files_processed'] == 100
     
     # Complete scan run
     dal.complete_scan_run(scan_run_id, 'completed')

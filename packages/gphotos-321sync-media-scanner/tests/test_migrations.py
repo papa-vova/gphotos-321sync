@@ -266,7 +266,8 @@ class TestSchemaIntegrity:
             'total_files_discovered',
             'media_files_discovered',
             'metadata_files_discovered',
-            'files_processed'
+            'media_files_processed',
+            'metadata_files_processed'
         }
         
         assert required_columns.issubset(columns), f"Missing columns: {required_columns - columns}"

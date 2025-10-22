@@ -67,12 +67,13 @@ def generate_summary(db_path: str, scan_run_id: str) -> Dict[str, Any]:
                 'metadata_files_discovered': scan_run['metadata_files_discovered'],
             },
             'processing': {
-                'files_processed': scan_run['files_processed'],
-                'new_files': scan_run['new_files'],
-                'unchanged_files': scan_run['unchanged_files'],
-                'changed_files': scan_run['changed_files'],
+                'media_files_processed': scan_run['media_files_processed'],
+                'metadata_files_processed': scan_run['metadata_files_processed'],
+                'media_new_files': scan_run['media_new_files'],
+                'media_unchanged_files': scan_run['media_unchanged_files'],
+                'media_changed_files': scan_run['media_changed_files'],
                 'missing_files': scan_run['missing_files'],
-                'error_files': scan_run['error_files'],
+                'media_error_files': scan_run['media_error_files'],
                 'inconsistent_files': scan_run['inconsistent_files'],
             },
             'albums': {
@@ -257,13 +258,14 @@ def format_summary_human_readable(summary: Dict[str, Any]) -> str:
     lines.append("PROCESSING")
     lines.append("-" * 70)
     proc = summary['processing']
-    lines.append(f"Files processed:     {proc['files_processed']:>8,}")
-    lines.append(f"New files:           {proc['new_files']:>8,}")
-    lines.append(f"Unchanged files:     {proc['unchanged_files']:>8,}")
-    lines.append(f"Changed files:       {proc['changed_files']:>8,}")
-    lines.append(f"Missing files:       {proc['missing_files']:>8,}")
-    lines.append(f"Error files:         {proc['error_files']:>8,}")
-    lines.append(f"Inconsistent files:  {proc['inconsistent_files']:>8,}")
+    lines.append(f"Media files processed:    {proc['media_files_processed']:>8,}")
+    lines.append(f"Metadata files processed: {proc['metadata_files_processed']:>8,}")
+    lines.append(f"New media files:          {proc['media_new_files']:>8,}")
+    lines.append(f"Unchanged media files:    {proc['media_unchanged_files']:>8,}")
+    lines.append(f"Changed media files:      {proc['media_changed_files']:>8,}")
+    lines.append(f"Missing files:            {proc['missing_files']:>8,}")
+    lines.append(f"Error media files:        {proc['media_error_files']:>8,}")
+    lines.append(f"Inconsistent files:       {proc['inconsistent_files']:>8,}")
     lines.append("")
     
     # Albums

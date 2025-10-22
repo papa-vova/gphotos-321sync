@@ -165,7 +165,7 @@ Tests for database connection and DAL operations (9 tests).
 | 1 | `test_database_connection` | Database path | Active connection, file created | Valid path | Tests SQLite connection creation |
 | 2 | `test_database_pragmas` | Database connection | WAL mode, busy_timeout=5000ms | Connection established | Verifies SQLite pragmas |
 | 3 | `test_migration_initial_schema` | Empty database (no schema_version table), run MigrationRunner | get_current_version() returns 1 after migration | First-time migration | Tests that MigrationRunner applies initial SQL schema (001_initial_schema.sql) and sets version to 1. Note: MigrationRunner runs on every app start but only applies pending migrations (idempotent). |
-| 4 | `test_scan_run_dal` | Call ScanRunDAL methods | create_scan_run() → get_scan_run() → update_scan_run() → complete_scan_run() all succeed | Tests scan_runs table operations | Tests CRUD operations on scan_runs table: create new scan, retrieve by ID, update fields (files_processed), mark as completed with end_timestamp |
+| 4 | `test_scan_run_dal` | Call ScanRunDAL methods | create_scan_run() → get_scan_run() → update_scan_run() → complete_scan_run() all succeed | Tests scan_runs table operations | Tests CRUD operations on scan_runs table: create new scan, retrieve by ID, update fields (media_files_processed), mark as completed with end_timestamp |
 | 5 | `test_album_dal` | Call AlbumDAL methods with scan_run_id | insert_album() → get_album_by_path() → get_album_by_id() → update_album() all succeed | Tests albums table operations | Tests CRUD operations on albums table: insert album with path/title, retrieve by path or ID, update fields (description). Requires scan_run_id foreign key. |
 | 6 | `test_media_item_dal` | Call MediaItemDAL methods with album_id + scan_run_id | insert_media_item() → get_media_item_by_path() → update_media_item() all succeed | Tests media_items table operations | Tests CRUD operations on media_items table: insert item with UUID/path/size/mime_type, retrieve by path or ID, update metadata (width/height). Requires album_id and scan_run_id foreign keys. |
 | 7 | `test_check_file_unchanged` | Media items with content_fingerprint and sidecar_fingerprint | check_file_unchanged() returns True for matching fingerprints, False otherwise | Tests rescan optimization | Tests early-exit optimization: verifies that files with matching content AND sidecar fingerprints are detected as unchanged. Tests NULL sidecar handling and mismatch detection. |
@@ -565,8 +565,8 @@ Tests for progress tracker (15 tests).
 | # | Test | Input | Output | Conditions/Assumptions | Logic |
 |---|------|-------|--------|----------------------|-------|
 | 1 | `test_initialization` | total_files=1000, log_interval=50 | Tracker initialized | Constructor parameters | Initializes progress tracker |
-| 2 | `test_update` | Update to 25 | files_processed=25 | Progress update | Updates progress counter |
-| 3 | `test_increment` | Increment by 1, then 5 | files_processed=6 | Incremental updates | Increments progress |
+| 2 | `test_update` | Update to 25 | files_processed=25 | Progress update | Updates progress counter (local variable, not DB field) |
+| 3 | `test_increment` | Increment by 1, then 5 | files_processed=6 | Incremental updates | Increments progress (local variable, not DB field) |
 | 4 | `test_get_progress_initial` | No progress | 0% complete, 100 remaining | Initial state | Returns initial progress |
 | 5 | `test_get_progress_halfway` | 50 of 100 processed | 50% complete, 50 remaining | Halfway through | Returns halfway progress |
 | 6 | `test_get_progress_complete` | 100 of 100 processed | 100% complete, 0 remaining | Complete | Returns completion progress |

@@ -148,7 +148,7 @@ else:
 │  - Batch writes to database (100-500 records per commit)    │
 │  - Single writer thread (SQLite WAL mode)                   │
 │  - Update last_seen_timestamp for each file                 │
-│  - Update files_processed count every 100 files             │
+│  - Update media_files_processed count every 100 files       │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -336,12 +336,13 @@ CREATE INDEX idx_errors_path ON processing_errors(relative_path);
 - `media_files_discovered` - Media files (photos/videos)
 - `metadata_files_discovered` - JSON sidecar files
 - `media_files_with_metadata` - Media files that have associated JSON sidecars
-- `files_processed` - Count of files processed
-- `new_files` - Files added since last scan
-- `unchanged_files` - Files skipped (path+size match)
-- `changed_files` - Files reprocessed (path or size changed)
+- `media_files_processed` - Count of media files processed (excludes JSON sidecars)
+- `metadata_files_processed` - Count of JSON sidecars that were considered/evaluated (includes paired, obsolete, and orphaned files)
+- `media_new_files` - Media files added since last scan
+- `media_unchanged_files` - Media files skipped (path+size match)
+- `media_changed_files` - Media files reprocessed (path or size changed)
 - `missing_files` - Files marked as status='missing'
-- `error_files` - Files that failed to process
+- `media_error_files` - Media files that failed to process
 - `inconsistent_files` - Files with current scan_run_id but old timestamp
 - `albums_total` - Total number of albums
 
@@ -402,7 +403,7 @@ CREATE INDEX idx_errors_path ON processing_errors(relative_path);
   1. **Inconsistent data**: Files with `scan_run_id = current` BUT `last_seen_timestamp < scan_start_time` → `status='inconsistent'`
   2. **Missing files**: Files with `scan_run_id != current` AND `status='present'` → `status='missing'` (deleted from disk)
   3. **Verification**: All files with `status='present'` must have `scan_run_id = current`
-- Progress tracking: `files_processed` count in `scan_runs` table for percentage calculation
+- Progress tracking: `media_files_processed` count in `scan_runs` table for percentage calculation
 
 #### No foreign keys
 
@@ -434,7 +435,7 @@ PRAGMA temp_store=MEMORY;       -- Temp tables in RAM
 - **WAL checkpointing:** `PRAGMA wal_autocheckpoint=1000` (checkpoint every 1000 pages)
 - **Manual checkpoint:** Run `PRAGMA wal_checkpoint(TRUNCATE)` after scan completes
 - **Retry policy:** Exponential backoff, max 3 retries on lock
-- **Progress tracking:** Update `scan_runs.files_processed` every 100 files
+- **Progress tracking:** Update `scan_runs.media_files_processed` every 100 media files
 - **Queue sizing:** Results queue maxsize=1000 (backpressure)
 - **TODO:** Implement memory-aware queue throttling. Track total bytes buffered across queues, apply backpressure if exceeds threshold (e.g., 100MB). Design at implementation time.
 
@@ -648,7 +649,7 @@ for result in pool.imap_unordered(cpu_work, work_batch, chunksize=10):
 - Total files discovered (from filesystem walk)
 - Media files vs metadata files breakdown
 - Files processed so far (updated every 100 files)
-- Progress percentage: `(files_processed / total_files_discovered) × 100`
+- Progress percentage: `(media_files_processed / media_files_discovered) × 100`
 - Processing rate (files/sec)
 - Estimated time remaining: `(total_files - processed) / rate`
 
@@ -672,7 +673,8 @@ for result in pool.imap_unordered(cpu_work, work_batch, chunksize=10):
   "total_files_discovered": 125000,
   "media_files": 100000,
   "metadata_files": 25000,
-  "files_processed": 45000,
+  "media_files_processed": 45000,
+  "metadata_files_processed": 38000,
   "files_skipped": 42000,
   "progress_percent": 45.0,
   "files_per_sec": 12.3,
@@ -692,11 +694,13 @@ for result in pool.imap_unordered(cpu_work, work_batch, chunksize=10):
   "status": "completed",
   "duration_seconds": 2700,
   "total_discovered": 100000,
-  "new_files": 1500,
-  "unchanged_files": 97500,
-  "changed_files": 800,
+  "media_files_processed": 99000,
+  "metadata_files_processed": 85000,
+  "media_new_files": 1500,
+  "media_unchanged_files": 97500,
+  "media_changed_files": 800,
   "missing_files": 200,
-  "error_files": 50,
+  "media_error_files": 50,
   "inconsistent_files": 0,
   "albums_total": 450,
   "files_per_second": 37.0,

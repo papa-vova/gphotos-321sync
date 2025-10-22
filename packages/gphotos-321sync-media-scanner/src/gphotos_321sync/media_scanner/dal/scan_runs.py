@@ -55,7 +55,7 @@ class ScanRunDAL:
         
         Args:
             scan_run_id: Scan run ID
-            **fields: Fields to update (e.g., files_processed=100)
+            **fields: Fields to update (e.g., media_files_processed=100)
         """
         if not fields:
             return
@@ -93,8 +93,8 @@ class ScanRunDAL:
                     julianday(?) - julianday(start_timestamp)
                 ) * 86400,
                 files_per_second = CASE
-                    WHEN files_processed > 0 THEN
-                        CAST(files_processed AS REAL) / 
+                    WHEN media_files_processed > 0 THEN
+                        CAST(media_files_processed AS REAL) / 
                         ((julianday(?) - julianday(start_timestamp)) * 86400)
                     ELSE 0
                 END
@@ -155,7 +155,7 @@ class ScanRunDAL:
         
         Args:
             scan_run_id: Scan run ID
-            counter_name: Name of counter field (e.g., 'files_processed')
+            counter_name: Name of counter field (e.g., 'media_files_processed')
             increment: Amount to increment by (default: 1)
         """
         cursor = self.db.execute(
@@ -190,12 +190,14 @@ class ScanRunDAL:
             'files_per_second': scan_run['files_per_second'],
             'total_files_discovered': scan_run['total_files_discovered'],
             'media_files_discovered': scan_run['media_files_discovered'],
-            'files_processed': scan_run['files_processed'],
-            'new_files': scan_run['new_files'],
-            'unchanged_files': scan_run['unchanged_files'],
-            'changed_files': scan_run['changed_files'],
+            'metadata_files_discovered': scan_run['metadata_files_discovered'],
+            'media_files_processed': scan_run['media_files_processed'],
+            'metadata_files_processed': scan_run['metadata_files_processed'],
+            'media_new_files': scan_run['media_new_files'],
+            'media_unchanged_files': scan_run['media_unchanged_files'],
+            'media_changed_files': scan_run['media_changed_files'],
             'missing_files': scan_run['missing_files'],
-            'error_files': scan_run['error_files'],
+            'media_error_files': scan_run['media_error_files'],
             'inconsistent_files': scan_run['inconsistent_files'],
             'albums_total': scan_run['albums_total'],
         }

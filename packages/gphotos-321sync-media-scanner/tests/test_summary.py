@@ -57,12 +57,13 @@ def populated_db(test_db):
         total_files_discovered=100,
         media_files_discovered=80,
         metadata_files_discovered=20,
-        files_processed=80,
-        new_files=50,
-        unchanged_files=20,
-        changed_files=5,
+        media_files_processed=80,
+        metadata_files_processed=60,
+        media_new_files=50,
+        media_unchanged_files=20,
+        media_changed_files=5,
         missing_files=3,
-        error_files=2,
+        media_error_files=2,
         inconsistent_files=0,
         albums_total=5,
     )
@@ -199,12 +200,13 @@ class TestGenerateSummary:
         summary = generate_summary(str(test_db), scan_run_id)
         
         proc = summary['processing']
-        assert proc['files_processed'] == 80
-        assert proc['new_files'] == 50
-        assert proc['unchanged_files'] == 20
-        assert proc['changed_files'] == 5
+        assert proc['media_files_processed'] == 80
+        assert proc['metadata_files_processed'] == 60
+        assert proc['media_new_files'] == 50
+        assert proc['media_unchanged_files'] == 20
+        assert proc['media_changed_files'] == 5
         assert proc['missing_files'] == 3
-        assert proc['error_files'] == 2
+        assert proc['media_error_files'] == 2
         assert proc['inconsistent_files'] == 0
     
     def test_album_statistics(self, populated_db):
@@ -280,7 +282,7 @@ class TestGenerateSummary:
         
         assert summary['scan_run_id'] == scan_run_id
         assert summary['discovery']['total_files_discovered'] == 0
-        assert summary['processing']['files_processed'] == 0
+        assert summary['processing']['media_files_processed'] == 0
         assert summary['errors']['total'] == 0
 
 

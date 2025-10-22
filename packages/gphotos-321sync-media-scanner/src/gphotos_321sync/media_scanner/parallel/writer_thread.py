@@ -113,13 +113,14 @@ def writer_thread_main(
                     total_errors += errors
                     
                     # Update progress (batch update to database)
+                    # Note: metadata_files_processed is set during discovery phase, not here
                     if total_written % progress_interval == 0:
                         scan_run_dal.update_scan_run(
                             scan_run_id=scan_run_id,
-                            files_processed=total_written,
-                            new_files=total_new_files,
-                            changed_files=total_changed_files,
-                            unchanged_files=total_unchanged_files,
+                            media_files_processed=total_written,
+                            media_new_files=total_new_files,
+                            media_changed_files=total_changed_files,
+                            media_unchanged_files=total_unchanged_files,
                         )
                         # Use progress tracker if available (shows ETA and rate)
                         if progress_tracker:
@@ -162,13 +163,14 @@ def writer_thread_main(
             total_errors += len([r for r in batch if r["type"] == "error"])
         
         # Final progress update with all statistics
+        # Note: metadata_files_processed is set during discovery phase, not here
         scan_run_dal.update_scan_run(
             scan_run_id=scan_run_id,
-            files_processed=total_written,
-            new_files=total_new_files,
-            changed_files=total_changed_files,
-            unchanged_files=total_unchanged_files,
-            error_files=total_errors,
+            media_files_processed=total_written,
+            media_new_files=total_new_files,
+            media_changed_files=total_changed_files,
+            media_unchanged_files=total_unchanged_files,
+            media_error_files=total_errors,
         )
         
     except Exception as e:
@@ -345,9 +347,11 @@ def writer_thread_with_retry(
                         new_items = len([r for r in batch if r["type"] == "media_item" and not r.get("is_changed", False)])
                         changed_items = len([r for r in batch if r["type"] == "media_item" and r.get("is_changed", False)])
                         unchanged_items = len([r for r in batch if r["type"] == "file_seen"])
+                        metadata_items = len([r for r in batch if r["type"] == "media_item" and r["record"].get("sidecar_fingerprint")])
                         total_new_files += new_items
                         total_changed_files += changed_items
                         total_unchanged_files += unchanged_items
+                        total_metadata_processed += metadata_items
                         total_written += new_items + changed_items + unchanged_items
                         total_errors += len([r for r in batch if r["type"] == "error"])
                     break
@@ -370,9 +374,9 @@ def writer_thread_with_retry(
                     if total_written % progress_interval == 0:
                         scan_run_dal.update_scan_run(
                             scan_run_id=scan_run_id,
-                            files_processed=total_written,
-                            new_files=total_new_files,
-                            unchanged_files=total_unchanged_files,
+                            media_files_processed=total_written,
+                            media_new_files=total_new_files,
+                            media_unchanged_files=total_unchanged_files,
                         )
                         logger.info(
                             f"Progress: {{'files_processed': {total_written}, 'errors': {total_errors}}}"
@@ -405,19 +409,22 @@ def writer_thread_with_retry(
             new_items = len([r for r in batch if r["type"] == "media_item" and not r.get("is_changed", False)])
             changed_items = len([r for r in batch if r["type"] == "media_item" and r.get("is_changed", False)])
             unchanged_items = len([r for r in batch if r["type"] == "file_seen"])
+            metadata_items = len([r for r in batch if r["type"] == "media_item" and r["record"].get("sidecar_fingerprint")])
             total_new_files += new_items
             total_changed_files += changed_items
             total_unchanged_files += unchanged_items
+            total_metadata_processed += metadata_items
             total_written += new_items + changed_items + unchanged_items
             total_errors += len([r for r in batch if r["type"] == "error"])
         
         scan_run_dal.update_scan_run(
             scan_run_id=scan_run_id,
-            files_processed=total_written,
-            new_files=total_new_files,
-            changed_files=total_changed_files,
-            unchanged_files=total_unchanged_files,
-            error_files=total_errors,
+            media_files_processed=total_written,
+            metadata_files_processed=total_metadata_processed,
+            media_new_files=total_new_files,
+            media_changed_files=total_changed_files,
+            media_unchanged_files=total_unchanged_files,
+            media_error_files=total_errors,
         )
         
     except Exception as e:

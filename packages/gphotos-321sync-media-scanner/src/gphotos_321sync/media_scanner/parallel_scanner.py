@@ -112,7 +112,7 @@ class ParallelScanner:
             - scan_run_id: UUID of this scan run
             - status: 'completed' or 'failed'
             - total_files: Number of files discovered
-            - files_processed: Number of files successfully processed
+            - media_files_processed: Number of media files successfully processed
             - duration_seconds: Total scan duration
         """
         logger.info(f"Starting parallel scan: {{'path': {str(target_media_path)!r}}}")
@@ -177,11 +177,14 @@ class ParallelScanner:
             logger.info(f"Discovered {total_files} total files ({media_files_count} media, {metadata_files_count} JSON sidecars, {media_with_metadata_count} media with metadata): {{'duration_seconds': {phase_timings['file_discovery']:.1f}}}")
             
             # Update scan_runs statistics for file discovery
+            # metadata_files_processed = all JSON sidecars that were considered (evaluated for matching)
+            # This equals metadata_files_discovered since all discovered JSONs are evaluated
             scan_run_dal.update_scan_run(
                 scan_run_id=scan_run_id,
                 total_files_discovered=total_files,
                 media_files_discovered=media_files_count,
                 metadata_files_discovered=metadata_files_count,
+                metadata_files_processed=metadata_files_count,  # All discovered JSONs are evaluated
                 media_files_with_metadata=media_with_metadata_count
             )
             
@@ -198,6 +201,11 @@ class ParallelScanner:
             if orphan_match_count > 0:
                 media_with_metadata_count = sum(1 for f in files_to_process if f.json_sidecar_path is not None)
                 logger.info(f"Updated totals after content-based matching: {media_files_count} media files, {media_with_metadata_count} with metadata")
+                # Update scan_runs with new media_files_with_metadata count
+                scan_run_dal.update_scan_run(
+                    scan_run_id=scan_run_id,
+                    media_files_with_metadata=media_with_metadata_count
+                )
             
             # Phase 2.6: Report unmatched files
             # Rebuild paired_sidecars set to include content-based matches
@@ -220,7 +228,7 @@ class ParallelScanner:
                     "scan_run_id": scan_run_id,
                     "status": "completed",
                     "total_files": 0,
-                    "files_processed": 0,
+                    "media_files_processed": 0,
                 }
             
             # Phase 3: Parallel processing
@@ -293,7 +301,7 @@ class ParallelScanner:
                 "scan_run_id": scan_run_id,
                 "status": "completed",
                 "total_files": total_files,
-                "files_processed": scan_run.get("files_processed", 0),
+                "media_files_processed": scan_run.get("media_files_processed", 0),
                 "duration_seconds": total_duration,
                 "phase_timings": phase_timings,
             }

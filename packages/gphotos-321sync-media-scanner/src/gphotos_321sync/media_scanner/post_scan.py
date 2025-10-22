@@ -164,7 +164,7 @@ def validate_scan(db_path: str, scan_run_id: str, scan_start_time: datetime) -> 
         cursor.close()
         
         if scan_run:
-            # Check files_processed vs actual media_items count
+            # Check media_files_processed vs actual media_items count
             cursor = conn.execute(
                 "SELECT COUNT(*) FROM media_items WHERE scan_run_id = ?",
                 (scan_run_id,)
@@ -172,11 +172,11 @@ def validate_scan(db_path: str, scan_run_id: str, scan_start_time: datetime) -> 
             actual_items_count = cursor.fetchone()[0]
             cursor.close()
             
-            reported_processed = scan_run['files_processed']
+            reported_processed = scan_run['media_files_processed']
             if reported_processed != actual_items_count:
                 logger.warning(
                     f"Statistics mismatch: {{'scan_run_id': {scan_run_id!r}, "
-                    f"'files_processed': {reported_processed}, 'actual_items': {actual_items_count}, "
+                    f"'media_files_processed': {reported_processed}, 'actual_items': {actual_items_count}, "
                     f"'difference': {abs(reported_processed - actual_items_count)}}}"
                 )
             
@@ -198,8 +198,8 @@ def validate_scan(db_path: str, scan_run_id: str, scan_start_time: datetime) -> 
             
             # Add validation results to stats
             validation_stats['statistics_validation'] = {
-                'files_processed_reported': reported_processed,
-                'files_processed_actual': actual_items_count,
+                'media_files_processed_reported': reported_processed,
+                'media_files_processed_actual': actual_items_count,
                 'albums_total_reported': reported_albums,
                 'albums_total_actual': actual_albums_count,
             }
