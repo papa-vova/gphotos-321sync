@@ -199,6 +199,7 @@ image.png.supplemental-metadata(2).json
 ```
 
 **Critical difference:** The `(N)` appears in **different positions**:
+
 - Media: `image(1).png` - before extension
 - Sidecar: `image.png.supplemental-metadata(1).json` - before `.json`
 
@@ -535,7 +536,7 @@ For a media file `photo.jpg`, look for `photo.jpg.supplemental-metadata.json`
 
 All heuristic matches are logged at **WARNING level** with `filename`, `heuristic` code, and `media_file`.
 
-**A. Windows Duplicate Suffix**
+### A. Windows Duplicate Suffix
 
 When Google Takeout is extracted multiple times, Windows adds `(N)` suffixes:
 
@@ -545,10 +546,11 @@ When Google Takeout is extracted multiple times, Windows adds `(N)` suffixes:
 **Important:** The `(N)` appears in different positions!
 
 Heuristic codes:
+
 - `happy_path+windows_duplicate_suffix` - Standard pattern with duplicate suffix
 - `truncated_*+windows_duplicate_suffix` - Truncated pattern with duplicate suffix
 
-**B. Truncated Extensions (Windows MAX_PATH)**
+### B. Truncated Extensions (Windows MAX_PATH)
 
 Due to 260-character path limit:
 
@@ -569,7 +571,7 @@ Due to 260-character path limit:
 | `.su.json` | `truncated_su` |
 | `.s.json` | `truncated_s` |
 
-**C. Plain JSON Extension**
+### C. Plain JSON Extension
 
 Pattern: `filename.json` (without `.supplemental-*`)
 
@@ -579,7 +581,7 @@ Heuristic code: `plain_json_extension`
 
 Example: `Screenshot_2024-01-14-14-13-33-16_948cd9899890.json` → `Screenshot_2024-01-14-14-13-33-16_948cd9899890cbd5c2798760b2b95377.jpg`
 
-**Unmatched Sidecars**
+### Unmatched Sidecars
 
 Sidecars that cannot be matched in Phase 1 are logged at **WARNING level** with `filename` only.
 
@@ -588,6 +590,7 @@ Sidecars that cannot be matched in Phase 1 are logged at **WARNING level** with 
 #### Edited Files
 
 For `photo-edited.jpg`:
+
 - Strip `-edited` suffix
 - Look for `photo.jpg.supplemental-metadata.json`
 
@@ -596,6 +599,7 @@ For `photo-edited.jpg`:
 #### Tilde Suffix Duplicates
 
 For `photo~2.jpg`:
+
 1. Try exact match: `photo~2.jpg.supplemental-metadata.json`
 2. Fall back to original: `photo.jpg.supplemental-metadata.json`
 
@@ -608,6 +612,7 @@ For remaining orphaned sidecars:
 3. **Match if similarity ≥ 80% AND common prefix ≥ 20 chars**
 
 **Example:**
+
 - Sidecar: `Screenshot_2022-04-21_abb9c8060a0a(1).json`
 - Title in JSON: `Screenshot_2022-04-21_abb9c8060a0a12c5ac89e934e52a2f4f.jpg`
 - Media file: `Screenshot_2022-04-21_abb9c8060a0a1(1).jpg`
@@ -620,6 +625,7 @@ For remaining orphaned sidecars:
 **Title Field Behavior:**
 
 When files have Windows duplicate suffixes `(N)`, the JSON `title` field may be **identical** for all duplicates:
+
 - `filename.ext` → `"title": "filename.ext"`
 - `filename(1).ext` → `"title": "filename.ext"` (same!)
 - `filename(2).ext` → `"title": "filename.ext"` (same!)
