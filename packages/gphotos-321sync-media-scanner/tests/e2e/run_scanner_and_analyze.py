@@ -204,6 +204,32 @@ class ScannerAnalyzer:
         for row in cursor.fetchall():
             db_stats["error_summary"][row["error_category"]] = row["count"]
         
+        # Get latest scan_run statistics
+        cursor.execute("""
+            SELECT 
+                total_files_discovered,
+                media_files_discovered,
+                metadata_files_discovered,
+                media_files_with_metadata,
+                media_files_processed,
+                metadata_files_processed,
+                media_new_files,
+                media_unchanged_files,
+                media_changed_files,
+                missing_files,
+                media_error_files,
+                inconsistent_files,
+                albums_total
+            FROM scan_runs
+            ORDER BY start_timestamp DESC
+            LIMIT 1
+        """)
+        scan_run_row = cursor.fetchone()
+        if scan_run_row:
+            db_stats["scan_run_stats"] = dict(scan_run_row)
+        else:
+            db_stats["scan_run_stats"] = {}
+        
         conn.close()
         
         self.results["database"] = db_stats
@@ -212,6 +238,16 @@ class ScannerAnalyzer:
         logger.info(f"  Albums: {db_stats['albums']}")
         logger.info(f"  Media items: {db_stats['media_items']}")
         logger.info(f"  Processing errors: {db_stats['processing_errors']}")
+        
+        # Log scan_run statistics if available
+        if db_stats.get("scan_run_stats"):
+            stats = db_stats["scan_run_stats"]
+            logger.info(f"  Scan run statistics:")
+            logger.info(f"    Total files discovered: {stats.get('total_files_discovered', 0)}")
+            logger.info(f"    Media files discovered: {stats.get('media_files_discovered', 0)}")
+            logger.info(f"    Metadata files discovered: {stats.get('metadata_files_discovered', 0)}")
+            logger.info(f"    Media files processed: {stats.get('media_files_processed', 0)}")
+            logger.info(f"    Metadata files processed: {stats.get('metadata_files_processed', 0)}")
     
     def _analyze_log(self) -> None:
         """Analyze scanner log file."""
@@ -289,6 +325,9 @@ class ScannerAnalyzer:
                    f"DB={comparison['albums']['database']}, "
                    f"Diff={comparison['albums']['difference']}, "
                    f"Match={comparison['albums']['match']}")
+        
+        # Add consistency checks across scan_run statistics
+        self._check_consistency()
     
     def _find_unprocessed_files(self) -> None:
         """Identify files that exist in filesystem but not in database."""
@@ -348,6 +387,119 @@ class ScannerAnalyzer:
             for item in unprocessed[:10]:
                 logger.info(f"    - {item['path']}")
     
+    def _check_consistency(self) -> None:
+        """Check consistency across scan_run statistics."""
+        db = self.results.get("database", {})
+        scan_stats = db.get("scan_run_stats", {})
+        
+        if not scan_stats:
+            logger.warning("  No scan_run statistics available for consistency check")
+            return
+        
+        consistency_checks = []
+        errors = []
+        
+        # Check 1: total_files_discovered = media_files_discovered + metadata_files_discovered
+        total_discovered = scan_stats.get("total_files_discovered", 0)
+        media_discovered = scan_stats.get("media_files_discovered", 0)
+        metadata_discovered = scan_stats.get("metadata_files_discovered", 0)
+        expected_total = media_discovered + metadata_discovered
+        
+        check1 = {
+            "name": "total_files = media + metadata",
+            "formula": f"{total_discovered} = {media_discovered} + {metadata_discovered}",
+            "expected": expected_total,
+            "actual": total_discovered,
+            "pass": total_discovered == expected_total
+        }
+        consistency_checks.append(check1)
+        if not check1["pass"]:
+            errors.append(f"Total files mismatch: {total_discovered} != {expected_total}")
+        
+        # Check 2: metadata_files_processed = metadata_files_discovered (all discovered JSONs are evaluated)
+        metadata_processed = scan_stats.get("metadata_files_processed", 0)
+        
+        check2 = {
+            "name": "metadata_processed = metadata_discovered",
+            "formula": f"{metadata_processed} = {metadata_discovered}",
+            "expected": metadata_discovered,
+            "actual": metadata_processed,
+            "pass": metadata_processed == metadata_discovered
+        }
+        consistency_checks.append(check2)
+        if not check2["pass"]:
+            errors.append(f"Metadata processed mismatch: {metadata_processed} != {metadata_discovered}")
+        
+        # Check 3: media_files_processed should match actual media_items count (for initial scan)
+        media_processed = scan_stats.get("media_files_processed", 0)
+        media_items_count = db.get("media_items", 0)
+        
+        check3 = {
+            "name": "media_processed = media_items_count",
+            "formula": f"{media_processed} = {media_items_count}",
+            "expected": media_items_count,
+            "actual": media_processed,
+            "pass": media_processed == media_items_count
+        }
+        consistency_checks.append(check3)
+        if not check3["pass"]:
+            errors.append(f"Media processed mismatch: {media_processed} != {media_items_count}")
+        
+        # Check 4: albums_total should match actual albums count
+        albums_total = scan_stats.get("albums_total", 0)
+        albums_count = db.get("albums", 0)
+        
+        check4 = {
+            "name": "albums_total = albums_count",
+            "formula": f"{albums_total} = {albums_count}",
+            "expected": albums_count,
+            "actual": albums_total,
+            "pass": albums_total == albums_count
+        }
+        consistency_checks.append(check4)
+        if not check4["pass"]:
+            errors.append(f"Albums total mismatch: {albums_total} != {albums_count}")
+        
+        # Check 5: media_files_with_metadata <= media_files_discovered
+        media_with_metadata = scan_stats.get("media_files_with_metadata", 0)
+        
+        check5 = {
+            "name": "media_with_metadata <= media_discovered",
+            "formula": f"{media_with_metadata} <= {media_discovered}",
+            "expected": f"<= {media_discovered}",
+            "actual": media_with_metadata,
+            "pass": media_with_metadata <= media_discovered
+        }
+        consistency_checks.append(check5)
+        if not check5["pass"]:
+            errors.append(f"Media with metadata exceeds total: {media_with_metadata} > {media_discovered}")
+        
+        # Store results
+        self.results["consistency_checks"] = {
+            "checks": consistency_checks,
+            "errors": errors,
+            "all_pass": len(errors) == 0
+        }
+        
+        # Log results
+        logger.info("")
+        logger.info("Consistency Checks:")
+        for check in consistency_checks:
+            status = "✓ PASS" if check["pass"] else "✗ FAIL"
+            logger.info(f"  {status}: {check['name']}")
+            logger.info(f"    Formula: {check['formula']}")
+            if not check["pass"]:
+                logger.info(f"    Expected: {check['expected']}, Got: {check['actual']}")
+        
+        if errors:
+            logger.error("")
+            logger.error("Consistency check failures:")
+            for error in errors:
+                logger.error(f"  - {error}")
+        else:
+            logger.info("")
+            logger.info("✓ All consistency checks passed!")
+    
     def print_summary(self) -> None:
         """Print detailed summary."""
         logger.info("")
@@ -389,6 +541,18 @@ class ScannerAnalyzer:
         logger.info("Comparison:")
         logger.info(f"  Media files match: {comp['media_files']['match']}")
         logger.info(f"  Albums match: {comp['albums']['match']}")
+        
+        # Show consistency check results
+        consistency = self.results.get("consistency_checks", {})
+        if consistency:
+            logger.info("")
+            logger.info("Consistency Checks:")
+            if consistency.get("all_pass"):
+                logger.info("  ✓ All checks passed")
+            else:
+                logger.info(f"  ✗ {len(consistency.get('errors', []))} check(s) failed")
+                for error in consistency.get("errors", []):
+                    logger.info(f"    - {error}")
         
         if self.results["unprocessed_files"]:
             logger.info("")
