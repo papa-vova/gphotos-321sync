@@ -87,7 +87,7 @@ Demonstrates usage patterns for various testing scenarios.
 ### Generate Test Data
 
 ```powershell
-python -m tests.e2e.generate_test_data --output-dir C:\temp\e2e_test_data
+python packages\gphotos-321sync-media-scanner\tests\e2e\generate_test_data.py --output-dir C:\temp\e2e_test_data
 ```
 
 Options:
@@ -98,7 +98,7 @@ Options:
 ### Run Scanner and Analyze
 
 ```powershell
-python -m tests.e2e.run_scanner_and_analyze --test-data-dir C:\temp\e2e_test_data
+python packages\gphotos-321sync-media-scanner\tests\e2e\run_scanner_and_analyze.py --test-data-dir C:\temp\e2e_test_data
 ```
 
 Options:
@@ -115,7 +115,7 @@ Options:
 ### View Examples
 
 ```powershell
-python -m tests.e2e.example_usage
+python packages\gphotos-321sync-media-scanner\tests\e2e\example_usage.py
 ```
 
 ## Testing Scenarios
@@ -126,10 +126,10 @@ Test the scanner's ability to process a fresh dataset.
 
 ```powershell
 # Step 1: Generate test data
-python -m tests.e2e.generate_test_data --output-dir C:\temp\e2e_test_data
+python packages\gphotos-321sync-media-scanner\tests\e2e\generate_test_data.py --output-dir C:\temp\e2e_test_data
 
 # Step 2: Run scanner and analyze
-python -m tests.e2e.run_scanner_and_analyze --test-data-dir C:\temp\e2e_test_data
+python packages\gphotos-321sync-media-scanner\tests\e2e\run_scanner_and_analyze.py --test-data-dir C:\temp\e2e_test_data
 
 # Step 3: Review results
 # - Check console output for summary
@@ -137,7 +137,7 @@ python -m tests.e2e.run_scanner_and_analyze --test-data-dir C:\temp\e2e_test_dat
 
 # Step 4: Test repeatability (delete database and re-run)
 Remove-Item C:\temp\e2e_test_data\media.db
-python -m tests.e2e.run_scanner_and_analyze --test-data-dir C:\temp\e2e_test_data
+python packages\gphotos-321sync-media-scanner\tests\e2e\run_scanner_and_analyze.py --test-data-dir C:\temp\e2e_test_data
 ```
 
 **Expected Results:**
@@ -153,19 +153,19 @@ Test the scanner's ability to detect unchanged files and changes.
 
 ```powershell
 # Step 1: Generate test data
-python -m tests.e2e.generate_test_data --output-dir C:\temp\e2e_test_data
+python packages\gphotos-321sync-media-scanner\tests\e2e\generate_test_data.py --output-dir C:\temp\e2e_test_data
 
 # Step 2: Initial scan
-python -m tests.e2e.run_scanner_and_analyze --test-data-dir C:\temp\e2e_test_data
+python packages\gphotos-321sync-media-scanner\tests\e2e\run_scanner_and_analyze.py --test-data-dir C:\temp\e2e_test_data
 
 # Step 3: Rescan (should detect unchanged files)
-python -m tests.e2e.run_scanner_and_analyze --test-data-dir C:\temp\e2e_test_data
+python packages\gphotos-321sync-media-scanner\tests\e2e\run_scanner_and_analyze.py --test-data-dir C:\temp\e2e_test_data
 
 # Step 4: Modify some files
 # (manually edit or delete some files)
 
 # Step 5: Rescan again (should detect changes)
-python -m tests.e2e.run_scanner_and_analyze --test-data-dir C:\temp\e2e_test_data
+python packages\gphotos-321sync-media-scanner\tests\e2e\run_scanner_and_analyze.py --test-data-dir C:\temp\e2e_test_data
 ```
 
 **Expected Results:**
@@ -180,12 +180,12 @@ Test scanner performance with different configurations.
 
 ```powershell
 # Generate large dataset
-python -m tests.e2e.generate_test_data --output-dir C:\temp\e2e_load_test --total-files 50000
+python packages\gphotos-321sync-media-scanner\tests\e2e\generate_test_data.py --output-dir C:\temp\e2e_load_test --total-files 50000
 
 # Test with different thread counts
-python -m tests.e2e.run_scanner_and_analyze --test-data-dir C:\temp\e2e_load_test --worker-threads 2
-python -m tests.e2e.run_scanner_and_analyze --test-data-dir C:\temp\e2e_load_test --worker-threads 4
-python -m tests.e2e.run_scanner_and_analyze --test-data-dir C:\temp\e2e_load_test --worker-threads 8
+python packages\gphotos-321sync-media-scanner\tests\e2e\run_scanner_and_analyze.py --test-data-dir C:\temp\e2e_load_test --worker-threads 2
+python packages\gphotos-321sync-media-scanner\tests\e2e\run_scanner_and_analyze.py --test-data-dir C:\temp\e2e_load_test --worker-threads 4
+python packages\gphotos-321sync-media-scanner\tests\e2e\run_scanner_and_analyze.py --test-data-dir C:\temp\e2e_load_test --worker-threads 8
 
 # Compare performance (check log timestamps)
 ```
@@ -202,10 +202,10 @@ Test scanner's resilience to corrupted/invalid files.
 
 ```powershell
 # Generate test data (includes corrupted files)
-python -m tests.e2e.generate_test_data --output-dir C:\temp\e2e_test_data
+python packages\gphotos-321sync-media-scanner\tests\e2e\generate_test_data.py --output-dir C:\temp\e2e_test_data
 
 # Run scanner
-python -m tests.e2e.run_scanner_and_analyze --test-data-dir C:\temp\e2e_test_data
+python packages\gphotos-321sync-media-scanner\tests\e2e\run_scanner_and_analyze.py --test-data-dir C:\temp\e2e_test_data
 
 # Check error summary in analysis.json
 ```
@@ -303,7 +303,7 @@ pip install -e packages/gphotos-321sync-media-scanner
 Generate specific file counts:
 
 ```powershell
-python -m tests.e2e.generate_test_data `
+python packages\gphotos-321sync-media-scanner\tests\e2e\generate_test_data.py `
   --output-dir C:\temp\custom_test `
   --total-files 5000
 ```
@@ -313,7 +313,7 @@ python -m tests.e2e.generate_test_data `
 Run scanner with exiftool and ffprobe:
 
 ```powershell
-python -m tests.e2e.run_scanner_and_analyze `
+python packages\gphotos-321sync-media-scanner\tests\e2e\run_scanner_and_analyze.py `
   --test-data-dir C:\temp\e2e_test_data `
   --worker-threads 8 `
   --use-exiftool `
@@ -325,7 +325,7 @@ python -m tests.e2e.run_scanner_and_analyze `
 Analyze without re-running scanner:
 
 ```powershell
-python -m tests.e2e.run_scanner_and_analyze `
+python packages\gphotos-321sync-media-scanner\tests\e2e\run_scanner_and_analyze.py `
   --test-data-dir C:\temp\e2e_test_data `
   --skip-scan
 ```
@@ -335,7 +335,7 @@ python -m tests.e2e.run_scanner_and_analyze `
 Specify custom paths for outputs:
 
 ```powershell
-python -m tests.e2e.run_scanner_and_analyze `
+python packages\gphotos-321sync-media-scanner\tests\e2e\run_scanner_and_analyze.py `
   --test-data-dir C:\temp\e2e_test_data `
   --db-path C:\temp\custom.db `
   --log-path C:\temp\custom.log `

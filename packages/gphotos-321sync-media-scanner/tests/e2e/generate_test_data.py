@@ -288,8 +288,10 @@ class SyntheticDataGenerator:
             shape_type = random.choice(["rectangle", "ellipse"])
             color = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
             
-            x1, y1 = random.randint(0, width), random.randint(0, height)
-            x2, y2 = random.randint(0, width), random.randint(0, height)
+            x1 = random.randint(0, width - 1)
+            y1 = random.randint(0, height - 1)
+            x2 = random.randint(x1, width)
+            y2 = random.randint(y1, height)
             
             if shape_type == "rectangle":
                 draw.rectangle([(x1, y1), (x2, y2)], fill=color)
