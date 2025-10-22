@@ -316,6 +316,7 @@ def discover_files(target_media_path: Path) -> Iterator[FileInfo]:
         
         # Skip files that shouldn't be scanned
         if not should_scan_file(file_path):
+            logger.debug(f"Skipping file (should_scan_file=False): {{'path': {str(file_path)!r}}}")
             continue
         
         # Skip JSON files (they're sidecars, not media)

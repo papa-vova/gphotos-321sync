@@ -9,13 +9,13 @@
 -- Schema version tracking
 CREATE TABLE IF NOT EXISTS schema_version (
     version INTEGER PRIMARY KEY,
-    applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    applied_at TIMESTAMP NOT NULL  -- Set explicitly from Python with timezone.utc
 );
 
 -- Scan runs tracking
 CREATE TABLE IF NOT EXISTS scan_runs (
     scan_run_id TEXT PRIMARY KEY,  -- UUID4
-    start_timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    start_timestamp TIMESTAMP NOT NULL,  -- Set explicitly from Python with timezone.utc
     end_timestamp TIMESTAMP,
     status TEXT NOT NULL CHECK(status IN ('running', 'completed', 'failed')),
     
@@ -51,8 +51,8 @@ CREATE TABLE IF NOT EXISTS albums (
     creation_timestamp TIMESTAMP,
     access_level TEXT,
     status TEXT NOT NULL CHECK(status IN ('present', 'error', 'missing')) DEFAULT 'present',
-    first_seen_timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    last_seen_timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    first_seen_timestamp TIMESTAMP NOT NULL,  -- Set explicitly from Python with timezone.utc
+    last_seen_timestamp TIMESTAMP NOT NULL,  -- Set explicitly from Python with timezone.utc
     scan_run_id TEXT NOT NULL,  -- References scan_runs(scan_run_id)
     
     -- Timestamp consistency
@@ -82,8 +82,8 @@ CREATE TABLE IF NOT EXISTS media_items (
     
     -- Timestamps
     capture_timestamp TIMESTAMP,  -- When photo was taken (JSON > EXIF > filename > NULL)
-    first_seen_timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    last_seen_timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    first_seen_timestamp TIMESTAMP NOT NULL,  -- Set explicitly from Python with timezone.utc
+    last_seen_timestamp TIMESTAMP NOT NULL,  -- Set explicitly from Python with timezone.utc
     scan_run_id TEXT NOT NULL,  -- References scan_runs(scan_run_id)
     
     -- Status
@@ -146,7 +146,7 @@ CREATE TABLE IF NOT EXISTS processing_errors (
     error_type TEXT NOT NULL CHECK(error_type IN ('media_file', 'json_sidecar', 'album_metadata')),
     error_category TEXT NOT NULL CHECK(error_category IN ('permission_denied', 'corrupted', 'io_error', 'parse_error', 'unsupported_format')),
     error_message TEXT NOT NULL,
-    timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    timestamp TIMESTAMP NOT NULL  -- Set explicitly from Python with timezone.utc
 );
 
 -- Indexes for performance
@@ -176,4 +176,6 @@ CREATE INDEX IF NOT EXISTS idx_people_tags_media ON people_tags(media_item_id);
 CREATE INDEX IF NOT EXISTS idx_people_tags_person ON people_tags(person_id);
 
 -- Insert initial schema version
-INSERT INTO schema_version (version) VALUES (1);
+-- Note: applied_at will be set by migration.py after executing this script
+-- We cannot use datetime('now') here as it creates naive datetime
+-- Migration runner will update this timestamp with timezone-aware UTC

@@ -145,13 +145,17 @@ class AlbumDAL:
         # Convert datetime to ISO format string for storage
         creation_timestamp_str = creation_timestamp.isoformat() if isinstance(creation_timestamp, datetime) else creation_timestamp
         
+        # Set first_seen and last_seen timestamps with timezone-aware UTC
+        now_utc = datetime.now(timezone.utc).isoformat()
+        
         cursor = self.db.execute(
             """
             INSERT INTO albums (
                 album_id, album_folder_path, title, description,
-                creation_timestamp, access_level, status, scan_run_id
+                creation_timestamp, access_level, status, scan_run_id,
+                first_seen_timestamp, last_seen_timestamp
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 album_id,
@@ -161,7 +165,9 @@ class AlbumDAL:
                 creation_timestamp_str,
                 access_level,
                 status,
-                scan_run_id
+                scan_run_id,
+                now_utc,  # first_seen_timestamp
+                now_utc   # last_seen_timestamp
             )
         )
         cursor.close()

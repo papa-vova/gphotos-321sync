@@ -237,15 +237,16 @@ class TestValidateScan:
         conn.commit()  # Tests must commit manually
         
         # Error file
+        now_utc = datetime.now(timezone.utc).isoformat()
         error_item_id = str(uuid.uuid4())
         conn.execute(
             """
             INSERT INTO media_items (
                 media_item_id, relative_path, album_id, file_size,
-                scan_run_id, status
-            ) VALUES (?, ?, ?, ?, ?, 'error')
+                scan_run_id, status, first_seen_timestamp, last_seen_timestamp
+            ) VALUES (?, ?, ?, ?, ?, 'error', ?, ?)
             """,
-            (error_item_id, "Photos/Test Album/error.jpg", album_id, 1000, scan_run_id)
+            (error_item_id, "Photos/Test Album/error.jpg", album_id, 1000, scan_run_id, now_utc, now_utc)
         )
         conn.commit()
         conn.close()

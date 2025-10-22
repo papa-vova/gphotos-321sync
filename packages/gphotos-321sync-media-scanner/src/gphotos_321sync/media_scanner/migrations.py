@@ -154,6 +154,15 @@ class MigrationRunner:
                 # Note: executescript doesn't support parameters, but migrations shouldn't need them
                 cursor.executescript(sql)
                 
+                # Insert schema version with timezone-aware timestamp
+                # This must be done AFTER executescript since the SQL file creates the table
+                from datetime import datetime, timezone
+                now_utc = datetime.now(timezone.utc).isoformat()
+                cursor.execute(
+                    "INSERT OR REPLACE INTO schema_version (version, applied_at) VALUES (?, ?)",
+                    (version, now_utc)
+                )
+                
                 logger.debug(f"Migration executed: {{'version': {version}}}")
                 
         except sqlite3.Error as e:

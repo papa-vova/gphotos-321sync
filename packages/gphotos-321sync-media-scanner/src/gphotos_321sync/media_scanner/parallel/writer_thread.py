@@ -224,6 +224,7 @@ def _write_batch(
                         # Delete old record and insert new one (simpler than updating all fields)
                         conn.execute("DELETE FROM media_items WHERE relative_path = ?", (record.relative_path,))
                         media_dal.insert_media_item(record)
+                        logger.debug(f"Updated changed media_item {record.media_item_id}: {{'path': {record.relative_path!r}}}")
                     except sqlite3.IntegrityError as e:
                         # Handle duplicate path gracefully - this can happen if the same file
                         # is processed multiple times in the same scan (race condition)

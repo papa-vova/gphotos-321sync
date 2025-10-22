@@ -1,6 +1,7 @@
 """Tests for scan summary generation."""
 
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 import pytest
 
@@ -91,16 +92,17 @@ def populated_db(test_db):
     conn.commit()  # Tests must commit manually
     
     # Create missing files
+    now_utc = datetime.now(timezone.utc).isoformat()
     for i in range(3):
         media_item_id = str(uuid.uuid4())
         conn.execute(
             """
             INSERT INTO media_items (
                 media_item_id, relative_path, album_id, file_size,
-                scan_run_id, status
-            ) VALUES (?, ?, ?, ?, ?, 'missing')
+                scan_run_id, status, first_seen_timestamp, last_seen_timestamp
+            ) VALUES (?, ?, ?, ?, ?, 'missing', ?, ?)
             """,
-            (media_item_id, f"Photos/Album 0/missing{i}.jpg", album_ids[0], 1000, scan_run_id)
+            (media_item_id, f"Photos/Album 0/missing{i}.jpg", album_ids[0], 1000, scan_run_id, now_utc, now_utc)
         )
     
     # Create error files
@@ -110,10 +112,10 @@ def populated_db(test_db):
             """
             INSERT INTO media_items (
                 media_item_id, relative_path, album_id, file_size,
-                scan_run_id, status
-            ) VALUES (?, ?, ?, ?, ?, 'error')
+                scan_run_id, status, first_seen_timestamp, last_seen_timestamp
+            ) VALUES (?, ?, ?, ?, ?, 'error', ?, ?)
             """,
-            (media_item_id, f"Photos/Album 0/error{i}.jpg", album_ids[0], 1000, scan_run_id)
+            (media_item_id, f"Photos/Album 0/error{i}.jpg", album_ids[0], 1000, scan_run_id, now_utc, now_utc)
         )
     
     # Create processing errors
