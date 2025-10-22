@@ -84,11 +84,26 @@ Demonstrates usage patterns for various testing scenarios.
 
 ## Quick Start
 
+**Important:** The data generator creates a proper Google Takeout structure:
+
+```text
+C:\temp\e2e_test_data\
+└── Takeout\
+    └── Google Photos\
+        ├── Abstract Patterns\
+        ├── Photos from 2020\
+        └── ...
+```
+
+The scanner automatically detects this structure when you point it to the root directory.
+
 ### Generate Test Data
 
 ```powershell
 python packages\gphotos-321sync-media-scanner\tests\e2e\generate_test_data.py --output-dir C:\temp\e2e_test_data
 ```
+
+**Note:** This creates a `Takeout/Google Photos/` subdirectory structure. When running the scanner, point to the root directory (e.g., `C:\temp\e2e_test_data`), and it will automatically detect and scan the `Takeout/Google Photos/` subfolder.
 
 Options:
 

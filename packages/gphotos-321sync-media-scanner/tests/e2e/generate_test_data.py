@@ -149,7 +149,14 @@ class SyntheticDataGenerator:
         logger.info(f"Generating synthetic test data in: {self.output_dir}")
         logger.info(f"Target: {self.total_files_target} total files (~{self.media_count} media files)")
         
+        # Create Google Takeout structure: Takeout/Google Photos/
         self.output_dir.mkdir(parents=True, exist_ok=True)
+        takeout_dir = self.output_dir / "Takeout"
+        google_photos_dir = takeout_dir / "Google Photos"
+        google_photos_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Update output_dir to point to Google Photos directory for album generation
+        self.output_dir = google_photos_dir
         
         user_album_files = int(self.media_count * 0.6)
         self._generate_user_albums(user_album_files)
@@ -159,7 +166,9 @@ class SyntheticDataGenerator:
         
         self._generate_edge_cases()
         self._generate_corrupted_files()
-        self._create_archive_browser()
+        
+        # Create archive_browser.html in Takeout/ (not Google Photos/)
+        self._create_archive_browser(takeout_dir)
         
         self.stats["total_files"] = self._count_files()
         logger.info(f"Generation complete: {json.dumps(self.stats, indent=2)}")
@@ -542,9 +551,13 @@ class SyntheticDataGenerator:
         self.stats["corrupted_files"] = 4
         self.stats["media_files"] += 4
     
-    def _create_archive_browser(self) -> None:
-        """Create archive_browser.html (part of Takeout structure)."""
-        html_path = self.output_dir / "archive_browser.html"
+    def _create_archive_browser(self, takeout_dir: Path) -> None:
+        """Create archive_browser.html (part of Takeout structure).
+        
+        Args:
+            takeout_dir: Path to Takeout directory (archive_browser.html goes here, not in Google Photos/)
+        """
+        html_path = takeout_dir / "archive_browser.html"
         html_content = """<!DOCTYPE html>
 <html>
 <head><title>Google Photos Archive</title></head>

@@ -397,9 +397,10 @@ class ParallelScanner:
                 logger.warning(
                     f"No album found for file: {{'folder': {album_folder_str!r}, 'file': {file_info.relative_path!r}}}"
                 )
-                # Generate album_id from folder path
-                from .dal.albums import AlbumDAL
-                album_id = AlbumDAL.generate_album_id(album_folder_str)
+                # Generate album_id from folder path using uuid5 directly
+                import uuid
+                ALBUM_NAMESPACE = uuid.UUID('6ba7b810-9dad-11d1-80b4-00c04fd430c8')
+                album_id = str(uuid.uuid5(ALBUM_NAMESPACE, album_folder_str))
             
             # Put work item in queue
             work_queue.put((file_info, album_id))

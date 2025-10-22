@@ -94,8 +94,15 @@ class ScannerAnalyzer:
             "by_album": {},
         }
         
-        # Count albums (top-level directories)
-        for item in self.test_data_dir.iterdir():
+        # Determine scan root (Google Takeout structure detection)
+        google_photos_path = self.test_data_dir / "Takeout" / "Google Photos"
+        if google_photos_path.exists() and google_photos_path.is_dir():
+            scan_root = google_photos_path
+        else:
+            scan_root = self.test_data_dir
+        
+        # Count albums (directories in scan root)
+        for item in scan_root.iterdir():
             if item.is_dir():
                 fs_stats["albums"] += 1
                 album_files = self._count_album_files(item)
@@ -298,10 +305,17 @@ class ScannerAnalyzer:
         
         conn.close()
         
+        # Determine scan root (Google Takeout structure detection)
+        google_photos_path = self.test_data_dir / "Takeout" / "Google Photos"
+        if google_photos_path.exists() and google_photos_path.is_dir():
+            scan_root = google_photos_path
+        else:
+            scan_root = self.test_data_dir
+        
         # Find unprocessed files
         unprocessed = []
         
-        for file_path in self.test_data_dir.rglob("*"):
+        for file_path in scan_root.rglob("*"):
             if not file_path.is_file():
                 continue
             
@@ -311,9 +325,9 @@ class ScannerAnalyzer:
             if ".json" in file_path.name:
                 continue
             
-            # Calculate relative path
+            # Calculate relative path from scan_root (matches database storage)
             try:
-                rel_path = file_path.relative_to(self.test_data_dir)
+                rel_path = file_path.relative_to(scan_root)
                 rel_path_str = str(rel_path).replace("\\", "/")
                 
                 if rel_path_str not in processed_paths:
@@ -425,7 +439,6 @@ def run_scanner(
         sys.executable,
         "-m",
         "gphotos_321sync.media_scanner",
-        "scan",
         "--target-media-path", str(test_data_dir),
         "--database-path", str(db_path),
         "--worker-threads", str(worker_threads),
