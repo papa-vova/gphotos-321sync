@@ -617,20 +617,32 @@ def run_scanner(
     logger.info("")
     
     # Run scanner
+    process = None
     try:
         with open(log_path, "w", encoding="utf-8") as log_file:
-            result = subprocess.run(
+            process = subprocess.Popen(
                 cmd,
                 stdout=log_file,
                 stderr=subprocess.STDOUT,
                 text=True,
             )
+            
+            # Wait for process to complete (this allows Ctrl+C to work)
+            returncode = process.wait()
         
-        logger.info(f"Scanner exit code: {result.returncode}")
-        return result.returncode
+        logger.info(f"Scanner exit code: {returncode}")
+        return returncode
     
+    except KeyboardInterrupt:
+        logger.warning("Scanner interrupted by user (Ctrl+C)")
+        if process:
+            process.terminate()
+            process.wait(timeout=5)
+        return 130  # Standard exit code for Ctrl+C
     except Exception as e:
         logger.error(f"Failed to run scanner: {e}")
+        if process:
+            process.terminate()
         return 1
 
 

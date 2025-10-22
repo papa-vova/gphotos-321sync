@@ -189,49 +189,6 @@ python packages\gphotos-321sync-media-scanner\tests\e2e\run_scanner_and_analyze.
 - After modifications, rescan should detect changes
 - Processing should be faster for unchanged files
 
-### Load Testing
-
-Test scanner performance with different configurations.
-
-```powershell
-# Generate large dataset
-python packages\gphotos-321sync-media-scanner\tests\e2e\generate_test_data.py --output-dir C:\temp\e2e_load_test --total-files 50000
-
-# Test with different thread counts
-python packages\gphotos-321sync-media-scanner\tests\e2e\run_scanner_and_analyze.py --test-data-dir C:\temp\e2e_load_test --worker-threads 2
-python packages\gphotos-321sync-media-scanner\tests\e2e\run_scanner_and_analyze.py --test-data-dir C:\temp\e2e_load_test --worker-threads 4
-python packages\gphotos-321sync-media-scanner\tests\e2e\run_scanner_and_analyze.py --test-data-dir C:\temp\e2e_load_test --worker-threads 8
-
-# Compare performance (check log timestamps)
-```
-
-**Expected Results:**
-
-- Scanner should handle large datasets without crashes
-- Performance should scale with thread count
-- Results should be consistent across runs
-
-### Error Handling Testing
-
-Test scanner's resilience to corrupted/invalid files.
-
-```powershell
-# Generate test data (includes corrupted files)
-python packages\gphotos-321sync-media-scanner\tests\e2e\generate_test_data.py --output-dir C:\temp\e2e_test_data
-
-# Run scanner
-python packages\gphotos-321sync-media-scanner\tests\e2e\run_scanner_and_analyze.py --test-data-dir C:\temp\e2e_test_data
-
-# Check error summary in analysis.json
-```
-
-**Expected Results:**
-
-- Scanner should continue processing despite errors
-- Errors should be logged to database
-- Error summary should categorize error types
-- Valid files should be processed successfully
-
 ## Output Files
 
 After running the scanner, you'll find these files in the test data directory:

@@ -137,17 +137,32 @@ class ParallelScanner:
         }
         
         try:
+            # Phase 0: Build list1 - raw filesystem scan (equivalent to: find . -type f | sort)
+            # This MUST be done BEFORE any processing starts
+            logger.info("Phase 0: Building complete file list (raw filesystem scan)...")
+            all_files_list1 = set()
+            scan_root = target_media_path / "Takeout" if (target_media_path / "Takeout").exists() else target_media_path
+            for file_path in scan_root.rglob("*"):
+                if file_path.is_file():
+                    all_files_list1.add(str(file_path))
+            all_files_list1_sorted = sorted(all_files_list1)
+            logger.info(f"Found {len(all_files_list1_sorted)} files for processing")
+            
             # Phase 1: Album discovery (must run before file processing)
             logger.info("Phase 1: Discovering albums...")
             phase_start = time.time()
             album_count = 0
             album_map = {}  # album_folder_path -> album_id
+            album_metadata_files = []  # Track metadata.json files we read
             
             logger.debug(f"Calling discover_albums: {{'path': {str(target_media_path)!r}}}")
             for album_info in discover_albums(target_media_path, album_dal, scan_run_id):
                 logger.debug(f"Discovered album: {{'path': {album_info.album_folder_path!r}}}")
                 album_map[str(album_info.album_folder_path)] = album_info.album_id
                 album_count += 1
+                # Track metadata.json files that were read
+                if album_info.metadata_path:
+                    album_metadata_files.append(album_info.metadata_path)
             
             phase_timings['album_discovery'] = time.time() - phase_start
             logger.info(f"Discovered {album_count} albums: {{'duration_seconds': {phase_timings['album_discovery']:.1f}}}")
@@ -296,6 +311,45 @@ class ParallelScanner:
                     f"  Phase 3 (File Processing):  {phase_timings['file_processing']:>7.1f}s\n"
                     f"  Total:                      <0.1s (very fast scan)"
                 )
+            
+            # Phase 4: Check for unprocessed files (final step after all processing)
+            logger.info("Phase 4: Checking for unprocessed files...")
+            
+            # Build list2: collect all files that were touched during processing
+            from gphotos_321sync.common import normalize_path
+            all_files_list2_raw = []
+            
+            # Add album metadata.json files that were read
+            for metadata_path in album_metadata_files:
+                all_files_list2_raw.append(normalize_path(metadata_path))
+            
+            # Add all media files that were processed
+            for file_info in files_to_process:
+                all_files_list2_raw.append(normalize_path(file_info.file_path))
+                # Add sidecar if it exists
+                if file_info.json_sidecar_path:
+                    all_files_list2_raw.append(normalize_path(file_info.json_sidecar_path))
+            
+            # Check for archive_browser.html (Google Takeout index file)
+            archive_browser = target_media_path / "Takeout" / "archive_browser.html"
+            if archive_browser.exists():
+                all_files_list2_raw.append(normalize_path(archive_browser))
+            
+            # Sort and remove duplicates
+            all_files_list2_sorted = sorted(set(all_files_list2_raw))
+            
+            # Normalize list1 for comparison
+            all_files_list1_normalized = sorted(set(normalize_path(p) for p in all_files_list1_sorted))
+            
+            # Compare list1 vs list2
+            unprocessed_files = sorted(set(all_files_list1_normalized) - set(all_files_list2_sorted))
+            
+            # Log counters at INFO level
+            logger.info(f"File processing summary: {{'total_in_list1': {len(all_files_list1_sorted)}, 'total_in_list2': {len(all_files_list2_sorted)}, 'unprocessed': {len(unprocessed_files)}}}")
+            
+            # Log detailed diff at DEBUG level (with absolute paths as requested)
+            if unprocessed_files:
+                logger.debug(f"Unprocessed files (in list1 but not in list2): {unprocessed_files}")
             
             return {
                 "scan_run_id": scan_run_id,
