@@ -682,7 +682,7 @@ Tests for changed file detection and tracking (5 tests).
 
 Tests for metadata-based sidecar matching fallback (11 tests).
 
-**Rationale**: When filename-based matching fails (e.g., duplicate numbered files with ambiguous patterns), the scanner falls back to matching sidecars to media files by comparing timestamps. This handles cases like `4_13_12 - 1.supplemental-metadata(1).json` → `4_13_12 - 1(1).jpg` where filename patterns are insufficient.
+**Rationale**: When filename-based matching fails (e.g., duplicate numbered files with ambiguous patterns), the scanner falls back to matching sidecars to media files by comparing timestamps within the same folder. This handles cases like `4_13_12 - 1.supplemental-metadata(1).json` → `4_13_12 - 1(1).jpg` where filename patterns are insufficient. Note: This is disabled by default due to performance concerns and only runs on unmatched sidecars when explicitly enabled.
 
 | # | Test | Input | Output | Conditions/Assumptions | Logic |
 |---|------|-------|--------|----------------------|-------|

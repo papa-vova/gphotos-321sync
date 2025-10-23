@@ -344,12 +344,131 @@ class ParallelScanner:
             # Compare list1 vs list2
             unprocessed_files = sorted(set(all_files_list1_normalized) - set(all_files_list2_sorted))
             
-            # Log counters at INFO level
-            logger.info(f"File processing summary: {{'total_in_list1': {len(all_files_list1_sorted)}, 'total_in_list2': {len(all_files_list2_sorted)}, 'unprocessed': {len(unprocessed_files)}}}")
+            # Check for duplicate sidecars across folders (only for unprocessed sidecars)
+            import hashlib
             
-            # Log detailed diff at DEBUG level (with absolute paths as requested)
-            if unprocessed_files:
-                logger.debug(f"Unprocessed files (in list1 but not in list2): {unprocessed_files}")
+            duplicated_sidecars = []
+            genuinely_orphaned = []
+            timestamp_matched = []
+            
+            for unprocessed_path in unprocessed_files:
+                # Only check .json files (sidecars)
+                if not unprocessed_path.endswith('.json'):
+                    genuinely_orphaned.append(unprocessed_path)
+                    continue
+                
+                # Skip system files
+                filename = Path(unprocessed_path).name
+                if filename in ['metadata.json', 'print-subscriptions.json', 'shared_album_comments.json', 'user-generated-memory-titles.json']:
+                    genuinely_orphaned.append(unprocessed_path)
+                    continue
+                
+                # Look for sidecars with same filename in other folders
+                unprocessed_file = Path(unprocessed_path)
+                found_duplicate = False
+                
+                # Search in all_files_list1 for files with same name but different path
+                for other_path in all_files_list1_normalized:
+                    other_file = Path(other_path)
+                    
+                    # Same filename, different directory
+                    if other_file.name == unprocessed_file.name and other_file.parent != unprocessed_file.parent:
+                        # Check if the other file was processed (in list2)
+                        if other_path in all_files_list2_sorted:
+                            # Found a duplicate that was processed - check if content is identical
+                            try:
+                                with open(unprocessed_file, 'rb') as f1, open(other_file, 'rb') as f2:
+                                    hash1 = hashlib.sha256(f1.read()).hexdigest()
+                                    hash2 = hashlib.sha256(f2.read()).hexdigest()
+                                    
+                                    if hash1 == hash2:
+                                        # Identical duplicate found
+                                        duplicated_sidecars.append(unprocessed_path)
+                                        found_duplicate = True
+                                        break
+                            except Exception as e:
+                                logger.debug(f"Failed to compare sidecar contents: {{'file1': {str(unprocessed_file)!r}, 'file2': {str(other_file)!r}, 'error': {str(e)!r}}}")
+                
+                if not found_duplicate:
+                    # Try timestamp-based matching in the same folder
+                    # Extract photoTakenTime from sidecar
+                    try:
+                        with open(unprocessed_file, 'r', encoding='utf-8') as f:
+                            sidecar_data = json.load(f)
+                        
+                        photo_taken = sidecar_data.get('photoTakenTime', {})
+                        timestamp_str = photo_taken.get('timestamp')
+                        
+                        if timestamp_str:
+                            sidecar_timestamp = datetime.fromtimestamp(int(timestamp_str), tz=timezone.utc)
+                            
+                            # Look for media files in the same folder
+                            parent_folder = unprocessed_file.parent
+                            
+                            # Find all files in same folder from list1
+                            same_folder_files = [
+                                Path(p) for p in all_files_list1_normalized 
+                                if Path(p).parent == parent_folder and not p.endswith('.json')
+                            ]
+                            
+                            # Try to match by similar filename and timestamp
+                            base_name = unprocessed_file.stem.replace('.supplemental-metadata', '').replace('.supplemental-metadat', '').replace('.supplemental-me', '')
+                            
+                            for media_file in same_folder_files:
+                                # Check if filename is similar (contains base name or vice versa)
+                                media_stem = media_file.stem
+                                
+                                # Simple similarity: one name contains the other (case-insensitive)
+                                if base_name.lower() in media_stem.lower() or media_stem.lower() in base_name.lower():
+                                    # Check if this media file was processed
+                                    media_path_normalized = str(media_file).replace('\\', '/')
+                                    if media_path_normalized in all_files_list2_sorted:
+                                        # Media file was processed - check its timestamp
+                                        # Look up in database to get photoTakenTime
+                                        try:
+                                            cursor = conn.cursor()
+                                            cursor.execute(
+                                                "SELECT capture_timestamp FROM media_items WHERE relative_path = ?",
+                                                (media_path_normalized.replace(str(target_media_path).replace('\\', '/') + '/', ''),)
+                                            )
+                                            result = cursor.fetchone()
+                                            
+                                            if result and result[0]:
+                                                media_timestamp = datetime.fromisoformat(result[0])
+                                                
+                                                # Check if timestamps match within 1 second
+                                                diff = abs((sidecar_timestamp - media_timestamp).total_seconds())
+                                                if diff <= 1:
+                                                    timestamp_matched.append({
+                                                        'sidecar': unprocessed_path,
+                                                        'media': media_path_normalized,
+                                                        'timestamp_diff': diff
+                                                    })
+                                                    # Add to list2 since we found the match (mark as processed)
+                                                    all_files_list2_sorted.append(unprocessed_path)
+                                                    found_duplicate = True
+                                                    break
+                                        except Exception as e:
+                                            logger.debug(f"Failed to check media timestamp: {{'media': {str(media_file)!r}, 'error': {str(e)!r}}}")
+                    
+                    except Exception as e:
+                        logger.debug(f"Failed to parse sidecar for timestamp matching: {{'file': {str(unprocessed_file)!r}, 'error': {str(e)!r}}}")
+                    
+                    if not found_duplicate:
+                        genuinely_orphaned.append(unprocessed_path)
+            
+            # Log counters at INFO level
+            logger.info(f"File processing summary: {{'total_in_list1': {len(all_files_list1_sorted)}, 'total_in_list2': {len(all_files_list2_sorted)}, 'unprocessed': {len(unprocessed_files)}, 'duplicated_sidecars': {len(duplicated_sidecars)}, 'timestamp_matched': {len(timestamp_matched)}, 'genuinely_orphaned': {len(genuinely_orphaned)}}}")
+            
+            # Log detailed lists at DEBUG level
+            if duplicated_sidecars:
+                logger.debug(f"Duplicated sidecars (identical copies in other albums): {duplicated_sidecars}")
+            
+            if timestamp_matched:
+                logger.debug(f"Timestamp-matched sidecars (matched by photoTakenTime in same folder): {timestamp_matched}")
+            
+            if genuinely_orphaned:
+                logger.debug(f"Genuinely orphaned files (no matching media or duplicate): {genuinely_orphaned}")
             
             return {
                 "scan_run_id": scan_run_id,
