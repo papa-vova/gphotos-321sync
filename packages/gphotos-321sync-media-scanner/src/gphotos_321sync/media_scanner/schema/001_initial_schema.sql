@@ -118,6 +118,7 @@ CREATE TABLE IF NOT EXISTS media_items (
     google_geo_data_altitude REAL,
     google_geo_data_latitude_span REAL,
     google_geo_data_longitude_span REAL,
+    media_google_url TEXT,  -- URL from Google Photos JSON sidecar
     
     -- Timestamp consistency
     CHECK(last_seen_timestamp >= first_seen_timestamp)
@@ -174,6 +175,8 @@ CREATE INDEX IF NOT EXISTS idx_errors_path_time ON processing_errors(relative_pa
 
 CREATE INDEX IF NOT EXISTS idx_people_tags_media ON people_tags(media_item_id);
 CREATE INDEX IF NOT EXISTS idx_people_tags_person ON people_tags(person_id);
+
+CREATE INDEX IF NOT EXISTS idx_media_items_google_url ON media_items(media_google_url);
 
 -- Insert initial schema version
 -- Note: applied_at will be set by migration.py after executing this script

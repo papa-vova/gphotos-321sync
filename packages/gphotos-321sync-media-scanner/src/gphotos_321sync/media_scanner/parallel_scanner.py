@@ -390,72 +390,118 @@ class ParallelScanner:
                                 logger.debug(f"Failed to compare sidecar contents: {{'file1': {str(unprocessed_file)!r}, 'file2': {str(other_file)!r}, 'error': {str(e)!r}}}")
                 
                 if not found_duplicate:
-                    # Try timestamp-based matching in the same folder
-                    # Extract photoTakenTime from sidecar
-                    try:
-                        with open(unprocessed_file, 'r', encoding='utf-8') as f:
-                            sidecar_data = json.load(f)
-                        
-                        photo_taken = sidecar_data.get('photoTakenTime', {})
-                        timestamp_str = photo_taken.get('timestamp')
-                        
-                        if timestamp_str:
-                            sidecar_timestamp = datetime.fromtimestamp(int(timestamp_str), tz=timezone.utc)
-                            
-                            # Look for media files in the same folder
-                            parent_folder = unprocessed_file.parent
-                            
-                            # Find all files in same folder from list1
-                            same_folder_files = [
-                                Path(p) for p in all_files_list1_normalized 
-                                if Path(p).parent == parent_folder and not p.endswith('.json')
-                            ]
-                            
-                            # Try to match by similar filename and timestamp
-                            base_name = unprocessed_file.stem.replace('.supplemental-metadata', '').replace('.supplemental-metadat', '').replace('.supplemental-me', '')
-                            
-                            for media_file in same_folder_files:
-                                # Check if filename is similar (contains base name or vice versa)
-                                media_stem = media_file.stem
-                                
-                                # Simple similarity: one name contains the other (case-insensitive)
-                                if base_name.lower() in media_stem.lower() or media_stem.lower() in base_name.lower():
-                                    # Check if this media file was processed
-                                    media_path_normalized = str(media_file).replace('\\', '/')
-                                    if media_path_normalized in all_files_list2_sorted:
-                                        # Media file was processed - check its timestamp
-                                        # Look up in database to get photoTakenTime
-                                        try:
-                                            cursor = conn.cursor()
-                                            cursor.execute(
-                                                "SELECT capture_timestamp FROM media_items WHERE relative_path = ?",
-                                                (media_path_normalized.replace(str(target_media_path).replace('\\', '/') + '/', ''),)
-                                            )
-                                            result = cursor.fetchone()
-                                            
-                                            if result and result[0]:
-                                                media_timestamp = datetime.fromisoformat(result[0])
-                                                
-                                                # Check if timestamps match within 1 second
-                                                diff = abs((sidecar_timestamp - media_timestamp).total_seconds())
-                                                if diff <= 1:
-                                                    timestamp_matched.append({
-                                                        'sidecar': unprocessed_path,
-                                                        'media': media_path_normalized,
-                                                        'timestamp_diff': diff
-                                                    })
-                                                    # Add to list2 since we found the match (mark as processed)
-                                                    all_files_list2_sorted.append(unprocessed_path)
-                                                    found_duplicate = True
-                                                    break
-                                        except Exception as e:
-                                            logger.debug(f"Failed to check media timestamp: {{'media': {str(media_file)!r}, 'error': {str(e)!r}}}")
+                    genuinely_orphaned.append(unprocessed_path)
+            
+            # Phase 4.5: Timestamp-based matching for orphaned sidecars in year-based albums
+            # For each orphaned sidecar:
+            # 1. Read its "title" field
+            # 2. Look for media file with that name in the SAME folder
+            # 3. Compare photoTakenTime from sidecar vs capture_timestamp from media file
+            # 4. If timestamps match (within 1 second), pair them and reprocess
+            import re
+            
+            successfully_matched_orphans = []
+            still_orphaned = []
+            
+            for orphan_path in genuinely_orphaned:
+                orphan_file = Path(orphan_path)
+                
+                # Only process .json sidecars (skip system files already filtered above)
+                if not orphan_path.endswith('.json'):
+                    still_orphaned.append(orphan_path)
+                    continue
+                
+                # Check if this is in a year-based album (Photos from YYYY)
+                parent_folder = orphan_file.parent
+                folder_name = parent_folder.name
+                
+                # Match "Photos from YYYY" pattern
+                if not re.match(r'Photos from \d{4}', folder_name):
+                    still_orphaned.append(orphan_path)
+                    continue
+                
+                try:
+                    # Read sidecar JSON
+                    with open(orphan_file, 'r', encoding='utf-8') as f:
+                        sidecar_data = json.load(f)
                     
-                    except Exception as e:
-                        logger.debug(f"Failed to parse sidecar for timestamp matching: {{'file': {str(unprocessed_file)!r}, 'error': {str(e)!r}}}")
+                    # Get title field (expected media filename)
+                    title = sidecar_data.get('title')
+                    if not title:
+                        logger.debug(f"Orphaned sidecar has no title field: {{'path': {orphan_path!r}}}")
+                        still_orphaned.append(orphan_path)
+                        continue
                     
-                    if not found_duplicate:
-                        genuinely_orphaned.append(unprocessed_path)
+                    # Get photoTakenTime from sidecar
+                    photo_taken = sidecar_data.get('photoTakenTime', {})
+                    timestamp_str = photo_taken.get('timestamp')
+                    if not timestamp_str:
+                        logger.debug(f"Orphaned sidecar has no photoTakenTime: {{'path': {orphan_path!r}}}")
+                        still_orphaned.append(orphan_path)
+                        continue
+                    
+                    sidecar_timestamp = datetime.fromtimestamp(int(timestamp_str), tz=timezone.utc)
+                    
+                    # Look for media file with matching title in same folder
+                    # Build expected path
+                    expected_media_path = parent_folder / title
+                    expected_media_normalized = str(expected_media_path).replace('\\', '/')
+                    
+                    # Check if this media file exists and was processed
+                    if expected_media_normalized not in all_files_list2_sorted:
+                        logger.debug(f"Orphaned sidecar title points to non-existent or unprocessed media: {{'sidecar': {orphan_path!r}, 'expected_media': {title!r}}}")
+                        still_orphaned.append(orphan_path)
+                        continue
+                    
+                    # Get media file's capture_timestamp from database
+                    cursor = conn.cursor()
+                    relative_path = expected_media_normalized.replace(str(target_media_path).replace('\\', '/') + '/', '')
+                    cursor.execute(
+                        "SELECT media_item_id, capture_timestamp FROM media_items WHERE relative_path = ?",
+                        (relative_path,)
+                    )
+                    result = cursor.fetchone()
+                    
+                    if not result or not result[1]:
+                        logger.debug(f"Media file has no capture_timestamp: {{'media': {title!r}}}")
+                        still_orphaned.append(orphan_path)
+                        continue
+                    
+                    media_item_id, media_timestamp_str = result
+                    media_timestamp = datetime.fromisoformat(media_timestamp_str)
+                    
+                    # Compare timestamps (within 1 second tolerance)
+                    diff = abs((sidecar_timestamp - media_timestamp).total_seconds())
+                    if diff <= 1:
+                        # MATCH! Update the media_item with this sidecar
+                        logger.warning(f"Timestamp-based match for orphaned sidecar: {{'sidecar': {orphan_file.name!r}, 'media': {title!r}, 'timestamp_diff': {diff}, 'folder': {folder_name!r}}}")
+                        
+                        # Update media_items table with sidecar path
+                        cursor.execute(
+                            "UPDATE media_items SET json_sidecar_path = ? WHERE media_item_id = ?",
+                            (str(orphan_file.relative_to(target_media_path)).replace('\\', '/'), media_item_id)
+                        )
+                        conn.commit()
+                        
+                        successfully_matched_orphans.append({
+                            'sidecar': orphan_path,
+                            'media': expected_media_normalized,
+                            'timestamp_diff': diff
+                        })
+                        
+                        # Mark as processed
+                        all_files_list2_sorted.append(orphan_path)
+                    else:
+                        logger.debug(f"Timestamp mismatch for orphaned sidecar: {{'sidecar': {orphan_file.name!r}, 'media': {title!r}, 'diff_seconds': {diff}}}")
+                        still_orphaned.append(orphan_path)
+                
+                except Exception as e:
+                    logger.debug(f"Failed timestamp matching for orphaned sidecar: {{'path': {orphan_path!r}, 'error': {str(e)!r}}}")
+                    still_orphaned.append(orphan_path)
+            
+            # Update genuinely_orphaned to only include files that are still orphaned
+            genuinely_orphaned = still_orphaned
+            timestamp_matched = successfully_matched_orphans
             
             # Log counters at INFO level
             logger.info(f"File processing summary: {{'total_in_list1': {len(all_files_list1_sorted)}, 'total_in_list2': {len(all_files_list2_sorted)}, 'unprocessed': {len(unprocessed_files)}, 'duplicated_sidecars': {len(duplicated_sidecars)}, 'timestamp_matched': {len(timestamp_matched)}, 'genuinely_orphaned': {len(genuinely_orphaned)}}}")

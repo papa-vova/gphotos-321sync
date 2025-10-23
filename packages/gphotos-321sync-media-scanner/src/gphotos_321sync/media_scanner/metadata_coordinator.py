@@ -77,6 +77,7 @@ class MediaItemRecord:
     google_geo_latitude: Optional[float]
     google_geo_longitude: Optional[float]
     google_geo_altitude: Optional[float]
+    media_google_url: Optional[str]
     
     # Status
     status: str = 'present'
@@ -117,6 +118,7 @@ class MediaItemRecord:
             'google_geo_latitude': self.google_geo_latitude,
             'google_geo_longitude': self.google_geo_longitude,
             'google_geo_altitude': self.google_geo_altitude,
+            'media_google_url': self.media_google_url,
             'status': self.status,
             'scan_run_id': self.scan_run_id,
         }
@@ -216,6 +218,7 @@ def coordinate_metadata(
         # 6. Extract Google Photos metadata from JSON
         google_description = json_metadata.get('description')
         google_geo = json_metadata.get('geoData', {})
+        media_google_url = json_metadata.get('url')
         
         # 7. Extract video metadata
         duration_seconds = video_data.get('duration') if video_data else None
@@ -255,6 +258,7 @@ def coordinate_metadata(
             google_geo_latitude=google_geo.get('latitude'),
             google_geo_longitude=google_geo.get('longitude'),
             google_geo_altitude=google_geo.get('altitude'),
+            media_google_url=media_google_url,
             status='present',
             scan_run_id=scan_run_id
         )

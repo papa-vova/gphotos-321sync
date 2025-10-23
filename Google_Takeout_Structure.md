@@ -552,14 +552,17 @@ Heuristic codes:
 
 ### B. Truncated Sidecar Suffixes
 
-When the **full path** (directory + filename) exceeds Windows' 260-character limit, the sidecar filename gets truncated:
+**Google Takeout ielf creates truncated sidecar filenames** (not Windows extraction). When paths would be too long, Google's export system shortens the `.supplemental-metadata` suffix:
 
-**Example:**
+**Example from actual export:**
 
-- Full path: `C:\Very\Long\Directory\Path\...\very_long_filename.jpg.supplemental-metadata.json` (>260 chars)
-- Truncated: `C:\Very\Long\Directory\Path\...\very_long_filename.jpg.supplemental-me.json` (≤260 chars)
+- Normal: `IMG_20200218_144935.jpg.supplemental-metadata.json`
+- Truncated: `Screenshot_20190317-234331.jpg.supplemental-me.json`
+- Truncated: `IMG_20200218_181324_Bokeh.jpg.supplemental-met.json`
 
-The `.supplemental-metadata` suffix gets cut short. Possible truncated patterns:
+**Why?** Likely to ensure compatibility with Windows' 260-character path limit or internal Google export system constraints.
+
+Possible truncated patterns found in real exports:
 
 | Pattern | Heuristic Code |
 |---------|----------------|

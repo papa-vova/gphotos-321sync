@@ -71,12 +71,12 @@ class MediaItemDAL:
                 google_description,
                 google_geo_data_latitude, google_geo_data_longitude,
                 google_geo_data_altitude, google_geo_data_latitude_span,
-                google_geo_data_longitude_span
+                google_geo_data_longitude_span, media_google_url
             )
             VALUES (
                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                ?, ?, ?, ?, ?, ?, ?
+                ?, ?, ?, ?, ?, ?, ?, ?
             )
             """,
             (
@@ -122,6 +122,7 @@ class MediaItemDAL:
                 item.google_geo_altitude,
                 None,  # google_geo_data_latitude_span (not in MediaItemRecord yet)
                 None,  # google_geo_data_longitude_span (not in MediaItemRecord yet)
+                item.media_google_url,
             )
         )
         cursor.close()
@@ -465,6 +466,7 @@ class MediaItemDAL:
                 item.get('google_geo_data_altitude'),
                 item.get('google_geo_data_latitude_span'),
                 item.get('google_geo_data_longitude_span'),
+                item.get('media_google_url'),
             )
             for item in items
         ]
@@ -486,11 +488,11 @@ class MediaItemDAL:
                 google_description,
                 google_geo_data_latitude, google_geo_data_longitude,
                 google_geo_data_altitude, google_geo_data_latitude_span,
-                google_geo_data_longitude_span
+                google_geo_data_longitude_span, media_google_url
             )
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                    ?, ?, ?, ?, ?, ?)
+                    ?, ?, ?, ?, ?, ?, ?)
             """,
             data
         )

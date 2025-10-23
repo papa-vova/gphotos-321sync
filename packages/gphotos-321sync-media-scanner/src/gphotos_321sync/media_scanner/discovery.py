@@ -350,11 +350,34 @@ def discover_files(
                     f"Ambiguous prefix match for sidecar: {{'filename': {json_path.name!r}, 'prefix': {base!r}, 'candidates': {candidates}}}"
                 )
         
-        # HEURISTIC: Numbered files - sidecar without media extension
-        # Pattern: "04.03.12 - 10.supplemental-metadata.json" -> "04.03.12 - 10.jpg"
-        # This handles cases where the sidecar name doesn't include the media extension
-        # This runs AFTER initial pattern matching to try extension guessing
         if media_filename:
+            # STEP 1: Add duplicate suffix FIRST (before extension guessing)
+            # If there's a duplicate suffix (e.g., "(1)"), insert it before the extension
+            # Example: image.png + (1) -> image(1).png
+            if duplicate_suffix:
+                logger.debug(f"Adding duplicate suffix: {{'media_filename': {media_filename!r}, 'duplicate_suffix': {duplicate_suffix!r}}}")
+                
+                # Check if media_filename has a valid extension
+                # Can't use Path().suffix because "18.03.12 - 1" would return ".03"
+                media_ext = media_filename.split('.')[-1].lower() if '.' in media_filename else ''
+                valid_exts = {'jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'heic', 'tiff', 'tif', 
+                             'mp4', 'mov', 'avi', 'mkv', 'webm', 'flv', 'wmv', '3gp', 'm4v'}
+                
+                if media_ext in valid_exts:
+                    # Has valid extension - use Path to split properly
+                    media_path = Path(media_filename)
+                    stem = media_path.stem
+                    suffix = media_path.suffix
+                    media_filename = f"{stem}{duplicate_suffix}{suffix}"
+                else:
+                    # No valid extension - just append duplicate suffix at the end
+                    media_filename = f"{media_filename}{duplicate_suffix}"
+                
+                logger.debug(f"After adding duplicate suffix: {{'media_filename': {media_filename!r}}}")
+            
+            # STEP 2: Extension guessing (AFTER duplicate suffix is added)
+            # Pattern: "04.03.12 - 10(1)" -> "04.03.12 - 10(1).jpg"
+            # This handles cases where the sidecar name doesn't include the media extension
             # Check if media_filename has a valid media extension
             # Can't use Path().suffix because "04.03.12 - 10" would return ".10"
             media_ext = media_filename.split('.')[-1].lower() if '.' in media_filename else ''
@@ -370,18 +393,8 @@ def discover_files(
                     if candidate_name in available_media_files:
                         media_filename = candidate_name
                         heuristic_code = "extension_guess_from_supplemental"
+                        logger.debug(f"Extension guessed: {{'media_filename': {media_filename!r}}}")
                         break
-        
-        if media_filename:
-            # If there's a duplicate suffix (e.g., "(1)"), insert it before the extension
-            # Example: image.png + (1) -> image(1).png
-            if duplicate_suffix:
-                logger.debug(f"Adding duplicate suffix: {{'media_filename': {media_filename!r}, 'duplicate_suffix': {duplicate_suffix!r}}}")
-                media_path = Path(media_filename)
-                stem = media_path.stem
-                suffix = media_path.suffix
-                media_filename = f"{stem}{duplicate_suffix}{suffix}"
-                logger.debug(f"After adding duplicate suffix: {{'media_filename': {media_filename!r}}}")
             
             # Verify that the media file actually exists in our collected files
             logger.debug(f"Validating: {{'media_filename': {media_filename!r}, 'in_set': {media_filename in available_media_files}}}")

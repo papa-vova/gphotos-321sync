@@ -59,6 +59,7 @@ def create_media_item_record(**kwargs) -> MediaItemRecord:
         'google_geo_latitude': None,
         'google_geo_longitude': None,
         'google_geo_altitude': None,
+        'media_google_url': None,
         'status': 'present',
         'scan_run_id': None,
     }
