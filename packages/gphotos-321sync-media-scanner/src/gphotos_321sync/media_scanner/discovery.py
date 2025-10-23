@@ -435,12 +435,24 @@ def discover_files(
     if use_metadata_fallback and unmatched_sidecars:
         logger.info(f"Attempting metadata-based fallback matching for {len(unmatched_sidecars)} unmatched sidecars...")
         
+        # Build set of media files that already have sidecars (to exclude from candidates)
+        media_with_sidecars = set(json_sidecars.keys())
+        
         for json_path in unmatched_sidecars[:]:  # Iterate over copy so we can modify original
             parent_dir = json_path.parent
             available_media_files_in_dir = all_files.get(parent_dir, set())
             
             # Build list of candidate media file paths in same directory
-            candidate_paths = [parent_dir / fname for fname in available_media_files_in_dir]
+            # ONLY include files that don't already have sidecars
+            candidate_paths = [
+                parent_dir / fname 
+                for fname in available_media_files_in_dir
+                if (parent_dir / fname) not in media_with_sidecars
+            ]
+            
+            if not candidate_paths:
+                # No unmatched media files in this directory
+                continue
             
             # Try to match by metadata timestamp
             matched_media_path = match_sidecar_by_metadata(
@@ -454,6 +466,7 @@ def discover_files(
             if matched_media_path:
                 # Successfully matched - add to json_sidecars dict
                 json_sidecars[matched_media_path] = json_path
+                media_with_sidecars.add(matched_media_path)  # Update the set
                 unmatched_sidecars.remove(json_path)
                 metadata_matches += 1
                 logger.info(
