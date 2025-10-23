@@ -1,6 +1,7 @@
-"""File discovery module for media scanner.
+"""File discovery for Google Takeout exports.
 
-Walks directory tree to identify media files and their JSON sidecars.
+Discovers all media files and pairs them with JSON sidecars.
+Handles Google Takeout directory structure and various edge cases.
 """
 
 import logging
@@ -10,6 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator, Optional, List
 
+from gphotos_321sync.media_scanner.metadata_matcher import match_sidecar_by_metadata
 from .path_utils import should_scan_file
 
 logger = logging.getLogger(__name__)
@@ -87,13 +89,21 @@ def discover_files_with_stats(target_media_path: Path) -> DiscoveryResult:
     )
 
 
-def discover_files(target_media_path: Path) -> Iterator[FileInfo]:
+def discover_files(
+    target_media_path: Path,
+    use_metadata_fallback: bool = True,
+    use_exiftool: bool = False,
+    use_ffprobe: bool = False
+) -> Iterator[FileInfo]:
     """Discover all media files in the directory tree.
     
     Automatically detects Google Takeout structure and makes paths relative to album root.
     
     Args:
         target_media_path: Target media directory to scan (ABSOLUTE path)
+        use_metadata_fallback: Enable metadata-based sidecar matching fallback
+        use_exiftool: Whether ExifTool is available for metadata extraction
+        use_ffprobe: Whether FFprobe is available for video metadata extraction
         
     Yields:
         FileInfo objects for each discovered media file
@@ -104,6 +114,7 @@ def discover_files(target_media_path: Path) -> Iterator[FileInfo]:
         - Pairs media files with .json sidecars when found
         - JSON sidecars are identified by naming pattern: <filename>.json
         - relative_path and album_folder_path are relative to scan_root (excludes Takeout/Google Photos)
+        - Metadata fallback matches sidecars by timestamp when filename patterns fail
     """
     if not target_media_path.exists():
         logger.error(f"Target media path does not exist: {{'path': {str(target_media_path)!r}}}")
@@ -418,6 +429,40 @@ def discover_files(target_media_path: Path) -> Iterator[FileInfo]:
     logger.info(
         f"Sidecar matching complete: {{'total': {len(json_sidecars)}, 'happy_path': {happy_path_matches}, 'heuristic': {heuristic_matches}, 'unmatched': {len(unmatched_sidecars)}}}"
     )
+    
+    # STEP 2.5: Metadata-based fallback matching for unmatched sidecars
+    metadata_matches = 0
+    if use_metadata_fallback and unmatched_sidecars:
+        logger.info(f"Attempting metadata-based fallback matching for {len(unmatched_sidecars)} unmatched sidecars...")
+        
+        for json_path in unmatched_sidecars[:]:  # Iterate over copy so we can modify original
+            parent_dir = json_path.parent
+            available_media_files_in_dir = all_files.get(parent_dir, set())
+            
+            # Build list of candidate media file paths in same directory
+            candidate_paths = [parent_dir / fname for fname in available_media_files_in_dir]
+            
+            # Try to match by metadata timestamp
+            matched_media_path = match_sidecar_by_metadata(
+                sidecar_path=json_path,
+                candidate_media_paths=candidate_paths,
+                tolerance_seconds=1,
+                use_exiftool=use_exiftool,
+                use_ffprobe=use_ffprobe
+            )
+            
+            if matched_media_path:
+                # Successfully matched - add to json_sidecars dict
+                json_sidecars[matched_media_path] = json_path
+                unmatched_sidecars.remove(json_path)
+                metadata_matches += 1
+                logger.info(
+                    f"Sidecar matched via metadata fallback: {{'sidecar': {json_path.name!r}, 'media': {matched_media_path.name!r}}}"
+                )
+        
+        logger.info(
+            f"Metadata fallback matching complete: {{'matched': {metadata_matches}, 'still_unmatched': {len(unmatched_sidecars)}}}"
+        )
     
     # STEP 3: Yield FileInfo objects for all media files
     logger.info("Creating FileInfo objects for media files...")

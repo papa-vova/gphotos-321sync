@@ -1,4 +1,11 @@
-"""Tests for file discovery module."""
+"""Tests for file discovery module.
+
+This module tests the file discovery functionality which:
+- Discovers all media files in a directory tree
+- Pairs media files with their JSON sidecars using filename patterns
+- Falls back to metadata-based matching when filename patterns fail
+- Handles Google Takeout directory structure and edge cases
+"""
 
 import pytest
 from pathlib import Path

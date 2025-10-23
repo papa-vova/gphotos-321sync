@@ -4,11 +4,11 @@ Comprehensive documentation of all test suites in the gphotos-321sync project.
 
 ## Summary
 
-**Total: 372 tests** (12 + 42 + 318)
+**Total: 383 tests** (12 + 42 + 329)
 
 - **gphotos-321sync-common:** 12 tests
 - **gphotos-321sync-takeout-extractor:** 42 tests
-- **gphotos-321sync-media-scanner:** 318 tests
+- **gphotos-321sync-media-scanner:** 329 tests
 
 ---
 
@@ -677,3 +677,23 @@ Tests for changed file detection and tracking (5 tests).
 | 3 | `test_changed_file_with_sidecar` | File in DB, sidecar JSON modified | check_file_unchanged returns False | Sidecar content changed | Verifies sidecar changes are detected (both content and sidecar fingerprints checked) |
 | 4 | `test_changed_file_update` | Changed file processed | Old record deleted, new record inserted with updated fingerprint and scan_run_id | Changed file workflow | Tests DELETE + INSERT update strategy for changed files |
 | 5 | `test_new_file_detection` | Path not in database | get_media_item_by_path returns None | File doesn't exist in DB | Verifies new files are correctly identified |
+
+### test_metadata_matcher.py
+
+Tests for metadata-based sidecar matching fallback (11 tests).
+
+**Rationale**: When filename-based matching fails (e.g., duplicate numbered files with ambiguous patterns), the scanner falls back to matching sidecars to media files by comparing timestamps. This handles cases like `4_13_12 - 1.supplemental-metadata(1).json` → `4_13_12 - 1(1).jpg` where filename patterns are insufficient.
+
+| # | Test | Input | Output | Conditions/Assumptions | Logic |
+|---|------|-------|--------|----------------------|-------|
+| 1 | `test_parse_sidecar_timestamp_valid` | Sidecar with photoTakenTime.timestamp="1609459200" | datetime(2021-01-01 00:00:00 UTC) | Valid Unix timestamp | Parses Google Takeout photoTakenTime field (Unix timestamp in seconds) to timezone-aware datetime |
+| 2 | `test_parse_sidecar_timestamp_missing_field` | Sidecar without photoTakenTime field | None | Missing timestamp | Returns None when photoTakenTime field is absent |
+| 3 | `test_parse_sidecar_timestamp_invalid_json` | Sidecar with malformed JSON | None | Invalid JSON | Handles JSON parsing errors gracefully |
+| 4 | `test_parse_sidecar_timestamp_invalid_timestamp` | Sidecar with timestamp="not_a_number" | None | Invalid timestamp value | Handles non-numeric timestamp values |
+| 5 | `test_timestamps_match_exact` | Two identical timestamps | True | Exact match | Verifies exact timestamp matching |
+| 6 | `test_timestamps_match_within_tolerance` | Timestamps 1 second apart, tolerance=1 | True | Within tolerance | Verifies timestamps within tolerance are matched |
+| 7 | `test_timestamps_match_outside_tolerance` | Timestamps 2 seconds apart, tolerance=1 | False | Outside tolerance | Verifies timestamps outside tolerance are not matched |
+| 8 | `test_timestamps_match_none` | One or both timestamps are None | False | Missing timestamps | Verifies None timestamps never match |
+| 9 | `test_match_sidecar_by_metadata_no_exif` | Sidecar with timestamp, media files without EXIF | None | No EXIF data | Returns None when media files have no EXIF timestamps |
+| 10 | `test_match_sidecar_by_metadata_no_sidecar_timestamp` | Sidecar without timestamp | None | Missing sidecar timestamp | Returns None when sidecar has no timestamp |
+| 11 | `test_match_sidecar_by_metadata_empty_candidates` | Sidecar with timestamp, empty candidate list | None | No candidates | Returns None when no candidate media files provided |
