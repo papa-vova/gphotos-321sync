@@ -378,23 +378,25 @@ def discover_files(
             # STEP 2: Extension guessing (AFTER duplicate suffix is added)
             # Pattern: "04.03.12 - 10(1)" -> "04.03.12 - 10(1).jpg"
             # This handles cases where the sidecar name doesn't include the media extension
-            # Check if media_filename has a valid media extension
-            # Can't use Path().suffix because "04.03.12 - 10" would return ".10"
-            media_ext = media_filename.split('.')[-1].lower() if '.' in media_filename else ''
-            valid_exts = {'jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'heic', 'tiff', 'tif', 
-                         'mp4', 'mov', 'avi', 'mkv', 'webm', 'flv', 'wmv', '3gp', 'm4v'}
-            
-            if media_ext not in valid_exts:
-                # Media filename has no valid extension - try to guess it
-                base = media_filename
-                # Try common extensions
-                for ext in ['.jpg', '.jpeg', '.png', '.mp4', '.mov', '.heic', '.gif', '.webp', '.bmp', '.tiff', '.tif']:
-                    candidate_name = f"{base}{ext}"
-                    if candidate_name in available_media_files:
-                        media_filename = candidate_name
-                        heuristic_code = "extension_guess_from_supplemental"
-                        logger.debug(f"Extension guessed: {{'media_filename': {media_filename!r}}}")
-                        break
+            # ONLY apply if the media file doesn't exist as-is
+            if media_filename not in available_media_files:
+                # Check if media_filename has a valid media extension
+                # Can't use Path().suffix because "04.03.12 - 10" would return ".10"
+                media_ext = media_filename.split('.')[-1].lower() if '.' in media_filename else ''
+                valid_exts = {'jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'heic', 'tiff', 'tif', 
+                             'mp4', 'mov', 'avi', 'mkv', 'webm', 'flv', 'wmv', '3gp', 'm4v'}
+                
+                if media_ext not in valid_exts:
+                    # Media filename has no valid extension - try to guess it
+                    base = media_filename
+                    # Try common extensions
+                    for ext in ['.jpg', '.jpeg', '.png', '.mp4', '.mov', '.heic', '.gif', '.webp', '.bmp', '.tiff', '.tif']:
+                        candidate_name = f"{base}{ext}"
+                        if candidate_name in available_media_files:
+                            media_filename = candidate_name
+                            heuristic_code = "extension_guess_from_supplemental"
+                            logger.debug(f"Extension guessed: {{'media_filename': {media_filename!r}}}")
+                            break
             
             # Verify that the media file actually exists in our collected files
             logger.debug(f"Validating: {{'media_filename': {media_filename!r}, 'in_set': {media_filename in available_media_files}}}")

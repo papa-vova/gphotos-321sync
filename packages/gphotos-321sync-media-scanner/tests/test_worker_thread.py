@@ -91,13 +91,25 @@ class TestProcessFileWork:
         future.get.return_value = metadata_ext
         mock_process_pool.apply_async.return_value = future
         
-        # Mock coordinate_metadata
+        # Mock coordinate_metadata (returns tuple: record, people_names)
         with patch("gphotos_321sync.media_scanner.parallel.worker_thread.coordinate_metadata") as mock_coord:
-            mock_coord.return_value = {
-                "media_item_id": "item-123",
-                "relative_path": "Photos/test.jpg",
-                "album_id": "album-456",
-            }
+            from gphotos_321sync.media_scanner.metadata_coordinator import MediaItemRecord
+            mock_record = MediaItemRecord(
+                media_item_id="item-123",
+                relative_path="Photos/test.jpg",
+                album_id="album-456",
+                title=None, mime_type=None, file_size=100, crc32=None,
+                content_fingerprint=None, sidecar_fingerprint=None,
+                width=None, height=None, duration_seconds=None, frame_rate=None,
+                capture_timestamp=None, exif_datetime_original=None, exif_datetime_digitized=None,
+                exif_gps_latitude=None, exif_gps_longitude=None, exif_gps_altitude=None,
+                exif_camera_make=None, exif_camera_model=None, exif_lens_make=None, exif_lens_model=None,
+                exif_focal_length=None, exif_f_number=None, exif_iso=None, exif_exposure_time=None,
+                exif_orientation=None, google_description=None, google_geo_latitude=None,
+                google_geo_longitude=None, google_geo_altitude=None, media_google_url=None,
+                status='present', scan_run_id='scan-789'
+            )
+            mock_coord.return_value = (mock_record, [])
             
             result = _process_file_work(
                 file_info=sample_file_info,
@@ -110,7 +122,7 @@ class TestProcessFileWork:
         
         # Verify result
         assert result["type"] == "media_item"
-        assert result["record"]["media_item_id"] == "item-123"
+        assert result["record"].media_item_id == "item-123"
         
         # Verify CPU work was submitted
         mock_process_pool.apply_async.assert_called_once()
@@ -176,12 +188,22 @@ class TestWorkerThreadMain:
         future.get.return_value = metadata_ext
         mock_process_pool.apply_async.return_value = future
         
-        # Mock coordinate_metadata
+        # Mock coordinate_metadata (returns tuple: record, people_names)
         with patch("gphotos_321sync.media_scanner.parallel.worker_thread.coordinate_metadata") as mock_coord:
-            mock_coord.return_value = {
-                "media_item_id": "item-123",
-                "relative_path": "Photos/test.jpg",
-            }
+            from gphotos_321sync.media_scanner.metadata_coordinator import MediaItemRecord
+            mock_record = MediaItemRecord(
+                media_item_id="item-123", relative_path="Photos/test.jpg", album_id="album-456",
+                title=None, mime_type=None, file_size=100, crc32=None, content_fingerprint=None,
+                sidecar_fingerprint=None, width=None, height=None, duration_seconds=None, frame_rate=None,
+                capture_timestamp=None, exif_datetime_original=None, exif_datetime_digitized=None,
+                exif_gps_latitude=None, exif_gps_longitude=None, exif_gps_altitude=None,
+                exif_camera_make=None, exif_camera_model=None, exif_lens_make=None, exif_lens_model=None,
+                exif_focal_length=None, exif_f_number=None, exif_iso=None, exif_exposure_time=None,
+                exif_orientation=None, google_description=None, google_geo_latitude=None,
+                google_geo_longitude=None, google_geo_altitude=None, media_google_url=None,
+                status='present', scan_run_id='scan-789'
+            )
+            mock_coord.return_value = (mock_record, [])
             
             # Run worker thread in actual thread
             thread = threading.Thread(
@@ -209,7 +231,7 @@ class TestWorkerThreadMain:
         assert results_queue.qsize() == 1
         result = results_queue.get()
         assert result["type"] == "media_item"
-        assert result["record"]["media_item_id"] == "item-123"
+        assert result["record"].media_item_id == "item-123"
     
     def test_handles_processing_error(
         self,
@@ -298,11 +320,25 @@ class TestWorkerThreadMain:
         future.get.return_value = metadata_ext
         mock_process_pool.apply_async.return_value = future
         
-        # Mock coordinate_metadata
+        # Mock coordinate_metadata (returns tuple: record, people_names)
         with patch("gphotos_321sync.media_scanner.parallel.worker_thread.coordinate_metadata") as mock_coord:
-            mock_coord.side_effect = [
-                {"media_item_id": f"item-{i}"} for i in range(3)
-            ]
+            from gphotos_321sync.media_scanner.metadata_coordinator import MediaItemRecord
+            mock_records = []
+            for i in range(3):
+                rec = MediaItemRecord(
+                    media_item_id=f"item-{i}", relative_path=f"Photos/test{i}.jpg", album_id="album-456",
+                    title=None, mime_type=None, file_size=100, crc32=None, content_fingerprint=None,
+                    sidecar_fingerprint=None, width=None, height=None, duration_seconds=None, frame_rate=None,
+                    capture_timestamp=None, exif_datetime_original=None, exif_datetime_digitized=None,
+                    exif_gps_latitude=None, exif_gps_longitude=None, exif_gps_altitude=None,
+                    exif_camera_make=None, exif_camera_model=None, exif_lens_make=None, exif_lens_model=None,
+                    exif_focal_length=None, exif_f_number=None, exif_iso=None, exif_exposure_time=None,
+                    exif_orientation=None, google_description=None, google_geo_latitude=None,
+                    google_geo_longitude=None, google_geo_altitude=None, media_google_url=None,
+                    status='present', scan_run_id='scan-789'
+                )
+                mock_records.append((rec, []))
+            mock_coord.side_effect = mock_records
             
             thread = threading.Thread(
                 target=worker_thread_main,
@@ -338,7 +374,20 @@ class TestWorkerThreadMain:
         mock_process_pool.apply_async.return_value = future
         
         with patch("gphotos_321sync.media_scanner.parallel.worker_thread.coordinate_metadata") as mock_coord:
-            mock_coord.return_value = {"media_item_id": "item-123"}
+            from gphotos_321sync.media_scanner.metadata_coordinator import MediaItemRecord
+            mock_record = MediaItemRecord(
+                media_item_id="item-123", relative_path="Photos/test.jpg", album_id="album-456",
+                title=None, mime_type=None, file_size=100, crc32=None, content_fingerprint=None,
+                sidecar_fingerprint=None, width=None, height=None, duration_seconds=None, frame_rate=None,
+                capture_timestamp=None, exif_datetime_original=None, exif_datetime_digitized=None,
+                exif_gps_latitude=None, exif_gps_longitude=None, exif_gps_altitude=None,
+                exif_camera_make=None, exif_camera_model=None, exif_lens_make=None, exif_lens_model=None,
+                exif_focal_length=None, exif_f_number=None, exif_iso=None, exif_exposure_time=None,
+                exif_orientation=None, google_description=None, google_geo_latitude=None,
+                google_geo_longitude=None, google_geo_altitude=None, media_google_url=None,
+                status='present', scan_run_id='scan-789'
+            )
+            mock_coord.return_value = (mock_record, [])
             
             thread = threading.Thread(
                 target=worker_thread_main,
@@ -390,11 +439,25 @@ class TestWorkerThreadBatchMain:
         future.get.return_value = metadata_ext
         mock_process_pool.apply_async.return_value = future
         
-        # Mock coordinate_metadata
+        # Mock coordinate_metadata (returns tuple: record, people_names)
         with patch("gphotos_321sync.media_scanner.parallel.worker_thread.coordinate_metadata") as mock_coord:
-            mock_coord.side_effect = [
-                {"media_item_id": f"item-{i}"} for i in range(batch_size)
-            ]
+            from gphotos_321sync.media_scanner.metadata_coordinator import MediaItemRecord
+            mock_records = []
+            for i in range(batch_size):
+                rec = MediaItemRecord(
+                    media_item_id=f"item-{i}", relative_path=f"Photos/test{i}.jpg", album_id="album-456",
+                    title=None, mime_type=None, file_size=100, crc32=None, content_fingerprint=None,
+                    sidecar_fingerprint=None, width=None, height=None, duration_seconds=None, frame_rate=None,
+                    capture_timestamp=None, exif_datetime_original=None, exif_datetime_digitized=None,
+                    exif_gps_latitude=None, exif_gps_longitude=None, exif_gps_altitude=None,
+                    exif_camera_make=None, exif_camera_model=None, exif_lens_make=None, exif_lens_model=None,
+                    exif_focal_length=None, exif_f_number=None, exif_iso=None, exif_exposure_time=None,
+                    exif_orientation=None, google_description=None, google_geo_latitude=None,
+                    google_geo_longitude=None, google_geo_altitude=None, media_google_url=None,
+                    status='present', scan_run_id='scan-789'
+                )
+                mock_records.append((rec, []))
+            mock_coord.side_effect = mock_records
             
             thread = threading.Thread(
                 target=worker_thread_batch_main,
@@ -449,12 +512,25 @@ class TestWorkerThreadBatchMain:
         
         mock_process_pool.apply_async.side_effect = futures
         
-        # Mock coordinate_metadata - will only be called for successes
+        # Mock coordinate_metadata - will only be called for successes (returns tuple: record, people_names)
         with patch("gphotos_321sync.media_scanner.parallel.worker_thread.coordinate_metadata") as mock_coord:
-            mock_coord.side_effect = [
-                {"media_item_id": "item-0"},
-                {"media_item_id": "item-2"},
-            ]
+            from gphotos_321sync.media_scanner.metadata_coordinator import MediaItemRecord
+            mock_records = []
+            for i in [0, 2]:
+                rec = MediaItemRecord(
+                    media_item_id=f"item-{i}", relative_path=f"Photos/test{i}.jpg", album_id="album-456",
+                    title=None, mime_type=None, file_size=100, crc32=None, content_fingerprint=None,
+                    sidecar_fingerprint=None, width=None, height=None, duration_seconds=None, frame_rate=None,
+                    capture_timestamp=None, exif_datetime_original=None, exif_datetime_digitized=None,
+                    exif_gps_latitude=None, exif_gps_longitude=None, exif_gps_altitude=None,
+                    exif_camera_make=None, exif_camera_model=None, exif_lens_make=None, exif_lens_model=None,
+                    exif_focal_length=None, exif_f_number=None, exif_iso=None, exif_exposure_time=None,
+                    exif_orientation=None, google_description=None, google_geo_latitude=None,
+                    google_geo_longitude=None, google_geo_altitude=None, media_google_url=None,
+                    status='present', scan_run_id='scan-789'
+                )
+                mock_records.append((rec, []))
+            mock_coord.side_effect = mock_records
             
             thread = threading.Thread(
                 target=worker_thread_batch_main,
@@ -506,9 +582,23 @@ class TestWorkerThreadBatchMain:
         mock_process_pool.apply_async.return_value = future
         
         with patch("gphotos_321sync.media_scanner.parallel.worker_thread.coordinate_metadata") as mock_coord:
-            mock_coord.side_effect = [
-                {"media_item_id": f"item-{i}"} for i in range(2)
-            ]
+            from gphotos_321sync.media_scanner.metadata_coordinator import MediaItemRecord
+            mock_records = []
+            for i in range(2):
+                rec = MediaItemRecord(
+                    media_item_id=f"item-{i}", relative_path=f"Photos/test{i}.jpg", album_id="album-456",
+                    title=None, mime_type=None, file_size=100, crc32=None, content_fingerprint=None,
+                    sidecar_fingerprint=None, width=None, height=None, duration_seconds=None, frame_rate=None,
+                    capture_timestamp=None, exif_datetime_original=None, exif_datetime_digitized=None,
+                    exif_gps_latitude=None, exif_gps_longitude=None, exif_gps_altitude=None,
+                    exif_camera_make=None, exif_camera_model=None, exif_lens_make=None, exif_lens_model=None,
+                    exif_focal_length=None, exif_f_number=None, exif_iso=None, exif_exposure_time=None,
+                    exif_orientation=None, google_description=None, google_geo_latitude=None,
+                    google_geo_longitude=None, google_geo_altitude=None, media_google_url=None,
+                    status='present', scan_run_id='scan-789'
+                )
+                mock_records.append((rec, []))
+            mock_coord.side_effect = mock_records
             
             thread = threading.Thread(
                 target=worker_thread_batch_main,

@@ -22,6 +22,7 @@ from typing import Any, Dict, Optional
 from ..dal.media_items import MediaItemDAL
 from ..dal.processing_errors import ProcessingErrorDAL
 from ..dal.scan_runs import ScanRunDAL
+from ..dal.people import PeopleDAL
 from ..database import DatabaseConnection
 
 logger = logging.getLogger(__name__)
@@ -35,8 +36,9 @@ def writer_thread_main(
     shutdown_event: Any,  # threading.Event
     progress_interval: int = 100,
     progress_tracker: Optional[Any] = None,  # ProgressTracker
+    max_retries: int = 3,
 ) -> None:
-    """Main function for batch writer thread.
+    """Main function for batch writer thread with retry logic.
     
     Args:
         results_queue: Queue of results to write (MediaItemRecord or error dicts)
@@ -46,11 +48,12 @@ def writer_thread_main(
         shutdown_event: Event to signal shutdown
         progress_interval: Update progress every N files
         progress_tracker: Optional progress tracker for detailed progress logging
+        max_retries: Maximum retry attempts for failed batches (default: 3)
     
     Returns:
         None (runs until shutdown_event is set and queue is empty)
     """
-    logger.info(f"Started writer thread: {{'batch_size': {batch_size}}}")
+    logger.info(f"Started writer thread: {{'batch_size': {batch_size}, 'max_retries': {max_retries}}}")
     
     # Connect to database
     from pathlib import Path
@@ -61,6 +64,7 @@ def writer_thread_main(
     media_dal = MediaItemDAL(conn)
     error_dal = ProcessingErrorDAL(conn)
     scan_run_dal = ScanRunDAL(conn)
+    people_dal = PeopleDAL(conn)
     
     total_written = 0
     total_errors = 0
@@ -82,7 +86,7 @@ def writer_thread_main(
                     results_queue.task_done()
                     # Flush remaining batch
                     if batch:
-                        _write_batch(batch, media_dal, error_dal, conn)
+                        _write_batch_with_retry(batch, media_dal, error_dal, people_dal, conn, max_retries)
                         new_items = len([r for r in batch if r["type"] == "media_item" and not r.get("is_changed", False)])
                         changed_items = len([r for r in batch if r["type"] == "media_item" and r.get("is_changed", False)])
                         unchanged_items = len([r for r in batch if r["type"] == "file_seen"])
@@ -99,7 +103,7 @@ def writer_thread_main(
                 
                 # Write batch if full
                 if len(batch) >= batch_size:
-                    _write_batch(batch, media_dal, error_dal, conn)
+                    _write_batch_with_retry(batch, media_dal, error_dal, people_dal, conn, max_retries)
                     
                     # Update counters
                     new_items = len([r for r in batch if r["type"] == "media_item" and not r.get("is_changed", False)])
@@ -138,7 +142,7 @@ def writer_thread_main(
             except Empty:
                 # Queue is empty, check if we should flush partial batch
                 if batch and shutdown_event.is_set():
-                    _write_batch(batch, media_dal, error_dal, conn)
+                    _write_batch_with_retry(batch, media_dal, error_dal, people_dal, conn, max_retries)
                     new_items = len([r for r in batch if r["type"] == "media_item" and not r.get("is_changed", False)])
                     changed_items = len([r for r in batch if r["type"] == "media_item" and r.get("is_changed", False)])
                     unchanged_items = len([r for r in batch if r["type"] == "file_seen"])
@@ -152,7 +156,7 @@ def writer_thread_main(
         
         # Flush any remaining items
         if batch:
-            _write_batch(batch, media_dal, error_dal, conn)
+            _write_batch_with_retry(batch, media_dal, error_dal, people_dal, conn, max_retries)
             new_items = len([r for r in batch if r["type"] == "media_item" and not r.get("is_changed", False)])
             changed_items = len([r for r in batch if r["type"] == "media_item" and r.get("is_changed", False)])
             unchanged_items = len([r for r in batch if r["type"] == "file_seen"])
@@ -188,6 +192,7 @@ def _write_batch(
     batch: list,
     media_dal: MediaItemDAL,
     error_dal: ProcessingErrorDAL,
+    people_dal: PeopleDAL,
     conn: Any,
 ) -> None:
     """Write a batch of results to database.
@@ -256,6 +261,11 @@ def _write_batch(
                             # Other integrity errors should still fail
                             raise
                 
+                # Add people tags if present
+                people_names = result.get("people_names", [])
+                if people_names:
+                    people_dal.add_people_tags(record.media_item_id, people_names)
+                
             elif result["type"] == "file_seen":
                 # Collect for batch update
                 file_seen_updates.append((
@@ -295,154 +305,11 @@ def _write_batch(
         raise
 
 
-def writer_thread_with_retry(
-    results_queue: Queue,
-    db_path: str,
-    scan_run_id: str,
-    batch_size: int,
-    shutdown_event: Any,
-    progress_interval: int = 100,
-    max_retries: int = 3,
-) -> None:
-    """Writer thread with retry logic for database errors.
-    
-    This version retries failed batches with exponential backoff.
-    Useful for handling transient database lock errors.
-    
-    Args:
-        results_queue: Queue of results to write
-        db_path: Path to SQLite database
-        scan_run_id: Current scan run UUID
-        batch_size: Number of records per batch
-        shutdown_event: Event to signal shutdown
-        progress_interval: Update progress every N files
-        max_retries: Maximum retry attempts for failed batches
-    """
-    logger.info(f"Started writer thread with retry: {{'batch_size': {batch_size}, 'max_retries': {max_retries}}}")
-    
-    from pathlib import Path
-    db_conn = DatabaseConnection(Path(db_path))
-    conn = db_conn.connect()
-    
-    media_dal = MediaItemDAL(conn)
-    error_dal = ProcessingErrorDAL(conn)
-    scan_run_dal = ScanRunDAL(conn)
-    
-    total_written = 0
-    total_errors = 0
-    total_new_files = 0
-    total_unchanged_files = 0
-    total_changed_files = 0
-    batch = []
-    
-    try:
-        while not shutdown_event.is_set() or not results_queue.empty():
-            try:
-                result = results_queue.get(timeout=0.1)
-                
-                if result is None:
-                    if batch:
-                        _write_batch_with_retry(
-                            batch, media_dal, error_dal, conn, max_retries
-                        )
-                        new_items = len([r for r in batch if r["type"] == "media_item" and not r.get("is_changed", False)])
-                        changed_items = len([r for r in batch if r["type"] == "media_item" and r.get("is_changed", False)])
-                        unchanged_items = len([r for r in batch if r["type"] == "file_seen"])
-                        metadata_items = len([r for r in batch if r["type"] == "media_item" and r["record"].get("sidecar_fingerprint")])
-                        total_new_files += new_items
-                        total_changed_files += changed_items
-                        total_unchanged_files += unchanged_items
-                        total_metadata_processed += metadata_items
-                        total_written += new_items + changed_items + unchanged_items
-                        total_errors += len([r for r in batch if r["type"] == "error"])
-                    break
-                
-                batch.append(result)
-                
-                if len(batch) >= batch_size:
-                    _write_batch_with_retry(
-                        batch, media_dal, error_dal, conn, max_retries
-                    )
-                    
-                    media_items = len([r for r in batch if r["type"] == "media_item"])
-                    file_seen = len([r for r in batch if r["type"] == "file_seen"])
-                    errors = len([r for r in batch if r["type"] == "error"])
-                    total_new_files += media_items
-                    total_unchanged_files += file_seen
-                    total_written += media_items + file_seen
-                    total_errors += errors
-                    
-                    if total_written % progress_interval == 0:
-                        scan_run_dal.update_scan_run(
-                            scan_run_id=scan_run_id,
-                            media_files_processed=total_written,
-                            media_new_files=total_new_files,
-                            media_unchanged_files=total_unchanged_files,
-                        )
-                        logger.info(
-                            f"Progress: {{'files_processed': {total_written}, 'errors': {total_errors}}}"
-                        )
-                    
-                    batch.clear()
-                
-                results_queue.task_done()
-                
-            except Empty:
-                if batch and shutdown_event.is_set():
-                    _write_batch_with_retry(
-                        batch, media_dal, error_dal, conn, max_retries
-                    )
-                    new_items = len([r for r in batch if r["type"] == "media_item" and not r.get("is_changed", False)])
-                    changed_items = len([r for r in batch if r["type"] == "media_item" and r.get("is_changed", False)])
-                    unchanged_items = len([r for r in batch if r["type"] == "file_seen"])
-                    total_new_files += new_items
-                    total_changed_files += changed_items
-                    total_unchanged_files += unchanged_items
-                    total_written += new_items + changed_items + unchanged_items
-                    total_errors += len([r for r in batch if r["type"] == "error"])
-                    batch.clear()
-                continue
-        
-        if batch:
-            _write_batch_with_retry(
-                batch, media_dal, error_dal, conn, max_retries
-            )
-            new_items = len([r for r in batch if r["type"] == "media_item" and not r.get("is_changed", False)])
-            changed_items = len([r for r in batch if r["type"] == "media_item" and r.get("is_changed", False)])
-            unchanged_items = len([r for r in batch if r["type"] == "file_seen"])
-            metadata_items = len([r for r in batch if r["type"] == "media_item" and r["record"].get("sidecar_fingerprint")])
-            total_new_files += new_items
-            total_changed_files += changed_items
-            total_unchanged_files += unchanged_items
-            total_metadata_processed += metadata_items
-            total_written += new_items + changed_items + unchanged_items
-            total_errors += len([r for r in batch if r["type"] == "error"])
-        
-        scan_run_dal.update_scan_run(
-            scan_run_id=scan_run_id,
-            media_files_processed=total_written,
-            metadata_files_processed=total_metadata_processed,
-            media_new_files=total_new_files,
-            media_changed_files=total_changed_files,
-            media_unchanged_files=total_unchanged_files,
-            media_error_files=total_errors,
-        )
-        
-    except Exception as e:
-        logger.error(f"Writer thread crashed: {{'error': {str(e)!r}}}", exc_info=True)
-        raise
-    
-    finally:
-        conn.close()
-        logger.info(
-            f"Writer thread shutting down: {{'written': {total_written}, 'errors': {total_errors}}}"
-        )
-
-
 def _write_batch_with_retry(
     batch: list,
     media_dal: MediaItemDAL,
     error_dal: ProcessingErrorDAL,
+    people_dal: PeopleDAL,
     conn: Any,
     max_retries: int,
 ) -> None:
@@ -452,6 +319,7 @@ def _write_batch_with_retry(
         batch: List of result dicts
         media_dal: MediaItemDAL instance
         error_dal: ProcessingErrorDAL instance
+        people_dal: PeopleDAL instance
         conn: Database connection
         max_retries: Maximum retry attempts
     
@@ -460,7 +328,7 @@ def _write_batch_with_retry(
     """
     for attempt in range(max_retries):
         try:
-            _write_batch(batch, media_dal, error_dal, conn)
+            _write_batch(batch, media_dal, error_dal, people_dal, conn)
             return  # Success
         except Exception as e:
             if attempt < max_retries - 1:

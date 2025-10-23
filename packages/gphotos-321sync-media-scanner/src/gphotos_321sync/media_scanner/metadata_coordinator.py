@@ -263,7 +263,10 @@ def coordinate_metadata(
             scan_run_id=scan_run_id
         )
         
-        return record
+        # Extract people tags from JSON metadata
+        people_names = json_metadata.get('people', [])
+        
+        return record, people_names
         
     except Exception as e:
         logger.error(

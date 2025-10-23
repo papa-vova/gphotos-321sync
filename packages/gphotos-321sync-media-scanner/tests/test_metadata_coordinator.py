@@ -54,23 +54,24 @@ def test_metadata_ext():
 
 def test_coordinate_metadata_basic(test_file_info, test_metadata_ext):
     """Test basic metadata coordination."""
-    record = coordinate_metadata(
+    record, people_names = coordinate_metadata(
         file_info=test_file_info,
         metadata_ext=test_metadata_ext,
         album_id='album-123',
         scan_run_id='scan-456'
     )
     
-    assert isinstance(record, MediaItemRecord)
+    assert record.media_item_id is not None
     assert record.relative_path == "Album/test.jpg"  # normalize_path always returns forward slashes
     assert record.album_id == 'album-123'
     assert record.scan_run_id == 'scan-456'
     assert record.status == 'present'
+    assert people_names == []  # No people in basic test
 
 
 def test_coordinate_metadata_cpu_data(test_file_info, test_metadata_ext):
     """Test that CPU result data is included."""
-    record = coordinate_metadata(
+    record, _ = coordinate_metadata(
         file_info=test_file_info,
         metadata_ext=test_metadata_ext,
         album_id='album-123',
@@ -87,7 +88,7 @@ def test_coordinate_metadata_cpu_data(test_file_info, test_metadata_ext):
 
 def test_coordinate_metadata_exif_data(test_file_info, test_metadata_ext):
     """Test that EXIF data is extracted."""
-    record = coordinate_metadata(
+    record, _ = coordinate_metadata(
         file_info=test_file_info,
         metadata_ext=test_metadata_ext,
         album_id='album-123',
@@ -129,7 +130,7 @@ def test_coordinate_metadata_with_json_sidecar(tmp_path, test_metadata_ext):
         file_size=100
     )
     
-    record = coordinate_metadata(
+    record, people_names = coordinate_metadata(
         file_info=file_info,
         metadata_ext=test_metadata_ext,
         album_id='album-123',
@@ -137,6 +138,7 @@ def test_coordinate_metadata_with_json_sidecar(tmp_path, test_metadata_ext):
     )
     
     # JSON metadata should be present
+    assert people_names == []  # No people in this test
     assert record.title == "Summer Vacation"
     assert record.google_description == "Beach photo"
     assert record.google_geo_latitude == 40.7128
@@ -165,7 +167,7 @@ def test_coordinate_metadata_json_parse_error(tmp_path, test_metadata_ext):
     )
     
     # Should not raise exception, just log warning
-    record = coordinate_metadata(
+    record, people_names = coordinate_metadata(
         file_info=file_info,
         metadata_ext=test_metadata_ext,
         album_id='album-123',
@@ -174,6 +176,7 @@ def test_coordinate_metadata_json_parse_error(tmp_path, test_metadata_ext):
     
     # Should still create record without JSON metadata
     assert isinstance(record, MediaItemRecord)
+    assert people_names == []
     assert record.google_description is None
 
 
@@ -196,7 +199,7 @@ def test_coordinate_metadata_video_data(test_file_info):
         'error': None
     }
     
-    record = coordinate_metadata(
+    record, _ = coordinate_metadata(
         file_info=test_file_info,
         metadata_ext=metadata_ext,
         album_id='album-123',
@@ -209,7 +212,7 @@ def test_coordinate_metadata_video_data(test_file_info):
 
 def test_coordinate_metadata_no_video_data(test_file_info, test_metadata_ext):
     """Test coordination without video metadata (image file)."""
-    record = coordinate_metadata(
+    record, _ = coordinate_metadata(
         file_info=test_file_info,
         metadata_ext=test_metadata_ext,
         album_id='album-123',
@@ -234,7 +237,7 @@ def test_coordinate_metadata_minimal_metadata_ext(test_file_info):
         'error': None
     }
     
-    record = coordinate_metadata(
+    record, _ = coordinate_metadata(
         file_info=test_file_info,
         metadata_ext=metadata_ext,
         album_id='album-123',
@@ -249,7 +252,7 @@ def test_coordinate_metadata_minimal_metadata_ext(test_file_info):
 
 def test_media_item_record_to_dict(test_file_info, test_metadata_ext):
     """Test MediaItemRecord.to_dict() conversion."""
-    record = coordinate_metadata(
+    record, _ = coordinate_metadata(
         file_info=test_file_info,
         metadata_ext=test_metadata_ext,
         album_id='album-123',
@@ -268,7 +271,7 @@ def test_media_item_record_to_dict(test_file_info, test_metadata_ext):
 
 def test_media_item_record_has_media_item_id(test_file_info, test_metadata_ext):
     """Test that MediaItemRecord has a generated media_item_id."""
-    record = coordinate_metadata(
+    record, _ = coordinate_metadata(
         file_info=test_file_info,
         metadata_ext=test_metadata_ext,
         album_id='album-123',
@@ -281,14 +284,14 @@ def test_media_item_record_has_media_item_id(test_file_info, test_metadata_ext):
 
 def test_media_item_record_deterministic_ids(test_file_info, test_metadata_ext):
     """Test that UUID5 generates deterministic IDs for same inputs."""
-    record1 = coordinate_metadata(
+    record1, _ = coordinate_metadata(
         file_info=test_file_info,
         metadata_ext=test_metadata_ext,
         album_id='album-123',
         scan_run_id='scan-456'
     )
     
-    record2 = coordinate_metadata(
+    record2, _ = coordinate_metadata(
         file_info=test_file_info,
         metadata_ext=test_metadata_ext,
         album_id='album-123',
@@ -330,7 +333,7 @@ def test_coordinate_metadata_all_exif_fields(test_file_info):
         'error': None
     }
     
-    record = coordinate_metadata(
+    record, _ = coordinate_metadata(
         file_info=test_file_info,
         metadata_ext=metadata_ext,
         album_id='album-123',
@@ -346,3 +349,39 @@ def test_coordinate_metadata_all_exif_fields(test_file_info):
     assert record.exif_iso == 100
     assert record.exif_exposure_time == '1/1000'
     assert record.exif_orientation == 1
+
+
+def test_coordinate_metadata_with_people_tags(tmp_path, test_metadata_ext):
+    """Test that people tags are extracted from JSON sidecar."""
+    # Create file with JSON sidecar containing people
+    file_path = tmp_path / "test.jpg"
+    file_path.write_text("fake image", encoding='utf-8')
+    
+    json_path = tmp_path / "test.jpg.json"
+    json_data = {
+        "title": "Family Photo",
+        "people": [
+            {"name": "John Doe"},
+            {"name": "Jane Smith"}
+        ]
+    }
+    json_path.write_text(json.dumps(json_data), encoding='utf-8')
+    
+    file_info = FileInfo(
+        file_path=file_path,
+        relative_path=Path("Album/test.jpg"),
+        album_folder_path=Path("Album"),
+        json_sidecar_path=json_path,
+        file_size=100
+    )
+    
+    record, people_names = coordinate_metadata(
+        file_info=file_info,
+        metadata_ext=test_metadata_ext,
+        album_id='album-123',
+        scan_run_id='scan-456'
+    )
+    
+    # People should be extracted
+    assert people_names == ["John Doe", "Jane Smith"]
+    assert record.title == "Family Photo"

@@ -447,9 +447,15 @@ class ParallelScanner:
                     expected_media_path = parent_folder / title
                     expected_media_normalized = str(expected_media_path).replace('\\', '/')
                     
-                    # Check if this media file exists and was processed
+                    # Check if this media file exists (was discovered)
+                    if expected_media_normalized not in all_files_list1_sorted:
+                        logger.debug(f"Orphaned sidecar title points to non-existent media: {{'sidecar': {orphan_path!r}, 'expected_media': {title!r}}}")
+                        still_orphaned.append(orphan_path)
+                        continue
+                    
+                    # Check if media file was processed (has database entry)
                     if expected_media_normalized not in all_files_list2_sorted:
-                        logger.debug(f"Orphaned sidecar title points to non-existent or unprocessed media: {{'sidecar': {orphan_path!r}, 'expected_media': {title!r}}}")
+                        logger.debug(f"Orphaned sidecar points to unprocessed media (skipped/error): {{'sidecar': {orphan_path!r}, 'expected_media': {title!r}}}")
                         still_orphaned.append(orphan_path)
                         continue
                     

@@ -183,7 +183,7 @@ def worker_thread_main(
                         error_count += 1
                     else:
                         # Coordinate metadata (parse JSON, aggregate)
-                        media_item_record = coordinate_metadata(
+                        media_item_record, people_names = coordinate_metadata(
                             file_info=file_info,
                             metadata_ext=metadata_ext,
                             album_id=album_id,
@@ -193,6 +193,7 @@ def worker_thread_main(
                         results_queue.put({
                             "type": "media_item",
                             "record": media_item_record,
+                            "people_names": people_names,
                             "is_changed": is_changed,
                         })
                         processed_count += 1
@@ -306,7 +307,7 @@ def _process_file_work(
     
     # Coordinate metadata (I/O work - parse JSON sidecar)
     # This runs in the worker thread (I/O-bound)
-    media_item_record = coordinate_metadata(
+    media_item_record, people_names = coordinate_metadata(
         file_info=file_info,
         metadata_ext=metadata_ext,
         album_id=album_id,
@@ -317,6 +318,7 @@ def _process_file_work(
     return {
         "type": "media_item",
         "record": media_item_record,
+        "people_names": people_names,
     }
 
 
@@ -418,7 +420,7 @@ def worker_thread_batch_main(
                         error_count += 1
                     else:
                         # Coordinate metadata
-                        media_item_record = coordinate_metadata(
+                        media_item_record, people_names = coordinate_metadata(
                             file_info=file_info,
                             metadata_ext=metadata_ext,
                             album_id=album_id,
@@ -428,6 +430,7 @@ def worker_thread_batch_main(
                         results_queue.put({
                             "type": "media_item",
                             "record": media_item_record,
+                            "people_names": people_names,
                         })
                         processed_count += 1
                         

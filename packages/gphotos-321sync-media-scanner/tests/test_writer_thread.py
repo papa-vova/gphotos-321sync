@@ -295,39 +295,40 @@ class TestWriteBatch:
         
         from gphotos_321sync.media_scanner.dal.media_items import MediaItemDAL
         from gphotos_321sync.media_scanner.dal.processing_errors import ProcessingErrorDAL
+        from gphotos_321sync.media_scanner.dal.people import PeopleDAL
         
         media_dal = MediaItemDAL(conn)
         error_dal = ProcessingErrorDAL(conn)
+        people_dal = PeopleDAL(conn)
         
-        import uuid
         batch = [
             {
                 "type": "media_item",
                 "record": create_media_item_record(
                     media_item_id=str(uuid.uuid4()),
                     relative_path="Photos/test1.jpg",
-                    album_id="album-123",
+                    album_id=str(uuid.uuid4()),
                     file_size=1000,
-                    mime_type="image/jpeg",
                     scan_run_id=scan_run_id,
                     status="present",
-                )
+                ),
+                "people_names": []
             },
             {
                 "type": "media_item",
                 "record": create_media_item_record(
                     media_item_id=str(uuid.uuid4()),
                     relative_path="Photos/test2.jpg",
-                    album_id="album-123",
+                    album_id=str(uuid.uuid4()),
                     file_size=2000,
-                    mime_type="image/jpeg",
                     scan_run_id=scan_run_id,
                     status="present",
-                )
+                ),
+                "people_names": []
             },
         ]
         
-        _write_batch(batch, media_dal, error_dal, conn)
+        _write_batch(batch, media_dal, error_dal, people_dal, conn)
         
         # Verify items written
         cursor = conn.execute("SELECT COUNT(*) FROM media_items")
@@ -343,11 +344,13 @@ class TestWriteBatch:
         
         from gphotos_321sync.media_scanner.dal.media_items import MediaItemDAL
         from gphotos_321sync.media_scanner.dal.processing_errors import ProcessingErrorDAL
+        from gphotos_321sync.media_scanner.dal.people import PeopleDAL
         
         media_dal = MediaItemDAL(conn)
         error_dal = ProcessingErrorDAL(conn)
+        people_dal = PeopleDAL(conn)
         
         # Should not raise error
-        _write_batch([], media_dal, error_dal, conn)
+        _write_batch([], media_dal, error_dal, people_dal, conn)
         
         conn.close()

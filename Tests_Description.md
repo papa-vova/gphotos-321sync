@@ -4,11 +4,11 @@ Comprehensive documentation of all test suites in the gphotos-321sync project.
 
 ## Summary
 
-**Total: 383 tests** (12 + 42 + 329)
+**Total: 391 tests** (12 + 42 + 337)
 
 - **gphotos-321sync-common:** 12 tests
 - **gphotos-321sync-takeout-extractor:** 42 tests
-- **gphotos-321sync-media-scanner:** 329 tests
+- **gphotos-321sync-media-scanner:** 337 tests (8 new tests for people tags)
 
 ---
 
@@ -503,26 +503,27 @@ Tests for Live Photos detection and linking (15 tests).
 
 ### test_metadata_coordinator.py
 
-Tests for metadata coordination and MediaItemRecord creation (14 tests).
+Tests for metadata coordination and MediaItemRecord creation (15 tests).
 
 **Rationale**: The coordinator combines data from multiple sources (FileInfo from discovery, metadata extraction results, JSON sidecars) into a single `MediaItemRecord` ready for database insertion. Tests validate that all data sources are correctly merged and edge cases (missing data, parse errors) are handled.
 
 | # | Test | Input | Output | Conditions/Assumptions | Logic |
 |---|------|-------|--------|----------------------|-------|
-| 1 | `test_coordinate_metadata_basic` | FileInfo (path, size, mtime), metadata_ext (MIME, CRC32), album_id, scan_run_id | MediaItemRecord with all basic fields populated | Valid inputs from all sources | Creates complete media item record by merging FileInfo + metadata_ext + IDs |
-| 2 | `test_coordinate_metadata_cpu_data` | FileInfo, metadata_ext with MIME/CRC32/fingerprint/width/height | Record with mime_type='image/jpeg', crc32='a1b2c3d4', fingerprint='fff...', width=1920, height=1080 | Metadata extraction completed successfully | Verifies metadata extraction results (MIME detection, checksums, dimensions) are correctly copied into record |
-| 3 | `test_coordinate_metadata_exif_data` | FileInfo, metadata_ext with exif_data dict (camera_make, camera_model, GPS, timestamps) | Record with exif_datetime_original, exif_camera_make='Canon', exif_gps_latitude=37.7749, etc. | EXIF extraction succeeded | Extracts specific EXIF fields from nested dict into flat record fields (datetime_original, camera_make, camera_model, lens_make, lens_model, focal_length, aperture, iso, GPS) |
-| 4 | `test_coordinate_metadata_with_json_sidecar` | FileInfo with json_sidecar_path pointing to valid .json file | Record with title, description, people tags, geo_data from JSON, sidecar_fingerprint (SHA-256) | JSON sidecar exists and is valid | Calls parse_google_photos_json() to extract Google Takeout metadata (title, description, photoTakenTime, geoData, people), calculates sidecar fingerprint for change detection, and merges into record |
-| 5 | `test_coordinate_metadata_json_parse_error` | FileInfo with json_sidecar_path pointing to malformed JSON file | Record created WITHOUT JSON metadata, no exception raised | JSON file is corrupted/invalid | Catches JSONDecodeError, logs warning, continues without JSON data (graceful degradation) |
-| 6 | `test_coordinate_metadata_video_data` | FileInfo, metadata_ext with video_data dict (duration=120.5, frame_rate=30.0) | Record with duration_seconds=120.5, frame_rate=30.0 | Video metadata extraction succeeded (ffprobe) | Extracts video-specific fields (duration, frame_rate) from metadata_ext into record |
-| 7 | `test_coordinate_metadata_no_video_data` | FileInfo, metadata_ext with video_data=None (image file) | Record with duration_seconds=None, frame_rate=None | File is an image, not a video | Handles non-video files by setting video fields to None (no error) |
-| 8 | `test_coordinate_metadata_minimal_cpu_result` | FileInfo, metadata_ext with only success=True, mime_type, crc32, fingerprint (no dimensions, no EXIF) | Record created with mime_type, width=None, height=None, exif fields=None | Metadata extraction succeeded but extracted minimal data | Handles sparse metadata_ext without crashing (missing optional fields default to None) |
+| 1 | `test_coordinate_metadata_basic` | FileInfo (path, size, mtime), metadata_ext (MIME, CRC32), album_id, scan_run_id | Tuple: (MediaItemRecord with all basic fields, []) | Valid inputs from all sources | Creates complete media item record by merging FileInfo + metadata_ext + IDs. Returns empty people list. |
+| 2 | `test_coordinate_metadata_cpu_data` | FileInfo, metadata_ext with MIME/CRC32/fingerprint/width/height | Tuple: (Record with mime_type='image/jpeg', crc32='a1b2c3d4', fingerprint='fff...', width=1920, height=1080, []) | Metadata extraction completed successfully | Verifies metadata extraction results (MIME detection, checksums, dimensions) are correctly copied into record |
+| 3 | `test_coordinate_metadata_exif_data` | FileInfo, metadata_ext with exif_data dict (camera_make, camera_model, GPS, timestamps) | Tuple: (Record with exif_datetime_original, exif_camera_make='Canon', exif_gps_latitude=37.7749, etc., []) | EXIF extraction succeeded | Extracts specific EXIF fields from nested dict into flat record fields (datetime_original, camera_make, camera_model, lens_make, lens_model, focal_length, aperture, iso, GPS) |
+| 4 | `test_coordinate_metadata_with_json_sidecar` | FileInfo with json_sidecar_path pointing to valid .json file | Tuple: (Record with title, description, geo_data from JSON, sidecar_fingerprint (SHA-256), []) | JSON sidecar exists and is valid | Calls parse_google_photos_json() to extract Google Takeout metadata (title, description, photoTakenTime, geoData), calculates sidecar fingerprint for change detection, and merges into record |
+| 5 | `test_coordinate_metadata_json_parse_error` | FileInfo with json_sidecar_path pointing to malformed JSON file | Tuple: (Record created WITHOUT JSON metadata, []), no exception raised | JSON file is corrupted/invalid | Catches JSONDecodeError, logs warning, continues without JSON data (graceful degradation) |
+| 6 | `test_coordinate_metadata_video_data` | FileInfo, metadata_ext with video_data dict (duration=120.5, frame_rate=30.0) | Tuple: (Record with duration_seconds=120.5, frame_rate=30.0, []) | Video metadata extraction succeeded (ffprobe) | Extracts video-specific fields (duration, frame_rate) from metadata_ext into record |
+| 7 | `test_coordinate_metadata_no_video_data` | FileInfo, metadata_ext with video_data=None (image file) | Tuple: (Record with duration_seconds=None, frame_rate=None, []) | File is an image, not a video | Handles non-video files by setting video fields to None (no error) |
+| 8 | `test_coordinate_metadata_minimal_cpu_result` | FileInfo, metadata_ext with only success=True, mime_type, crc32, fingerprint (no dimensions, no EXIF) | Tuple: (Record created with mime_type, width=None, height=None, exif fields=None, []) | Metadata extraction succeeded but extracted minimal data | Handles sparse metadata_ext without crashing (missing optional fields default to None) |
 | 9 | `test_media_item_record_to_dict` | MediaItemRecord object | Dictionary with all record fields as key-value pairs | Record is valid | Tests .to_dict() method for database insertion (converts dataclass to dict) |
 | 10 | `test_media_item_record_has_media_item_id` | MediaItemRecord created from inputs | Record has media_item_id field with 36-character UUID string | ID generation enabled | Verifies UUID is generated and formatted correctly (UUID5 based on path+size+mtime) |
 | 11 | `test_media_item_record_deterministic_ids` | Call coordinate_metadata() TWICE with identical FileInfo, metadata_ext, album_id, scan_run_id | Both calls return records with SAME media_item_id | UUID5 is deterministic (not random) | Verifies IDs are reproducible (same inputs → same UUID). Critical for idempotent re-scans. If someone changes UUID5 to UUID4 (random), this test catches it. |
-| 12 | `test_coordinate_metadata_all_exif_fields` | FileInfo, metadata_ext with exif_data containing ALL possible EXIF fields (datetime_original, datetime_digitized, camera, lens, focal_length, aperture, iso, exposure_time, orientation, GPS) | Record with ALL exif_* fields populated correctly | Complete EXIF data available | Validates coordinator doesn't miss any EXIF fields during extraction (regression test for completeness) |
-| 13 | `test_coordinate_metadata_with_exiftool` | FileInfo, metadata_ext with use_exiftool=True | Record with exif_data populated from ExifTool | ExifTool available | Tests ExifTool integration for RAW formats |
-| 14 | `test_coordinate_metadata_with_exiftool_error` | FileInfo, metadata_ext with use_exiftool=True, ExifTool returns error | Record created without ExifTool data, no exception raised | ExifTool error | Catches ExifTool errors, logs warning, continues without ExifTool data |
+| 12 | `test_coordinate_metadata_all_exif_fields` | FileInfo, metadata_ext with exif_data containing ALL possible EXIF fields (datetime_original, datetime_digitized, camera, lens, focal_length, aperture, iso, exposure_time, orientation, GPS) | Tuple: (Record with ALL exif_* fields populated correctly, []) | Complete EXIF data available | Validates coordinator doesn't miss any EXIF fields during extraction (regression test for completeness) |
+| 13 | `test_coordinate_metadata_with_exiftool` | FileInfo, metadata_ext with use_exiftool=True | Tuple: (Record with exif_data populated from ExifTool, []) | ExifTool available | Tests ExifTool integration for RAW formats |
+| 14 | `test_coordinate_metadata_with_exiftool_error` | FileInfo, metadata_ext with use_exiftool=True, ExifTool returns error | Tuple: (Record created without ExifTool data, []), no exception raised | ExifTool error | Catches ExifTool errors, logs warning, continues without ExifTool data |
+| 15 | `test_coordinate_metadata_with_people_tags` | FileInfo with JSON sidecar containing `"people": [{"name": "John Doe"}, {"name": "Jane Smith"}]` | Tuple: (Record with title="Family Photo", ["John Doe", "Jane Smith"]) | JSON sidecar with people field | **NEW**: Extracts people tags from JSON sidecar, returns as second element of tuple. Preserves order of people in list. |
 
 ### test_metadata_aggregator.py
 
@@ -697,3 +698,19 @@ Tests for metadata-based sidecar matching fallback (11 tests).
 | 9 | `test_match_sidecar_by_metadata_no_exif` | Sidecar with timestamp, media files without EXIF | None | No EXIF data | Returns None when media files have no EXIF timestamps |
 | 10 | `test_match_sidecar_by_metadata_no_sidecar_timestamp` | Sidecar without timestamp | None | Missing sidecar timestamp | Returns None when sidecar has no timestamp |
 | 11 | `test_match_sidecar_by_metadata_empty_candidates` | Sidecar with timestamp, empty candidate list | None | No candidates | Returns None when no candidate media files provided |
+
+### test_people_dal.py
+
+Tests for PeopleDAL database operations (8 tests)
+
+**Rationale**: Implements storage and retrieval of people tags from Google Photos JSON sidecars. People tags are stored in two tables: `people` (person_id, person_name) and `people_tags` (media_item_id, person_id, tag_order). This enables querying photos by person and preserves the order of people in group photos.
+
+| # | Test | Input | Output | Conditions/Assumptions | Logic |
+|---|------|-------|--------|----------------------|-------|
+| 1 | `test_get_or_create_person_new` | person_name="John Doe" | UUID person_id, person inserted in database | New person | Creates new person record with UUID, stores name |
+| 2 | `test_get_or_create_person_existing` | person_name="Jane Smith" called twice | Same person_id returned both times | Person already exists | Returns existing person_id without creating duplicate |
+| 3 | `test_add_people_tags` | media_item_id + ["Alice", "Bob", "Charlie"] | 3 people_tags records with tag_order 0,1,2 | Multiple people | Creates people records (if needed) and people_tags with correct order |
+| 4 | `test_add_people_tags_empty_list` | media_item_id + [] | No database changes | Empty list | Handles empty people list gracefully (no-op) |
+| 5 | `test_add_people_tags_replaces_existing` | Add ["Person A", "Person B"], then add ["Person C"] | Only "Person C" tag remains | Replacing tags | Deletes old tags before inserting new ones (UPDATE behavior) |
+| 6 | `test_get_people_for_media_item` | media_item_id with 2 people tags | ["David", "Emma"] in correct order | Tags exist | Retrieves people names sorted by tag_order |
+| 7 | `test_get_people_for_media_item_no_tags` | media_item_id with no tags | Empty list [] | No tags | Returns empty list for media without people tags |
