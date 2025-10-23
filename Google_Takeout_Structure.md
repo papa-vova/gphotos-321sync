@@ -550,9 +550,16 @@ Heuristic codes:
 - `happy_path+duplicate_numbered_suffix` - Standard pattern with duplicate numbered suffix
 - `truncated_*+duplicate_numbered_suffix` - Truncated pattern with duplicate numbered suffix
 
-### B. Truncated Extensions (Windows MAX_PATH)
+### B. Truncated Sidecar Suffixes
 
-Due to 260-character path limit:
+When the **full path** (directory + filename) exceeds Windows' 260-character limit, the sidecar filename gets truncated:
+
+**Example:**
+
+- Full path: `C:\Very\Long\Directory\Path\...\very_long_filename.jpg.supplemental-metadata.json` (>260 chars)
+- Truncated: `C:\Very\Long\Directory\Path\...\very_long_filename.jpg.supplemental-me.json` (≤260 chars)
+
+The `.supplemental-metadata` suffix gets cut short. Possible truncated patterns:
 
 | Pattern | Heuristic Code |
 |---------|----------------|
@@ -571,7 +578,44 @@ Due to 260-character path limit:
 | `.su.json` | `truncated_su` |
 | `.s.json` | `truncated_s` |
 
-### C. Plain JSON Extension
+### C. No Extension with Duplicate Suffix
+
+Pattern: Base name has NO valid media extension, but has duplicate suffix
+
+- Sidecar: `[UNSET].supplemental-metadata(1).json`
+- Base: `[UNSET]` (no `.jpg`, `.mp4`, etc.)
+- Try extensions: `[UNSET](1).jpg`, `[UNSET](1).png`, `[UNSET](1).mp4`, etc.
+- Match the one that exists
+
+Heuristic code: `no_extension_with_duplicate_suffix`
+
+**Performance optimization:** Quick pre-check skips this for 99% of files (those with `.jpg.supplemental`, `.mp4.supplemental`, etc.)
+
+### D. Extension Guessing (Numbered Files)
+
+Pattern: Sidecar name doesn't include media extension (often for numbered files)
+
+- Sidecar: `04.03.12 - 10.supplemental-metadata.json`
+- Extracted: `04.03.12 - 10` (the `.10` is NOT a valid media extension)
+- Try extensions: `04.03.12 - 10.jpg`, `04.03.12 - 10.png`, etc.
+- Match the one that exists
+
+Heuristic code: `extension_guess_from_supplemental`
+
+### E. Duplicate Without Supplemental
+
+Pattern: Duplicate JSON sidecars that don't have the `.supplemental-metadata` pattern
+
+- Sidecar: `Screenshot_2022-04-21(1).json`
+- Extract base: `Screenshot_2022-04-21` (remove `(N)` suffix)
+- Try extensions: `Screenshot_2022-04-21.jpg`, `Screenshot_2022-04-21.png`, etc.
+- Match the one that exists
+
+Heuristic code: `duplicate_without_supplemental`
+
+**Note:** The `(N)` suffix is in the sidecar name, NOT the media filename
+
+### F. Plain JSON Extension
 
 Pattern: `filename.json` (without `.supplemental-*`)
 

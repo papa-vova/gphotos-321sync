@@ -229,16 +229,21 @@ def discover_files(
         #          [Some Name].supplemental-metadata(2).json -> [Some Name](2).png
         # Google Photos creates these for files without proper metadata
         # MUST come BEFORE happy path because base name has no extension
-        # Check if this pattern applies (has duplicate suffix, has .supplemental, base has no valid extension)
-        if has_duplicate_suffix and '.supplemental' in filename:
+        # Quick pre-check: skip if filename contains common media extension before .supplemental
+        # This avoids computing base/base_ext for 99% of files
+        if (has_duplicate_suffix and '.supplemental' in filename and 
+            not any(f'.{ext}.supplemental' in filename for ext in 
+                   ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'heic', 'tiff', 'tif',
+                    'mp4', 'mov', 'avi', 'mkv', 'webm', 'flv', 'wmv', '3gp', 'm4v'])):
+            # Now extract base and verify no valid extension
             base = filename.split('.supplemental')[0]
             base_ext = base.split('.')[-1].lower() if '.' in base else ''
             valid_exts = {'jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'heic', 'tiff', 'tif', 
                          'mp4', 'mov', 'avi', 'mkv', 'webm', 'flv', 'wmv', '3gp', 'm4v'}
             
-            # Only apply this heuristic if base has NO valid extension
+            # Double-check: only apply if base has NO valid extension
             if base_ext not in valid_exts:
-                logger.debug(f"Applying no_extension heuristic: {{'base': {base!r}, 'duplicate_suffix': {duplicate_suffix!r}, 'available_files': {list(available_media_files)[:5]}}}")
+                logger.debug(f"Applying no_extension heuristic: {{'base': {base!r}, 'duplicate_suffix': {duplicate_suffix!r}}}")
                 # Base has no valid extension - try to find media file with duplicate suffix
                 for ext in ['.jpg', '.jpeg', '.png', '.mp4', '.mov', '.heic', '.gif', '.webp']:
                     candidate_name = f"{base}{duplicate_suffix}{ext}"
@@ -251,11 +256,10 @@ def discover_files(
                         duplicate_suffix = ""
                         has_duplicate_suffix = False
                         break
-        
-        logger.debug(f"After no_extension heuristic: {{'media_filename': {media_filename!r}}}")
+                
+                logger.debug(f"After no_extension heuristic: {{'media_filename': {media_filename!r}}}")
         
         # HAPPY PATH: Full .supplemental-metadata.json (standard Google Takeout pattern)
-        logger.debug(f"Checking happy path: {{'media_filename is None': {media_filename is None}, 'filename_len': {filename_len}, 'has .supplemental-metadata': {'.supplemental-metadata' in filename}}}")
         if media_filename is None and filename_len > 30 and '.supplemental-metadata' in filename:
             # Full pattern: photo.jpg.supplemental-metadata.json (27 chars + base)
             media_filename = filename.split('.supplemental-metadata')[0]
@@ -350,7 +354,6 @@ def discover_files(
         # Pattern: "04.03.12 - 10.supplemental-metadata.json" -> "04.03.12 - 10.jpg"
         # This handles cases where the sidecar name doesn't include the media extension
         # This runs AFTER initial pattern matching to try extension guessing
-        logger.debug(f"Before extension guessing: {{'media_filename': {media_filename!r}}}")
         if media_filename:
             # Check if media_filename has a valid media extension
             # Can't use Path().suffix because "04.03.12 - 10" would return ".10"
@@ -370,10 +373,10 @@ def discover_files(
                         break
         
         if media_filename:
-            logger.debug(f"Before duplicate suffix handling: {{'media_filename': {media_filename!r}, 'duplicate_suffix': {duplicate_suffix!r}, 'has_duplicate_suffix': {has_duplicate_suffix}}}")
             # If there's a duplicate suffix (e.g., "(1)"), insert it before the extension
             # Example: image.png + (1) -> image(1).png
             if duplicate_suffix:
+                logger.debug(f"Adding duplicate suffix: {{'media_filename': {media_filename!r}, 'duplicate_suffix': {duplicate_suffix!r}}}")
                 media_path = Path(media_filename)
                 stem = media_path.stem
                 suffix = media_path.suffix
