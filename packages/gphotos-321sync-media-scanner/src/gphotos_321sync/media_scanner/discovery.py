@@ -387,25 +387,32 @@ def discover_files(
                              'mp4', 'mov', 'avi', 'mkv', 'webm', 'flv', 'wmv', '3gp', 'm4v'}
                 
                 if media_ext not in valid_exts:
-                    # Media filename has no valid extension - try to guess it
+                    # Media filename has no valid extension - use prefix matching to find it
                     base = media_filename
-                    # Try common extensions
-                    for ext in ['.jpg', '.jpeg', '.png', '.mp4', '.mov', '.heic', '.gif', '.webp', '.bmp', '.tiff', '.tif']:
-                        candidate_name = f"{base}{ext}"
-                        if candidate_name in available_media_files:
-                            media_filename = candidate_name
-                            heuristic_code = "extension_guess_from_supplemental"
-                            logger.debug(f"Extension guessed: {{'media_filename': {media_filename!r}}}")
-                            break
+                    # Find ALL media files that start with base + '.' (excluding JSON files)
+                    candidates = [f for f in available_media_files if f.startswith(base + '.') and not f.endswith('.json')]
+                    # Only match if there's exactly ONE candidate (unambiguous)
+                    if len(candidates) == 1:
+                        media_filename = candidates[0]
+                        heuristic_code = "extension_guess_from_supplemental"
+                        logger.debug(f"Extension guessed via prefix match: {{'media_filename': {media_filename!r}}}")
+                    elif len(candidates) > 1:
+                        # Ambiguous - multiple files match this prefix
+                        logger.warning(
+                            f"Ambiguous extension match for sidecar: {{'filename': {json_path.name!r}, 'base': {base!r}, 'candidates': {candidates}}}"
+                        )
+                        # Don't pair - let it fall through to unmatched
+                        media_filename = None
+                    # else: no candidates, media_filename stays as-is and will not be paired below
             
-            # Verify that the media file actually exists in our collected files
-            logger.debug(f"Validating: {{'media_filename': {media_filename!r}, 'in_set': {media_filename in available_media_files}}}")
-            if media_filename not in available_media_files:
-                # Media file doesn't exist - this sidecar is orphaned
+            # Only pair if we found a valid media file
+            if media_filename is None or media_filename not in available_media_files:
+                # Could not find matching media file - this sidecar is orphaned
                 unmatched_sidecars.append(json_path)
-                logger.warning(
-                    f"Sidecar unmatched (media file not found): {{'filename': {json_path.name!r}, 'expected_media': {media_filename!r}, 'available_files': {sorted(list(available_media_files))[:10]}}}"
-                )
+                if media_filename:
+                    logger.debug(
+                        f"Sidecar unmatched (media file not found): {{'filename': {json_path.name!r}, 'expected_media': {media_filename!r}}}"
+                    )
                 continue
             
             key = parent_dir / media_filename
