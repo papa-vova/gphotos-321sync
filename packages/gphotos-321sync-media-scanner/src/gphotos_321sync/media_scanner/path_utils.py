@@ -59,9 +59,12 @@ def should_scan_file(path: Path) -> bool:
     The actual media detection happens via MIME type checking (detect_mime_type).
     
     Excluded files:
-    - Hidden files (Unix: starts with '.', Windows: FILE_ATTRIBUTE_HIDDEN)
     - System files (Thumbs.db, .DS_Store, desktop.ini, Icon\r)
     - Temporary files (.tmp, .temp, .cache, .bak, .swp)
+    
+    NOT excluded:
+    - Hidden files (files starting with '.' or Windows hidden attribute)
+      These may be valid media files (e.g., .facebook_865716343.jpg)
     
     Args:
         path: Path to check
@@ -70,10 +73,6 @@ def should_scan_file(path: Path) -> bool:
         True if the file should be scanned (MIME detection will determine if it's media)
     """
     filename = path.name.lower()
-    
-    # Skip hidden files (cross-platform)
-    if is_hidden(path):
-        return False
     
     # Skip known system files
     if filename in SYSTEM_FILES:
@@ -84,4 +83,5 @@ def should_scan_file(path: Path) -> bool:
         return False
     
     # Everything else should be scanned - MIME detection will determine if it's media
+    # This includes hidden files (files starting with '.')
     return True

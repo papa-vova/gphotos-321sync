@@ -536,9 +536,9 @@ For a media file `photo.jpg`, look for `photo.jpg.supplemental-metadata.json`
 
 All heuristic matches are logged at **WARNING level** with `filename`, `heuristic` code, and `media_file`.
 
-### A. Windows Duplicate Suffix
+### A. Duplicate Numbered Suffix
 
-When Google Takeout is extracted multiple times, Windows adds `(N)` suffixes:
+Google Takeout exports may contain files with `(N)` numbered suffixes for duplicates:
 
 - Sidecar: `image.png.supplemental-metadata(1).json`
 - Media: `image(1).png`
@@ -547,8 +547,8 @@ When Google Takeout is extracted multiple times, Windows adds `(N)` suffixes:
 
 Heuristic codes:
 
-- `happy_path+windows_duplicate_suffix` - Standard pattern with duplicate suffix
-- `truncated_*+windows_duplicate_suffix` - Truncated pattern with duplicate suffix
+- `happy_path+duplicate_numbered_suffix` - Standard pattern with duplicate numbered suffix
+- `truncated_*+duplicate_numbered_suffix` - Truncated pattern with duplicate numbered suffix
 
 ### B. Truncated Extensions (Windows MAX_PATH)
 

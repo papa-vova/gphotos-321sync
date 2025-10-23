@@ -35,17 +35,21 @@ class TestShouldScanFile:
         assert should_scan_file(Path("document.txt"))  # Wrong extension
         assert should_scan_file(Path("data.json"))
     
-    def test_hidden_files_should_skip(self):
-        """Test that hidden files are skipped."""
-        assert not should_scan_file(Path(".hidden"))
-        assert not should_scan_file(Path(".DS_Store"))
-        assert not should_scan_file(Path(".gitignore"))
+    def test_hidden_files_should_scan(self):
+        """Test that hidden files are scanned (may be valid media files)."""
+        # Hidden files should be scanned - they may be valid media files
+        # Example: .facebook_865716343.jpg from Google Takeout
+        assert should_scan_file(Path(".hidden"))
+        assert should_scan_file(Path(".facebook_865716343.jpg"))
+        assert should_scan_file(Path(".photo.png"))
     
     def test_system_files_should_skip(self):
         """Test that system files are skipped."""
         assert not should_scan_file(Path("Thumbs.db"))
         assert not should_scan_file(Path("desktop.ini"))
         assert not should_scan_file(Path("THUMBS.DB"))  # Case insensitive
+        # .DS_Store is a system file, not just a hidden file
+        assert not should_scan_file(Path(".DS_Store"))
     
     def test_temp_files_should_skip(self):
         """Test that temporary files are skipped."""

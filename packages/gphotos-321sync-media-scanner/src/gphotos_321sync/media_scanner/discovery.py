@@ -125,26 +125,44 @@ def discover_files(target_media_path: Path) -> Iterator[FileInfo]:
         logger.debug(f"Using scan root: {{'path': {str(target_media_path)!r}}}")
         scan_root = target_media_path
     
+    # STEP 1: Collect ALL files in one pass (both media and JSON)
+    # Build sets for efficient string-based lookup
+    all_files: dict[Path, set[str]] = {}  # Key: parent_dir, Value: set of filenames in that dir
+    json_files: list[Path] = []  # All JSON sidecar files
+    media_files: list[Path] = []  # All potential media files
+    
+    logger.info("Collecting all files...")
+    for file_path in scan_root.rglob("*"):
+        if file_path.is_dir():
+            continue
+        if not should_scan_file(file_path):
+            continue
+        
+        parent_dir = file_path.parent
+        if parent_dir not in all_files:
+            all_files[parent_dir] = set()
+        all_files[parent_dir].add(file_path.name)
+        
+        if file_path.suffix.lower() == ".json":
+            if file_path.name != "metadata.json":  # Skip album metadata
+                json_files.append(file_path)
+        else:
+            media_files.append(file_path)
+    
+    logger.info(f"Files collected: {{'media': {len(media_files)}, 'json_sidecars': {len(json_files)}}}")
+    
+    # STEP 2: Match JSON sidecars to media files using PURE string matching
     # Build a map of JSON sidecars for efficient lookup
     # Key: media file path (e.g., parent/IMG_1234.jpg)
     # Value: Path to JSON sidecar file
     json_sidecars: dict[Path, Path] = {}
-    
-    # First pass: collect all JSON sidecars
-    # CRITICAL: Scan from scan_root, not target_media_path
     
     # Track matching statistics
     happy_path_matches = 0
     heuristic_matches = 0
     unmatched_sidecars = []
     
-    for json_path in scan_root.rglob("*.json"):
-        if not should_scan_file(json_path):
-            continue
-        
-        # Check if this is a sidecar (not album metadata.json)
-        if json_path.name == "metadata.json":
-            continue  # Skip album metadata files
+    for json_path in json_files:
         
         # Google Takeout sidecar patterns (Windows MAX_PATH truncation):
         # Full: IMG_1234.jpg.supplemental-metadata.json (27 chars)
@@ -172,14 +190,21 @@ def discover_files(target_media_path: Path) -> Iterator[FileInfo]:
         parent_dir = json_path.parent
         filename = json_path.name
         
+        # Get available media filenames in this directory for string matching
+        available_media_files = all_files.get(parent_dir, set())
+        
+        # Debug logging
+        if not available_media_files:
+            logger.debug(f"No media files found in directory: {{'dir': {str(parent_dir)!r}, 'sidecar': {json_path.name!r}}}")
+        
         # Try to extract media filename from sidecar filename
         media_filename = None
         heuristic_code = None  # Track which heuristic was used
         
-        # Extract Windows duplicate suffix (e.g., "(1)", "(2)") before .json if present
+        # Extract duplicate numbered suffix (e.g., "(1)", "(2)") before .json if present
         # Pattern: filename.ext.supplemental-metadata(1).json
         # The media file will be: filename(1).ext
-        # This handles cases where Google Takeout was extracted multiple times
+        # This handles duplicate files in Google Takeout exports
         duplicate_suffix = ""
         has_duplicate_suffix = False
         if filename.endswith('.json'):
@@ -196,67 +221,153 @@ def discover_files(target_media_path: Path) -> Iterator[FileInfo]:
         # This reduces checks from ~16 to 1-3 in most cases
         filename_len = len(filename)
         
+        # HEURISTIC: Sidecars with duplicate suffix but no extension in base name
+        # Pattern: [UNSET].supplemental-metadata(1).json -> [UNSET](1).jpg
+        #          [Some Name].supplemental-metadata(2).json -> [Some Name](2).png
+        # Google Photos creates these for files without proper metadata
+        # MUST come BEFORE happy path because base name has no extension
+        # Check if this pattern applies (has duplicate suffix, has .supplemental, base has no valid extension)
+        if has_duplicate_suffix and '.supplemental' in filename:
+            base = filename.split('.supplemental')[0]
+            base_ext = base.split('.')[-1].lower() if '.' in base else ''
+            valid_exts = {'jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'heic', 'tiff', 'tif', 
+                         'mp4', 'mov', 'avi', 'mkv', 'webm', 'flv', 'wmv', '3gp', 'm4v'}
+            
+            # Only apply this heuristic if base has NO valid extension
+            if base_ext not in valid_exts:
+                logger.debug(f"Applying no_extension heuristic: {{'base': {base!r}, 'duplicate_suffix': {duplicate_suffix!r}, 'available_files': {list(available_media_files)[:5]}}}")
+                # Base has no valid extension - try to find media file with duplicate suffix
+                for ext in ['.jpg', '.jpeg', '.png', '.mp4', '.mov', '.heic', '.gif', '.webp']:
+                    candidate_name = f"{base}{duplicate_suffix}{ext}"
+                    logger.debug(f"Trying candidate: {candidate_name!r}, in set: {candidate_name in available_media_files}")
+                    if candidate_name in available_media_files:
+                        media_filename = candidate_name
+                        heuristic_code = "no_extension_with_duplicate_suffix"
+                        logger.debug(f"MATCHED: {candidate_name!r}")
+                        # Clear duplicate_suffix since we already included it in media_filename
+                        duplicate_suffix = ""
+                        has_duplicate_suffix = False
+                        break
+        
+        logger.debug(f"After no_extension heuristic: {{'media_filename': {media_filename!r}}}")
+        
         # HAPPY PATH: Full .supplemental-metadata.json (standard Google Takeout pattern)
-        if filename_len > 30 and '.supplemental-metadata' in filename:
+        logger.debug(f"Checking happy path: {{'media_filename is None': {media_filename is None}, 'filename_len': {filename_len}, 'has .supplemental-metadata': {'.supplemental-metadata' in filename}}}")
+        if media_filename is None and filename_len > 30 and '.supplemental-metadata' in filename:
             # Full pattern: photo.jpg.supplemental-metadata.json (27 chars + base)
             media_filename = filename.split('.supplemental-metadata')[0]
+            logger.debug(f"Happy path matched: {{'filename': {filename!r}, 'media_filename': {media_filename!r}, 'duplicate_suffix': {duplicate_suffix!r}}}")
             # No heuristic code - this is happy path
         # HEURISTIC: Truncated .supplemental-* patterns (Windows MAX_PATH truncation)
-        elif filename_len > 28 and '.supplemental-metadat' in filename:
+        elif media_filename is None and filename_len > 28 and '.supplemental-metadat' in filename:
             media_filename = filename.split('.supplemental-metadat')[0]
             heuristic_code = "truncated_supplemental_metadat"
-        elif filename_len > 25 and '.supplemental-metad' in filename:
+        elif media_filename is None and filename_len > 25 and '.supplemental-metad' in filename:
             media_filename = filename.split('.supplemental-metad')[0]
             heuristic_code = "truncated_supplemental_metad"
-        elif filename_len > 24 and '.supplemental-meta' in filename:
+        elif media_filename is None and filename_len > 24 and '.supplemental-meta' in filename:
             media_filename = filename.split('.supplemental-meta')[0]
             heuristic_code = "truncated_supplemental_meta"
-        elif filename_len > 21 and '.supplemental-me' in filename:
+        elif media_filename is None and filename_len > 21 and '.supplemental-me' in filename:
             media_filename = filename.split('.supplemental-me')[0]
             heuristic_code = "truncated_supplemental_me"
-        elif '.supplemental-' in filename:
+        elif media_filename is None and '.supplemental-' in filename:
             media_filename = filename.split('.supplemental-')[0]
             heuristic_code = "truncated_supplemental_other"
         
         # HEURISTIC: .supplemen* variants (heavily truncated)
-        elif filename_len > 18 and '.supplemen' in filename:
+        elif media_filename is None and filename_len > 18 and '.supplemen' in filename:
             media_filename = filename.split('.supplemen')[0]
             heuristic_code = "truncated_supplemen"
-        elif filename_len > 17 and '.suppleme' in filename:
+        elif media_filename is None and filename_len > 17 and '.suppleme' in filename:
             media_filename = filename.split('.suppleme')[0]
             heuristic_code = "truncated_suppleme"
-        elif filename_len > 16 and '.supplem' in filename:
+        elif media_filename is None and filename_len > 16 and '.supplem' in filename:
             media_filename = filename.split('.supplem')[0]
             heuristic_code = "truncated_supplem"
-        elif filename_len > 15 and '.supple' in filename:
+        elif media_filename is None and filename_len > 15 and '.supple' in filename:
             media_filename = filename.split('.supple')[0]
             heuristic_code = "truncated_supple"
-        elif filename_len > 14 and '.suppl' in filename:
+        elif media_filename is None and filename_len > 14 and '.suppl' in filename:
             media_filename = filename.split('.suppl')[0]
             heuristic_code = "truncated_suppl"
-        elif filename_len > 13 and '.supp' in filename:
+        elif media_filename is None and filename_len > 13 and '.supp' in filename:
             media_filename = filename.split('.supp')[0]
             heuristic_code = "truncated_supp"
         
         # HEURISTIC: Very heavily truncated (rare)
-        elif filename_len > 12 and '.sup.' in filename and filename.endswith('.json'):
+        elif media_filename is None and filename_len > 12 and '.sup.' in filename and filename.endswith('.json'):
             media_filename = filename.split('.sup.')[0]
             heuristic_code = "truncated_sup"
-        elif filename_len > 11 and '.su.' in filename and filename.endswith('.json'):
+        elif media_filename is None and filename_len > 11 and '.su.' in filename and filename.endswith('.json'):
             media_filename = filename.split('.su.')[0]
             heuristic_code = "truncated_su"
-        elif filename_len > 10 and '.s.' in filename and filename.endswith('.json'):
+        elif media_filename is None and filename_len > 10 and '.s.' in filename and filename.endswith('.json'):
             media_filename = filename.split('.s.')[0]
             heuristic_code = "truncated_s"
         
+        # HEURISTIC: Duplicate sidecars without .supplemental-metadata
+        # Pattern: "Screenshot_2022-04-21(1).json" -> "Screenshot_2022-04-21.jpg"
+        # This handles duplicate JSON sidecars that don't have the supplemental-metadata pattern
+        # MUST come before plain_json_extension fallback
+        elif media_filename is None and has_duplicate_suffix and '.supplemental' not in filename:
+            # Extract base name without (N).json
+            base = json_path.stem.rsplit('(', 1)[0]  # Remove (N) suffix
+            # Try common extensions
+            for ext in ['.jpg', '.jpeg', '.png', '.mp4', '.mov', '.heic', '.gif', '.webp']:
+                candidate_name = f"{base}{ext}"
+                if candidate_name in available_media_files:
+                    media_filename = candidate_name
+                    heuristic_code = "duplicate_without_supplemental"
+                    # Clear duplicate_suffix since it's already in the sidecar name, not media name
+                    duplicate_suffix = ""
+                    has_duplicate_suffix = False
+                    break
+        
         # HEURISTIC: Alternative .json pattern (for very long filenames, rare)
-        elif filename.endswith('.json'):
+        # This is a fallback - should come AFTER all other specific patterns
+        elif media_filename is None and filename.endswith('.json'):
             # Alternative pattern: photo.json (without .supplemental prefix)
-            # Used when media filename is extremely long
-            media_filename = filename[:-5]
-            heuristic_code = "plain_json_extension"
+            # Used when media filename is extremely long and gets truncated
+            # Do PREFIX matching - find media file that starts with the sidecar base name
+            base = filename[:-5]  # Remove .json
+            # Find ALL media files that start with this base
+            candidates = [f for f in available_media_files if f.startswith(base) and f != filename]
+            # Only match if there's exactly ONE candidate (unambiguous)
+            if len(candidates) == 1:
+                media_filename = candidates[0]
+                heuristic_code = "plain_json_extension"
+            elif len(candidates) > 1:
+                # Ambiguous - multiple files match this prefix
+                logger.warning(
+                    f"Ambiguous prefix match for sidecar: {{'filename': {json_path.name!r}, 'prefix': {base!r}, 'candidates': {candidates}}}"
+                )
+        
+        # HEURISTIC: Numbered files - sidecar without media extension
+        # Pattern: "04.03.12 - 10.supplemental-metadata.json" -> "04.03.12 - 10.jpg"
+        # This handles cases where the sidecar name doesn't include the media extension
+        # This runs AFTER initial pattern matching to try extension guessing
+        logger.debug(f"Before extension guessing: {{'media_filename': {media_filename!r}}}")
+        if media_filename:
+            # Check if media_filename has a valid media extension
+            # Can't use Path().suffix because "04.03.12 - 10" would return ".10"
+            media_ext = media_filename.split('.')[-1].lower() if '.' in media_filename else ''
+            valid_exts = {'jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'heic', 'tiff', 'tif', 
+                         'mp4', 'mov', 'avi', 'mkv', 'webm', 'flv', 'wmv', '3gp', 'm4v'}
+            
+            if media_ext not in valid_exts:
+                # Media filename has no valid extension - try to guess it
+                base = media_filename
+                # Try common extensions
+                for ext in ['.jpg', '.jpeg', '.png', '.mp4', '.mov', '.heic', '.gif', '.webp', '.bmp', '.tiff', '.tif']:
+                    candidate_name = f"{base}{ext}"
+                    if candidate_name in available_media_files:
+                        media_filename = candidate_name
+                        heuristic_code = "extension_guess_from_supplemental"
+                        break
         
         if media_filename:
+            logger.debug(f"Before duplicate suffix handling: {{'media_filename': {media_filename!r}, 'duplicate_suffix': {duplicate_suffix!r}, 'has_duplicate_suffix': {has_duplicate_suffix}}}")
             # If there's a duplicate suffix (e.g., "(1)"), insert it before the extension
             # Example: image.png + (1) -> image(1).png
             if duplicate_suffix:
@@ -264,6 +375,17 @@ def discover_files(target_media_path: Path) -> Iterator[FileInfo]:
                 stem = media_path.stem
                 suffix = media_path.suffix
                 media_filename = f"{stem}{duplicate_suffix}{suffix}"
+                logger.debug(f"After adding duplicate suffix: {{'media_filename': {media_filename!r}}}")
+            
+            # Verify that the media file actually exists in our collected files
+            logger.debug(f"Validating: {{'media_filename': {media_filename!r}, 'in_set': {media_filename in available_media_files}}}")
+            if media_filename not in available_media_files:
+                # Media file doesn't exist - this sidecar is orphaned
+                unmatched_sidecars.append(json_path)
+                logger.warning(
+                    f"Sidecar unmatched (media file not found): {{'filename': {json_path.name!r}, 'expected_media': {media_filename!r}, 'available_files': {sorted(list(available_media_files))[:10]}}}"
+                )
+                continue
             
             key = parent_dir / media_filename
             json_sidecars[key] = json_path
@@ -271,13 +393,13 @@ def discover_files(target_media_path: Path) -> Iterator[FileInfo]:
             # Track statistics and log
             # Consider it a heuristic if either:
             # 1. A heuristic pattern was used (truncation, plain .json, etc.)
-            # 2. Windows duplicate suffix was used (even with happy path pattern)
+            # 2. Duplicate numbered suffix was used (even with happy path pattern)
             if heuristic_code or has_duplicate_suffix:
                 heuristic_matches += 1
                 # Build heuristic description
                 heuristic_desc = heuristic_code if heuristic_code else "happy_path"
                 if has_duplicate_suffix:
-                    heuristic_desc = f"{heuristic_desc}+windows_duplicate_suffix"
+                    heuristic_desc = f"{heuristic_desc}+duplicate_numbered_suffix"
                 logger.warning(
                     f"Sidecar matched via heuristic: {{'filename': {json_path.name!r}, 'heuristic': {heuristic_desc!r}, 'media_file': {media_filename!r}}}"
                 )
@@ -297,8 +419,8 @@ def discover_files(target_media_path: Path) -> Iterator[FileInfo]:
         f"Sidecar matching complete: {{'total': {len(json_sidecars)}, 'happy_path': {happy_path_matches}, 'heuristic': {heuristic_matches}, 'unmatched': {len(unmatched_sidecars)}}}"
     )
     
-    # Second pass: discover all files and pair with sidecars
-    logger.info("Discovering media files (this may take several minutes for large libraries)...")
+    # STEP 3: Yield FileInfo objects for all media files
+    logger.info("Creating FileInfo objects for media files...")
     files_discovered = 0
     files_with_sidecars = 0
     progress_interval = 1000  # Log every 1000 files
@@ -308,20 +430,7 @@ def discover_files(target_media_path: Path) -> Iterator[FileInfo]:
     last_progress_time = discovery_start_time
     time_progress_interval = 2.0  # Log every 2 seconds
     
-    # CRITICAL: Scan from scan_root, not target_media_path
-    for file_path in scan_root.rglob("*"):
-        # Skip directories
-        if file_path.is_dir():
-            continue
-        
-        # Skip files that shouldn't be scanned
-        if not should_scan_file(file_path):
-            logger.debug(f"Skipping file (should_scan_file=False): {{'path': {str(file_path)!r}}}")
-            continue
-        
-        # Skip JSON files (they're sidecars, not media)
-        if file_path.suffix.lower() == ".json":
-            continue
+    for file_path in media_files:
         
         # Get file size
         try:

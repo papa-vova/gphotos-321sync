@@ -42,7 +42,7 @@ class TestValidateScan:
     """Tests for validate_scan function."""
     
     def test_marks_inconsistent_files(self, test_db):
-        """Test that files from previous scans with old timestamps are marked inconsistent."""
+        """Test that files from CURRENT scan with old timestamps are marked inconsistent."""
         db_conn = DatabaseConnection(test_db)
         conn = db_conn.connect()
         
@@ -50,20 +50,21 @@ class TestValidateScan:
         media_dal = MediaItemDAL(conn)
         album_dal = AlbumDAL(conn)
         
-        # Create OLD scan run
-        old_scan_run_id = scan_run_dal.create_scan_run()
+        # Create scan run (capture start time BEFORE creating scan)
+        scan_start_time = datetime.now(timezone.utc)
+        scan_run_id = scan_run_dal.create_scan_run()
         
         # Create album
         album_id = str(uuid.uuid4())
         album_dal.upsert_album({
             'album_id': album_id,
             'album_folder_path': "Photos/Test Album",
-            'scan_run_id': old_scan_run_id,
+            'scan_run_id': scan_run_id,
         })
         
-        # Create media item with OLD scan_run_id and old timestamp
-        # Use UTC timezone-aware datetime
-        old_timestamp = (datetime.now(timezone.utc) - timedelta(hours=1)).strftime('%Y-%m-%d %H:%M:%S')
+        # Create media item with CURRENT scan_run_id but OLD timestamp (data anomaly)
+        # This simulates a bug where a file was processed but got an old timestamp
+        old_timestamp = (scan_start_time - timedelta(hours=1)).strftime('%Y-%m-%d %H:%M:%S')
         media_item_id = str(uuid.uuid4())
         
         conn.execute(
@@ -73,18 +74,14 @@ class TestValidateScan:
                 scan_run_id, status, first_seen_timestamp, last_seen_timestamp
             ) VALUES (?, ?, ?, ?, ?, 'present', ?, ?)
             """,
-            (media_item_id, "Photos/Test Album/test.jpg", album_id, 1000, old_scan_run_id, old_timestamp, old_timestamp)
+            (media_item_id, "Photos/Test Album/test.jpg", album_id, 1000, scan_run_id, old_timestamp, old_timestamp)
         )
         conn.commit()
-        
-        # Create NEW scan run
-        scan_start_time = datetime.now(timezone.utc)
-        new_scan_run_id = scan_run_dal.create_scan_run()
         
         conn.close()
         
         # Run validation
-        stats = validate_scan(str(test_db), new_scan_run_id, scan_start_time)
+        stats = validate_scan(str(test_db), scan_run_id, scan_start_time)
         
         # Verify file was marked inconsistent
         assert stats['inconsistent_files'] == 1
@@ -129,8 +126,20 @@ class TestValidateScan:
             album_id=album_id,
             file_size=1000,
             scan_run_id=old_scan_run_id,
+            status='present',  # Explicitly set status
         ))
         conn.commit()  # Tests must commit manually
+        
+        # Verify the media item was inserted with correct status
+        cursor = conn.execute(
+            "SELECT status, scan_run_id FROM media_items WHERE media_item_id = ?",
+            (media_item_id,)
+        )
+        row = cursor.fetchone()
+        cursor.close()
+        assert row is not None, "Media item was not inserted"
+        assert row[0] == 'present', f"Expected status='present', got '{row[0]}'"
+        assert row[1] == old_scan_run_id, f"Expected scan_run_id='{old_scan_run_id}', got '{row[1]}'"
         
         # Create new scan run (capture start time BEFORE creating scan)
         # Use UTC timezone-aware datetime
@@ -143,8 +152,16 @@ class TestValidateScan:
         # Run validation
         stats = validate_scan(str(test_db), new_scan_run_id, scan_start_time)
         
+        # Debug: Check what's in the database after validation
+        db_conn2 = DatabaseConnection(test_db)
+        conn2 = db_conn2.connect()
+        cursor2 = conn2.execute("SELECT media_item_id, status, scan_run_id FROM media_items")
+        all_items = cursor2.fetchall()
+        cursor2.close()
+        conn2.close()
+        
         # Verify file was marked missing
-        assert stats['missing_files'] == 1
+        assert stats['missing_files'] == 1, f"Expected 1 missing file, got {stats['missing_files']}. DB contents: {all_items}. Stats: {stats}"
         
         # Verify in database
         db_conn = DatabaseConnection(test_db)

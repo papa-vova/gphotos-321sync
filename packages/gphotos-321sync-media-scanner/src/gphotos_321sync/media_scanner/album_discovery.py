@@ -153,7 +153,7 @@ def discover_albums(target_media_path: Path, album_dal: AlbumDAL, scan_run_id: s
             f"Please provide a valid directory path."
         )
     
-    logger.debug(f"Starting album discovery: {{'path': {str(target_media_path)!r}, 'type': {type(target_media_path).__name__!r}}}")
+    logger.debug(f"Starting album discovery: {{'path': {str(target_media_path)!r}}}")
     
     # Detect Google Takeout structure: Takeout/Google Photos/
     # This is CRITICAL - Google Takeout places all albums in this subfolder

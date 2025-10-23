@@ -157,7 +157,7 @@ class ParallelScanner:
             
             logger.debug(f"Calling discover_albums: {{'path': {str(target_media_path)!r}}}")
             for album_info in discover_albums(target_media_path, album_dal, scan_run_id):
-                logger.debug(f"Discovered album: {{'path': {album_info.album_folder_path!r}}}")
+                logger.debug(f"Discovered album: {{'path': {str(album_info.album_folder_path)!r}}}")
                 album_map[str(album_info.album_folder_path)] = album_info.album_id
                 album_count += 1
                 # Track metadata.json files that were read

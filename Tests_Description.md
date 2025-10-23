@@ -4,11 +4,11 @@ Comprehensive documentation of all test suites in the gphotos-321sync project.
 
 ## Summary
 
-**Total: 368 tests** (12 + 42 + 314)
+**Total: 372 tests** (12 + 42 + 318)
 
 - **gphotos-321sync-common:** 12 tests
 - **gphotos-321sync-takeout-extractor:** 42 tests
-- **gphotos-321sync-media-scanner:** 314 tests
+- **gphotos-321sync-media-scanner:** 318 tests
 
 ---
 
@@ -145,15 +145,15 @@ Tests for scanner-specific configuration (3 tests).
 
 Tests for media scanner path utilities (6 tests).
 
-**Rationale**: Tests media-scanner specific file filtering (hidden/system/temp files).
+**Rationale**: Tests media-scanner specific file filtering (system/temp files). Hidden files are now scanned as they may be valid media files.
 
 | # | Test | Input | Output | Conditions/Assumptions | Logic |
 |---|------|-------|--------|----------------------|-------|
 | 1 | `test_unix_hidden_files` | Files: .hidden, .DS_Store, .gitignore | is_hidden=True for all | Unix hidden files | Identifies files starting with . as hidden |
 | 2 | `test_regular_files_not_hidden` | Files: photo.jpg, document.pdf | is_hidden=False for all | Normal files | Regular files not marked as hidden |
 | 3 | `test_regular_files_should_scan` | Files: photo.jpg, video.mp4 | should_scan=True for all | Normal files | All regular media files should be scanned |
-| 4 | `test_hidden_files_should_skip` | Files: .hidden, .DS_Store | should_scan=False for all | Hidden files | Skips Unix hidden files (system metadata) |
-| 5 | `test_system_files_should_skip` | Files: Thumbs.db, desktop.ini, .DS_Store | should_scan=False for all | Windows/Mac system files | Skips system-generated files |
+| 4 | `test_hidden_files_should_scan` | Files: .hidden, .facebook_865716343.jpg | should_scan=True for all | Hidden files may be valid media | Scans hidden files (e.g., .facebook_865716343.jpg from Google Takeout) |
+| 5 | `test_system_files_should_skip` | Files: Thumbs.db, desktop.ini, .DS_Store | should_scan=False for all | Windows/Mac system files | Skips system-generated files (.DS_Store is in SYSTEM_FILES list) |
 | 6 | `test_temp_files_should_skip` | Files: file.tmp, cache.cache, backup.bak | should_scan=False for all | Temporary file extensions | Skips temporary and backup files |
 
 ### test_database.py
@@ -265,18 +265,18 @@ Tests for album discovery and metadata parsing (16 tests).
 
 ### test_discovery.py
 
-Tests for file discovery functionality (16 tests).
+Tests for file discovery functionality (20 tests).
 
-**Rationale**: Ensures all media files are discovered correctly, JSON sidecars are paired with their media files (including Windows MAX_PATH truncated variants), and hidden/system files are filtered out to avoid processing unwanted files.
+**Rationale**: Ensures all media files are discovered correctly, JSON sidecars are paired with their media files (including Windows MAX_PATH truncated variants and new heuristics for [UNSET] files, numbered files, and duplicate sidecars), and system files are filtered out. Hidden files are now scanned as they may be valid media.
 
 | # | Test | Input | Output | Conditions/Assumptions | Logic |
 |---|------|-------|--------|----------------------|-------|
-| 1 | `test_discover_files_basic` | Directory: "Photos/" with IMG_001.jpg, IMG_002.jpg | List of 2 FileInfo objects | Media files present | Discovers all non-hidden, non-system files |
+| 1 | `test_discover_files_basic` | Directory: "Photos/" with IMG_001.jpg, IMG_002.jpg, .hidden.jpg | List of 3+ FileInfo objects | Media files present | Discovers all non-system files (including hidden files) |
 | 2 | `test_discover_files_sidecar_pairing` | photo1.jpg + photo1.jpg.supplemental-metadata.json, video1.mp4 + video1.mp4.supplemental-metadata.json, photo2.png (no sidecar) | FileInfo with json_sidecar_path set for files with sidecars, None for others | Google Takeout sidecar patterns | Tests sidecar pairing. App supports Google Takeout patterns: 1) `filename.ext.supplemental-metadata.json` (standard), 2) `filename.ext.supplemental-me.json` (truncated), 3) `filename.ext.supplemental-metadat.json` (truncated), 4) `filename.ext.supplemental-metad.json` (truncated), 5) `filename.ext.json` (alternative). Test covers: files with sidecars (photo1.jpg, video1.mp4, photo4.heic) and files without (photo2.png, photo3.jpg, video2.mov). |
 | 3 | `test_discover_files_relative_paths` | Root: "/media", File: "/media/Photos/2023/img.jpg" | FileInfo with relative_path="Photos/2023/img.jpg" | Files at various depths | Calculates correct relative paths from root |
 | 4 | `test_discover_files_album_folder` | File: "Photos/Vacation/img.jpg" | FileInfo with album_folder_path="Photos/Vacation" | Files in subdirectories | Identifies immediate parent folder as album |
 | 5 | `test_discover_files_excludes_json` | Directory with photo1.jpg.json, video1.mp4.json, metadata.json | discover_files() returns only media files, no .json files | JSON files present | Tests that JSON files are excluded from results (they're paired as sidecars or album metadata, not scanned as media files). Verifies no FileInfo has .json extension. |
-| 6 | `test_discover_files_excludes_hidden` | Files: .hidden, .DS_Store, IMG_001.jpg | Only IMG_001.jpg in results | Hidden files present | Filters out Unix hidden files (starting with .) |
+| 6 | `test_discover_files_includes_hidden` | Files: .hidden.jpg, .facebook_865716343.jpg, IMG_001.jpg | All files in results except .DS_Store | Hidden media files present | Includes hidden files (they may be valid media), excludes only system files |
 | 7 | `test_discover_files_empty_directory` | Empty directory (no files) | discover_files() returns empty list, warning "No media files discovered" logged | No files to discover | Tests that discover_files() handles empty directories gracefully: returns empty list, logs warning (folder exists but has no media - user should know). Unlike discover_albums which raises error, this just warns. |
 | 8 | `test_discover_files_nonexistent_path` | Path: "/does/not/exist" | Empty list | Path doesn't exist | Handles missing paths gracefully |
 | 9 | `test_discover_files_file_not_directory` | Path to file instead of directory | Empty list | Path is a file | Handles file paths gracefully |
@@ -287,6 +287,10 @@ Tests for file discovery functionality (16 tests).
 | 14 | `test_discover_files_truncated_sidecar_patterns` | photo1.jpg + photo1.jpg.supplemen.json, photo2.jpg + photo2.jpg.suppl.json, photo3.jpg + photo3.jpg.supplemental-metadat.json, photo4.jpg + photo4.jpg.supplemental-metad.json, photo5.jpg + photo5.jpg.supplemental-me.json | All 5 photos paired with their truncated sidecars | Windows MAX_PATH truncation (Windows-only issue) | Tests that app handles full spectrum of Windows path truncation variants. When full path exceeds 260 chars, Windows truncates the filename. App must match all variants from `.supplemental-metadata.json` (27 chars) down to `.json` (5 chars). Tests intermediate truncations: `.supplemen.json`, `.suppl.json`, `.supplemental-metadat.json`, `.supplemental-metad.json`, `.supplemental-me.json`. |
 | 15 | `test_discover_files_tilde_duplicates` | IMG20240221145914.jpg + IMG20240221145914.jpg.supplemental-metadata.json, IMG20240221145914~2.jpg (no own sidecar), IMG20240221145914~3.jpg (no own sidecar), VID20240523214231~2.mp4 + VID20240523214231~2.mp4.supplemental-metadata.json | Tilde duplicates without own sidecars fall back to original's sidecar; tilde duplicates with own sidecars use their own | Google Takeout tilde suffix pattern (~2, ~3) | Tests handling of tilde suffix duplicates (alternative to parenthesis duplicates). When Google Takeout creates duplicates, it may use `filename~2.ext` instead of `filename(1).ext`. App tries exact match first, then falls back to original file's sidecar if duplicate has no own sidecar. |
 | 16 | `test_discover_files_alternative_json_pattern` | Screenshot_2024-01-14-14-13-33-16_948cd9899890cbd5c2798760b2b95377.jpg + Screenshot_2024-01-14-14-13-33-16_948cd9899890.json, original_0eb58adf-59c4-46d2-9420-73d42f7c8e88_FB_IMG_1713377637724.jpg + original_0eb58adf-59c4-46d2-9420-73d42f7c8e88_.json | Both files paired with .json sidecars (without .supplemental-metadata) | Very long filenames or UUID patterns | Tests alternative `.json` pattern (without `.supplemental-metadata` prefix). Used when media filename is extremely long or contains patterns like UUIDs. Google Takeout uses this pattern to avoid exceeding Windows MAX_PATH even for the sidecar filename. |
+| 17 | `test_discover_files_no_extension_with_duplicate_suffix` | [UNSET](1).jpg, [UNSET](2).jpg, [Some Name](1).png + [UNSET].supplemental-metadata(1).json, [UNSET].supplemental-metadata(2).json, [Some Name].supplemental-metadata(1).json | All files paired with their numbered sidecars | Sidecars with no extension in base name | Tests matching of sidecars where base name has no extension. Pattern: [BaseName].supplemental-metadata(N).json → [BaseName](N).ext. Works for any filename pattern ([UNSET], [Some Name], etc.). Heuristic tries common extensions to find matching media file. Google Photos creates these for files without proper metadata. |
+| 18 | `test_discover_files_numbered_without_extension` | 04.03.12 - 10.jpg, 18.03.12 - 1.jpg + 04.03.12 - 10.supplemental-metadata.json, 18.03.12 - 1.supplemental-metadata.json | Files paired via extension guessing | Sidecars without media extension in name | Tests extension guessing heuristic for numbered files. When sidecar name doesn't include the media extension (e.g., "04.03.12 - 10.supplemental-metadata.json" for "04.03.12 - 10.jpg"), the algorithm tries common extensions to find the matching media file. |
+| 19 | `test_discover_files_duplicate_without_supplemental` | Screenshot_2022-04-21.jpg + Screenshot_2022-04-21(1).json | File paired with duplicate sidecar | Duplicate sidecar without supplemental-metadata pattern | Tests matching of duplicate JSON sidecars that don't have the supplemental-metadata pattern. Pattern: Screenshot_2022-04-21(1).json → Screenshot_2022-04-21.jpg. The (1) suffix is in the sidecar name, not the media filename. |
+| 20 | `test_discover_files_hidden_media` | .facebook_865716343.jpg + .facebook_865716343.jpg.supplemental-metadata.json | Hidden file discovered and paired with sidecar | Hidden media file (starts with .) | Tests that hidden media files (starting with '.') are discovered and paired with their sidecars. These may be valid media files from Google Takeout (e.g., .facebook_865716343.jpg). System files like .DS_Store are still excluded. |
 
 ### test_content_based_matching.py
 

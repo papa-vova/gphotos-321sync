@@ -36,7 +36,7 @@ def validate_scan(db_path: str, scan_run_id: str, scan_start_time: datetime) -> 
     
     try:
         # Step 1: Mark inconsistent files
-        # Files from PREVIOUS scans that have old timestamps
+        # Files from CURRENT scan that have old timestamps (data anomalies)
         # Get the current scan's start time from the database
         cursor = conn.execute(
             "SELECT start_timestamp FROM scan_runs WHERE scan_run_id = ?",
@@ -47,12 +47,13 @@ def validate_scan(db_path: str, scan_run_id: str, scan_start_time: datetime) -> 
             db_scan_start = row[0]
             cursor.close()
             
-            # Mark files from previous scans with timestamps before this scan started
+            # Mark files from CURRENT scan with timestamps before this scan started
+            # This detects data anomalies (timing issues, incomplete transactions, bugs)
             cursor = conn.execute(
                 """
                 UPDATE media_items
                 SET status = 'inconsistent'
-                WHERE scan_run_id != ?
+                WHERE scan_run_id = ?
                   AND last_seen_timestamp < ?
                   AND status = 'present'
                 """,

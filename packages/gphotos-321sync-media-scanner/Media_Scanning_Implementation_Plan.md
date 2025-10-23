@@ -74,12 +74,13 @@ This document provides a step-by-step implementation plan for the media scanning
 - **Status:** ✅
 - **File:** `src/gphotos_321sync/media_scanner/path_utils.py`
 - **Functions:**
-  - `should_scan_file(path: Path) -> bool` (excludes only system/hidden/temp files)
-  - `is_hidden(path: Path) -> bool` (cross-platform hidden file detection)
-- **Tests:** File filtering, hidden file detection
+  - `should_scan_file(path: Path) -> bool` (excludes only system/temp files)
+  - `is_hidden(path: Path) -> bool` (cross-platform hidden file detection - kept for reference)
+- **Tests:** File filtering, system/temp file detection
 - **Acceptance:** All path tests pass
-- **CRITICAL:** Does NOT filter by extension! MIME detection determines if file is media.
+- **CRITICAL:** Does NOT filter by extension OR hidden status! MIME detection determines if file is media.
   - Files without extensions: scanned ✅
+  - Hidden files (starting with '.'): scanned ✅ (may be valid media, e.g., .facebook_865716343.jpg)
   - Files with wrong extensions: scanned ✅
   - Actual media detection: via `detect_mime_type()` only
 

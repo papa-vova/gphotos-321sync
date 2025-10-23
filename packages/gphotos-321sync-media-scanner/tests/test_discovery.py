@@ -36,8 +36,9 @@ def test_tree(tmp_path):
     # Create album metadata (should be ignored)
     (album1 / "metadata.json").write_text('{"title": "Album 1"}')
     
-    # Create hidden file (should be ignored)
+    # Create hidden file (should be scanned - may be valid media)
     (album1 / ".hidden.jpg").write_text("hidden")
+    (album1 / ".hidden.jpg.supplemental-metadata.json").write_text('{"title": "Hidden"}')
     
     # Create system file (should be ignored on Windows)
     thumbs = album2 / "Thumbs.db"
@@ -50,8 +51,8 @@ def test_discover_files_basic(test_tree):
     """Test basic file discovery."""
     files = list(discover_files(test_tree))
     
-    # Should find 6 media files (excluding .hidden.jpg and Thumbs.db)
-    assert len(files) >= 6
+    # Should find 7 media files (including .hidden.jpg, excluding Thumbs.db)
+    assert len(files) >= 7
     
     # Check that all returned items are FileInfo objects
     for file_info in files:
@@ -117,12 +118,12 @@ def test_discover_files_excludes_json(test_tree):
         assert file_info.file_path.suffix.lower() != ".json"
 
 
-def test_discover_files_excludes_hidden(test_tree):
-    """Test that hidden files are excluded."""
+def test_discover_files_includes_hidden(test_tree):
+    """Test that hidden files are included (may be valid media)."""
     files = [f.file_path.name for f in discover_files(test_tree)]
     
-    # Hidden file should not be in results
-    assert ".hidden.jpg" not in files
+    # Hidden file should be in results (may be valid media file)
+    assert ".hidden.jpg" in files
 
 
 def test_discover_files_empty_directory(tmp_path):
@@ -307,11 +308,11 @@ def test_discover_files_alternative_json_pattern(tmp_path):
     assert files["original_0eb58adf-59c4-46d2-9420-73d42f7c8e88_FB_IMG_1713377637724.jpg"].json_sidecar_path.name == "original_0eb58adf-59c4-46d2-9420-73d42f7c8e88_.json"
 
 
-def test_discover_files_windows_duplicate_suffix(tmp_path):
-    """Test discovery of files with Windows duplicate suffix (N) pattern.
+def test_discover_files_duplicate_numbered_suffix(tmp_path):
+    """Test discovery of files with duplicate numbered suffix (N) pattern.
     
-    When Google Takeout is extracted multiple times to the same location,
-    Windows adds (1), (2), etc. suffixes to duplicate files.
+    Google Takeout exports may contain files with (1), (2), etc. suffixes
+    for duplicate files.
     For sidecars: filename.ext.supplemental-metadata(1).json
     For media: filename(1).ext
     """
@@ -351,3 +352,78 @@ def test_discover_files_windows_duplicate_suffix(tmp_path):
     # Truncated sidecar with duplicate suffix should be paired
     assert files["Screenshot_20211104-110347(1).jpg"].json_sidecar_path is not None
     assert files["Screenshot_20211104-110347(1).jpg"].json_sidecar_path.name == "Screenshot_20211104-110347.jpg.supplemental-me(1).json"
+
+
+def test_discover_files_no_extension_with_duplicate_suffix(tmp_path):
+    """Test that sidecars with no extension in base name are correctly paired with numbered media files."""
+    # Create media files with various base names without extensions
+    # [UNSET] is one example, but this works for any filename pattern
+    (tmp_path / "[UNSET](1).jpg").write_text("fake jpeg 1")
+    (tmp_path / "[UNSET](2).jpg").write_text("fake jpeg 2")
+    (tmp_path / "[Some Name](1).png").write_text("fake png")
+    
+    # Create corresponding sidecars (base name has no extension)
+    (tmp_path / "[UNSET].supplemental-metadata(1).json").write_text('{"title": "UNSET 1"}')
+    (tmp_path / "[UNSET].supplemental-metadata(2).json").write_text('{"title": "UNSET 2"}')
+    (tmp_path / "[Some Name].supplemental-metadata(1).json").write_text('{"title": "Some Name"}')
+    
+    files = {f.file_path.name: f for f in discover_files(tmp_path)}
+    
+    # All files should be paired with their sidecars via extension guessing
+    assert files["[UNSET](1).jpg"].json_sidecar_path is not None
+    assert files["[UNSET](1).jpg"].json_sidecar_path.name == "[UNSET].supplemental-metadata(1).json"
+    
+    assert files["[UNSET](2).jpg"].json_sidecar_path is not None
+    assert files["[UNSET](2).jpg"].json_sidecar_path.name == "[UNSET].supplemental-metadata(2).json"
+    
+    assert files["[Some Name](1).png"].json_sidecar_path is not None
+    assert files["[Some Name](1).png"].json_sidecar_path.name == "[Some Name].supplemental-metadata(1).json"
+
+
+def test_discover_files_numbered_without_extension(tmp_path):
+    """Test that sidecars for numbered files without extensions are matched via heuristic."""
+    # Create media files with extensions
+    (tmp_path / "04.03.12 - 10.jpg").write_text("fake jpeg")
+    (tmp_path / "18.03.12 - 1.jpg").write_text("fake jpeg")
+    
+    # Create sidecars that don't include the extension in the name
+    (tmp_path / "04.03.12 - 10.supplemental-metadata.json").write_text('{"title": "Photo 10"}')
+    (tmp_path / "18.03.12 - 1.supplemental-metadata.json").write_text('{"title": "Photo 1"}')
+    
+    files = {f.file_path.name: f for f in discover_files(tmp_path)}
+    
+    # Files should be paired via extension guessing heuristic
+    assert files["04.03.12 - 10.jpg"].json_sidecar_path is not None
+    assert files["04.03.12 - 10.jpg"].json_sidecar_path.name == "04.03.12 - 10.supplemental-metadata.json"
+    
+    assert files["18.03.12 - 1.jpg"].json_sidecar_path is not None
+    assert files["18.03.12 - 1.jpg"].json_sidecar_path.name == "18.03.12 - 1.supplemental-metadata.json"
+
+
+def test_discover_files_duplicate_without_supplemental(tmp_path):
+    """Test that duplicate sidecars without supplemental-metadata pattern are matched."""
+    # Create media files
+    (tmp_path / "Screenshot_2022-04-21.jpg").write_text("fake screenshot")
+    
+    # Create duplicate sidecar without supplemental-metadata pattern
+    (tmp_path / "Screenshot_2022-04-21(1).json").write_text('{"title": "Screenshot"}')
+    
+    files = {f.file_path.name: f for f in discover_files(tmp_path)}
+    
+    # File should be paired via duplicate_without_supplemental heuristic
+    assert files["Screenshot_2022-04-21.jpg"].json_sidecar_path is not None
+    assert files["Screenshot_2022-04-21.jpg"].json_sidecar_path.name == "Screenshot_2022-04-21(1).json"
+
+
+def test_discover_files_hidden_media(tmp_path):
+    """Test that hidden media files (starting with .) are discovered."""
+    # Create hidden media file (e.g., from Google Takeout)
+    (tmp_path / ".facebook_865716343.jpg").write_text("fake jpeg")
+    (tmp_path / ".facebook_865716343.jpg.supplemental-metadata.json").write_text('{"title": "Facebook"}')
+    
+    files = {f.file_path.name: f for f in discover_files(tmp_path)}
+    
+    # Hidden file should be discovered and paired
+    assert ".facebook_865716343.jpg" in files
+    assert files[".facebook_865716343.jpg"].json_sidecar_path is not None
+    assert files[".facebook_865716343.jpg"].json_sidecar_path.name == ".facebook_865716343.jpg.supplemental-metadata.json"
