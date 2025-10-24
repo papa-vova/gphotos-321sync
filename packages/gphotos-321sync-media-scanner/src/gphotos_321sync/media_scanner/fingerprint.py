@@ -2,10 +2,10 @@
 
 import hashlib
 from pathlib import Path
-from gphotos_321sync.common import compute_crc32
+from gphotos_321sync.common import compute_crc32, compute_crc32_hex
 
-# Re-export compute_crc32 from common for backward compatibility
-__all__ = ['compute_content_fingerprint', 'compute_crc32']
+# Re-export CRC32 functions from common for backward compatibility
+__all__ = ['compute_content_fingerprint', 'compute_crc32', 'compute_crc32_hex']
 
 # Fingerprint configuration
 FINGERPRINT_HEAD_SIZE = 65536  # 64 KB from start

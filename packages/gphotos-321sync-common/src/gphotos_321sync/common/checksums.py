@@ -33,3 +33,23 @@ def compute_crc32(file_path: Path) -> int:
     
     # Return as unsigned 32-bit integer
     return crc & 0xFFFFFFFF
+
+
+def compute_crc32_hex(file_path: Path) -> str:
+    """
+    Compute CRC32 checksum of entire file as hex string.
+    
+    Used for:
+    - Duplicate detection (scanner) - hex format for database storage
+    
+    Args:
+        file_path: Path to the file
+        
+    Returns:
+        CRC32 checksum as 8-character hex string (e.g., "a1b2c3d4")
+        
+    Raises:
+        OSError: If file cannot be read
+    """
+    crc_int = compute_crc32(file_path)
+    return f"{crc_int:08x}"

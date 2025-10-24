@@ -60,8 +60,5 @@ See individual package READMEs for detailed usage:
 
 ```bash
 # Run tests
-python -m pytest packages/
-
-# Format code
-python -m black packages/
-python -m ruff check packages/
+python -m pytest tests/ -v
+```

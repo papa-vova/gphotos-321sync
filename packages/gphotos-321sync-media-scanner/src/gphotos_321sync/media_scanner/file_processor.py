@@ -15,14 +15,14 @@ from typing import Optional
 import zlib
 
 # Constants for file processing
-CRC32_CHUNK_SIZE = 64 * 1024  # 64KB chunks for CRC32 calculation
+# CRC32_CHUNK_SIZE moved to common package
 
 from .metadata.exif_extractor import extract_exif_smart, extract_resolution
 from .metadata.video_extractor import extract_video_metadata, is_video_file
 from .mime_detector import detect_mime_type
 from .fingerprint import compute_content_fingerprint
 from .errors import classify_error
-from gphotos_321sync.common.checksums import compute_crc32
+from gphotos_321sync.common.checksums import compute_crc32, compute_crc32_hex
 
 logger = logging.getLogger(__name__)
 
@@ -162,29 +162,4 @@ def process_file_cpu_work(
     return result
 
 
-def calculate_crc32(file_path: Path) -> str:
-    """Calculate CRC32 checksum of a file.
-    
-    Args:
-        file_path: Path to the file
-        
-    Returns:
-        CRC32 checksum as 8-character hex string (e.g., "a1b2c3d4")
-        
-    Note:
-        - Reads file in chunks to handle large files efficiently
-        - CRC32 is fast (~1-2 GB/s) for duplicate detection
-    """
-    crc = 0
-    chunk_size = CRC32_CHUNK_SIZE
-    
-    with open(file_path, 'rb') as f:
-        while True:
-            chunk = f.read(chunk_size)
-            if not chunk:
-                break
-            crc = zlib.crc32(chunk, crc)
-    
-    # Convert to unsigned 32-bit integer and format as 8 hex chars
-    crc = crc & 0xFFFFFFFF
-    return f"{crc:08x}"
+# calculate_crc32 function removed - use compute_crc32_hex from common package
