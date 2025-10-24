@@ -1,0 +1,7 @@
+---
+description: Corner case awareness guidelines
+alwaysApply: true
+---
+
+- Always think about potential corner cases and document them for future consideration.
+- Address critical corner cases immediately; note less critical ones for later review.

@@ -1,0 +1,7 @@
+---
+description: Edge case protection guidelines
+alwaysApply: true
+---
+
+- Add runtime checks for critical operations and validate data integrity at boundaries.
+- Use assert() for development-time checks (disabled in production) to catch early bugs.

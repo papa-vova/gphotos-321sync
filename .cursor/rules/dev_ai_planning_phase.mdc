@@ -1,0 +1,8 @@
+---
+description: AI development planning phase guidelines
+alwaysApply: true
+---
+
+- Present the complete plan for any feature before implementation (Step 1: Think of the whole plan and offer it first).
+- Allow corrections and alignments before proceeding to coding (Step 2: Allow corrections before proceeding).
+- Ensure alignment on the full approach before starting any implementation.

@@ -1,0 +1,9 @@
+---
+description: Require clarifying questions for ambiguous requests
+alwaysApply: true
+---
+
+- If any aspect of a request or prompt is unclear or underspecified, ask targeted clarifying questions before drafting a plan or implementing steps.  
+- Do not proceed to outline, code generation, or implementation until all necessary details are confirmed.  
+- Ensure questions are specific, concise, and focused on filling the gaps in requirements or context.  
+- Once the user has provided the needed clarifications, resume with the planned workflow (outline → atomic increments → verification).

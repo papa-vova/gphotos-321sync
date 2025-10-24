@@ -1,0 +1,22 @@
+---
+description: Logging strategy guidelines
+alwaysApply: true
+---
+
+- Implement configurable logging with multiple levels (error, info, debug).
+- Ensure logging is present for all important cases from the start (no delayed logging).
+- In debug builds, enable all log levels; in production builds, restrict to WARN and ERROR levels.
+
+Levels:
+- error: Indicate failures (e.g., crashes, exceptions, data corruption).
+- warn: Highlight potentially problematic situations (deprecated API usage, recoverable errors) that don’t halt execution but merit attention.
+- info: Track status messages and important events (e.g., user actions, lifecycle events).
+- debug: Provide detailed execution flow for troubleshooting when debugger is unavailable.
+
+Best Practices:
+- Use structured, consistent message formats.
+- Include relevant context (user/session IDs) but avoid sensitive data.
+- Apply appropriate log levels.
+
+Exceptions:
+- Skip logging for trivial getters/setters, basic UI rendering (unless it fails), and internal helper functions that cannot fail.

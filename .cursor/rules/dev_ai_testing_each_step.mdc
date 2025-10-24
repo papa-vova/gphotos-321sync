@@ -1,0 +1,10 @@
+---
+description: Testing at each step guidelines
+alwaysApply: true
+---
+
+- Test after every atomic change by:
+  - Building successfully.
+  - Checking UI previews (if any) render correctly.
+  - Verifying core functionality.
+  - Looking for obvious regressions.

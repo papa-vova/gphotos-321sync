@@ -1,0 +1,8 @@
+---
+description: Atomic change guidelines
+alwaysApply: true
+---
+
+- Make each change atomic: independently buildable, testable, and small enough to isolate issues.
+- Ensure atomic changes provide visible feedback (UI and functionality updates, log messages, etc.).
+- Implement → Build → Test → Verify workflow for each atomic change.

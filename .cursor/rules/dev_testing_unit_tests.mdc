@@ -1,0 +1,8 @@
+---
+description: Unit testing guidelines
+alwaysApply: true
+---
+
+- Write unit tests when maintainability becomes critical.
+- Focus on complex business logic and critical algorithms.
+- Keep unit tests isolated, fast, and deterministic.

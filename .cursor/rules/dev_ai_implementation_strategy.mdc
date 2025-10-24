@@ -1,0 +1,8 @@
+---
+description: AI implementation strategy guidelines
+alwaysApply: true
+---
+
+- Follow a minimalistic-first approach, expanding functionality iteratively.
+- Structure development in hierarchical stages: Phase/Stage (major feature area) → Step (specific functionality) → Atomic change (smallest testable unit).
+- Ensure each atomic change is small, testable, and provides visible feedback.

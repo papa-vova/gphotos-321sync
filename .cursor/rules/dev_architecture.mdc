@@ -1,0 +1,15 @@
+---
+description: Clean Architecture guidelines
+alwaysApply: true
+---
+
+- ALWAYS implement Clean Architecture from the first line of code, not after problems arise.
+- Adhere to key principles: Separation of concerns, Dependency inversion, Single responsibility, Testability, Maintainability.
+- Ensure code readability, compact blocks, clean and consistent variable naming.
+- Prefer code readability to comments and documentation. But ensure that important key things that might not be immediately clear from the code itself are documented and mentioned in the relevant places.
+- Enforce inward dependencies (domain layer has no dependencies on outer layers).
+- Do not hardcode anything. Use configuration at all times.
+- Always prefer logging to prints.
+- Embrace a 'speed first, then quality' pragmatic development philosophy.
+- Keep code self-documenting; add comments only for complex or non-obvious logic.
+- In code reviews, focus on critical issues and avoid over-engineering.

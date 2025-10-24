@@ -1,0 +1,8 @@
+---
+description: Smoke testing guidelines
+alwaysApply: true
+---
+
+- Ensure the app launches successfully under high confidence.
+- Verify critical navigation flows work as expected.
+- Confirm basic functionality operates correctly before deeper testing.

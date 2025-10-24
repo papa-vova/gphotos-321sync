@@ -1,0 +1,8 @@
+---
+description: Use case testing guidelines
+alwaysApply: true
+---
+
+- Test complete user workflows covering core app functionality.
+- Validate critical user journeys end-to-end, including external integrations.
+- Prioritize use case–oriented testing with medium priority.
