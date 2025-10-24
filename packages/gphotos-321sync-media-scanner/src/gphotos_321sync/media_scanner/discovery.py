@@ -167,9 +167,9 @@ def discover_files(
     
     for json_path in json_files:
         
-        # Google Takeout sidecar patterns (Windows MAX_PATH truncation):
+        # Google Takeout sidecar patterns (filename truncation):
         # Full: IMG_1234.jpg.supplemental-metadata.json (27 chars)
-        # Truncated variants due to Windows 260-char path limit:
+        # Truncated variants due to path length limits:
         #   - .supplemental-metadat.json (25 chars)
         #   - .supplemental-metada.json (24 chars)
         #   - .supplemental-metad.json (22 chars)
@@ -265,7 +265,7 @@ def discover_files(
             media_filename = filename.split('.supplemental-metadata')[0]
             logger.debug(f"Happy path matched: {{'filename': {filename!r}, 'media_filename': {media_filename!r}, 'duplicate_suffix': {duplicate_suffix!r}}}")
             # No heuristic code - this is happy path
-        # HEURISTIC: Truncated .supplemental-* patterns (Windows MAX_PATH truncation)
+        # HEURISTIC: Truncated .supplemental-* patterns (filename truncation)
         elif media_filename is None and filename_len > 28 and '.supplemental-metadat' in filename:
             media_filename = filename.split('.supplemental-metadat')[0]
             heuristic_code = "truncated_supplemental_metadat"

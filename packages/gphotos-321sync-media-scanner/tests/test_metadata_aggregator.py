@@ -131,7 +131,7 @@ def test_aggregate_metadata_no_sources():
 
 
 def test_timestamp_precedence():
-    """Test timestamp precedence: JSON > EXIF > filename."""
+    """Test timestamp precedence: EXIF (if reliable) > JSON > filename."""
     file_path = Path("IMG_20210101_120000.jpg")
     
     json_metadata = {
@@ -142,8 +142,13 @@ def test_timestamp_precedence():
         'datetime_original': '2021-05-01T09:00:00'
     }
     
-    # JSON has highest priority
+    # EXIF has highest priority when reliable
     result = _aggregate_timestamp(json_metadata, exif_data, file_path)
+    assert result == '2021-05-01T09:00:00'
+    
+    # JSON when EXIF is unreliable (Unix epoch)
+    unreliable_exif = {'datetime_original': '1970-01-01T00:00:00'}
+    result = _aggregate_timestamp(json_metadata, unreliable_exif, file_path)
     assert result == '2021-06-01T10:00:00'
     
     # EXIF when no JSON

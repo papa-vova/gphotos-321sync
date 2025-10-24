@@ -19,8 +19,8 @@ def aggregate_metadata(
     Aggregate metadata from multiple sources with precedence rules.
     
     Precedence order:
-    1. Google JSON sidecar (highest priority)
-    2. EXIF/IPTC from media file
+    1. EXIF/IPTC from media file (if reliable)
+    2. Google JSON sidecar (fallback when EXIF is unreliable)
     3. Filename parsing
     4. NULL (unknown)
     
@@ -49,7 +49,7 @@ def aggregate_metadata(
     # Description: JSON only
     result['description'] = json_metadata.get('description')
     
-    # Capture timestamp: JSON > EXIF > filename > NULL
+    # Capture timestamp: EXIF (if reliable) > JSON > filename > NULL
     result['capture_timestamp'] = _aggregate_timestamp(
         json_metadata, exif_data, file_path
     )
@@ -103,7 +103,7 @@ def _aggregate_timestamp(
     """
     Aggregate timestamp from multiple sources.
     
-    Precedence: JSON > EXIF > filename > NULL
+    Precedence: EXIF (if reliable) > JSON > filename > NULL
     
     Args:
         json_metadata: JSON sidecar metadata
@@ -113,21 +113,21 @@ def _aggregate_timestamp(
     Returns:
         ISO format timestamp string or None
     """
-    # 1. JSON photoTakenTime (highest priority)
+    # 1. EXIF DateTimeOriginal (if reliable)
+    if 'datetime_original' in exif_data and _is_reliable_exif_timestamp(exif_data['datetime_original']):
+        return exif_data['datetime_original']
+    
+    # 2. EXIF DateTimeDigitized (if reliable)
+    if 'datetime_digitized' in exif_data and _is_reliable_exif_timestamp(exif_data['datetime_digitized']):
+        return exif_data['datetime_digitized']
+    
+    # 3. JSON photoTakenTime (fallback when EXIF is unreliable)
     if 'photoTakenTime' in json_metadata:
         return json_metadata['photoTakenTime']
     
-    # 2. JSON creationTime
+    # 4. JSON creationTime (fallback when EXIF is unreliable)
     if 'creationTime' in json_metadata:
         return json_metadata['creationTime']
-    
-    # 3. EXIF DateTimeOriginal
-    if 'datetime_original' in exif_data:
-        return exif_data['datetime_original']
-    
-    # 4. EXIF DateTimeDigitized
-    if 'datetime_digitized' in exif_data:
-        return exif_data['datetime_digitized']
     
     # 5. Parse from filename
     filename_timestamp = _parse_timestamp_from_filename(file_path.name)
@@ -239,3 +239,72 @@ def _parse_timestamp_from_filename(filename: str) -> Optional[str]:
             pass
     
     return None
+
+
+def _is_reliable_exif_timestamp(timestamp) -> bool:
+    """
+    Check if EXIF timestamp is reliable and not trivial.
+    
+    EXIF timestamps are considered unreliable if they are:
+    - Default camera timestamps (1970-01-01, 1980-01-01, etc.)
+    - Future timestamps (more than 1 year from now)
+    - Very old timestamps (before 1990, before digital cameras)
+    - Invalid or malformed timestamps
+    
+    Args:
+        timestamp: ISO format timestamp string or datetime object
+        
+    Returns:
+        True if timestamp is reliable, False if trivial/unreliable
+    """
+    if not timestamp:
+        return False
+    
+    try:
+        # Handle both datetime objects and strings
+        if isinstance(timestamp, datetime):
+            dt = timestamp
+        else:
+            # Parse the timestamp - handle both with and without timezone
+            if timestamp.endswith('Z'):
+                dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+            elif '+' in timestamp or timestamp.count('-') > 2:  # Has timezone info
+                dt = datetime.fromisoformat(timestamp)
+            else:
+                # No timezone info - assume UTC
+                dt = datetime.fromisoformat(timestamp + '+00:00')
+        
+        # Check for default/trivial timestamps
+        trivial_timestamps = [
+            datetime(1970, 1, 1, tzinfo=timezone.utc),  # Unix epoch
+            datetime(1980, 1, 1, tzinfo=timezone.utc),  # GPS epoch
+            datetime(2000, 1, 1, tzinfo=timezone.utc),  # Y2K default
+            datetime(2001, 1, 1, tzinfo=timezone.utc),  # Common default
+        ]
+        
+        for trivial in trivial_timestamps:
+            if abs((dt - trivial).total_seconds()) < 60:  # Within 1 minute
+                return False
+        
+        # Check for very old timestamps (before digital cameras were common)
+        if dt.year < 1990:
+            return False
+        
+        # Check for future timestamps (more than 1 year from now)
+        now = datetime.now(timezone.utc)
+        if dt > now:
+            # Allow up to 1 year in the future (timezone issues, etc.)
+            if (dt - now).days > 365:
+                return False
+        
+        # Check for suspiciously recent timestamps (likely default)
+        # If timestamp is within 1 minute of a round hour on Jan 1st, it's likely default
+        if (dt.month == 1 and dt.day == 1 and 
+            dt.minute == 0 and dt.second == 0):
+            return False
+        
+        return True
+        
+    except (ValueError, TypeError):
+        # Invalid timestamp format
+        return False

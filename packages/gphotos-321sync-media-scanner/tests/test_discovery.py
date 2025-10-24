@@ -297,7 +297,7 @@ def test_discover_files_alternative_json_pattern(tmp_path):
     album.mkdir()
     
     # Create files with alternative .json pattern (used for long filenames)
-    # When full path exceeds MAX_PATH, Windows truncates the sidecar filename itself
+    # When full path exceeds length limits, the sidecar filename gets truncated
     # Pattern: photo_with_very_long_name.jpg → photo_with_very_long.json (truncated)
     (album / "Screenshot_2024-01-14-14-13-33-16_948cd9899890cbd5c2798760b2b95377.jpg").write_text("fake screenshot")
     (album / "Screenshot_2024-01-14-14-13-33-16_948cd9899890.json").write_text('{"title": "Screenshot"}')

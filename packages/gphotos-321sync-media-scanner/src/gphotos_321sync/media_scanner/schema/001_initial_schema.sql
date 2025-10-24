@@ -81,7 +81,7 @@ CREATE TABLE IF NOT EXISTS media_items (
     frame_rate REAL CHECK(frame_rate IS NULL OR frame_rate > 0),
     
     -- Timestamps
-    capture_timestamp TIMESTAMP,  -- When photo was taken (JSON > EXIF > filename > NULL)
+    capture_timestamp TIMESTAMP,  -- When photo was taken (EXIF > JSON > filename > NULL)
     first_seen_timestamp TIMESTAMP NOT NULL,  -- Set explicitly from Python with timezone.utc
     last_seen_timestamp TIMESTAMP NOT NULL,  -- Set explicitly from Python with timezone.utc
     scan_run_id TEXT NOT NULL,  -- References scan_runs(scan_run_id)

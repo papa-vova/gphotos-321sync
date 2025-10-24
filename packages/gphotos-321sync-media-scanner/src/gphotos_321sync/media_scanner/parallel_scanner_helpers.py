@@ -204,7 +204,7 @@ def report_unmatched_files(
                     "total_samples": min(10, len(media_sidecars_orphaned)),
                     "possible_causes": [
                         "Media file deleted from Google Photos",
-                        "Filename mismatch due to Windows path truncation",
+                        "Filename mismatch due to path truncation",
                         "Google Takeout export inconsistency"
                     ]
                 }
