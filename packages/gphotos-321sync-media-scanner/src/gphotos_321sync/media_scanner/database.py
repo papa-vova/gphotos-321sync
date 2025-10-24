@@ -3,7 +3,7 @@
 import sqlite3
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Iterator
 from contextlib import contextmanager
 
 logger = logging.getLogger(__name__)
@@ -94,7 +94,7 @@ class DatabaseConnection:
         cursor.close()
     
     @contextmanager
-    def transaction(self):
+    def transaction(self) -> Iterator[None]:
         """
         Context manager for explicit transactions.
         
@@ -118,7 +118,7 @@ class DatabaseConnection:
         finally:
             cursor.close()
     
-    def execute(self, sql: str, parameters=None):
+    def execute(self, sql: str, parameters: Optional[tuple] = None) -> sqlite3.Cursor:
         """
         Execute a single SQL statement.
         
@@ -139,7 +139,7 @@ class DatabaseConnection:
             cursor.execute(sql)
         return cursor
     
-    def executemany(self, sql: str, parameters):
+    def executemany(self, sql: str, parameters: list) -> sqlite3.Cursor:
         """
         Execute a SQL statement with multiple parameter sets.
         
@@ -157,17 +157,17 @@ class DatabaseConnection:
         cursor.executemany(sql, parameters)
         return cursor
     
-    def commit(self):
+    def commit(self) -> None:
         """Commit current transaction."""
         if self._connection is not None:
             self._connection.commit()
     
-    def rollback(self):
+    def rollback(self) -> None:
         """Rollback current transaction."""
         if self._connection is not None:
             self._connection.rollback()
     
-    def close(self):
+    def close(self) -> None:
         """Close database connection."""
         if self._connection is not None:
             # Run checkpoint before closing

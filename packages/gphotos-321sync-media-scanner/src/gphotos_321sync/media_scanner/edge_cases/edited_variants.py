@@ -5,6 +5,7 @@ For example: IMG_1234.JPG (original) and IMG_1234-edited.JPG (edited version).
 """
 
 import logging
+import sqlite3
 from pathlib import Path
 from typing import List, Dict, Optional
 from dataclasses import dataclass
@@ -78,7 +79,7 @@ def detect_edited_variants(files: List[FileInfo]) -> Dict[str, str]:
 
 
 def link_edited_variants(
-    db_conn,
+    db_conn: sqlite3.Connection,
     edited_to_original: Dict[str, str]
 ) -> Dict[str, int]:
     """

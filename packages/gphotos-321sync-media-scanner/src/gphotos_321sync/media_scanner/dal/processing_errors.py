@@ -32,7 +32,7 @@ class ProcessingErrorDAL:
         error_type: str,
         error_category: str,
         error_message: str
-    ):
+    ) -> None:
         """
         Insert a processing error.
         

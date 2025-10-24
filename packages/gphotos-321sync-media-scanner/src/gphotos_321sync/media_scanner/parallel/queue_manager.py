@@ -83,7 +83,7 @@ class QueueManager:
             "results_queue_maxsize": self.results_queue_maxsize,
         }
     
-    def shutdown(self):
+    def shutdown(self) -> None:
         """Shutdown queues (cleanup).
         
         Note: Python queues don't need explicit cleanup, but this method

@@ -49,7 +49,7 @@ class ScanRunDAL:
         logger.info(f"Created scan_run {scan_run_id}")
         return scan_run_id
     
-    def update_scan_run(self, scan_run_id: str, **fields):
+    def update_scan_run(self, scan_run_id: str, **fields) -> None:
         """
         Update scan run fields.
         
@@ -74,7 +74,7 @@ class ScanRunDAL:
         
         logger.debug(f"Updated scan_run {scan_run_id}: {list(fields.keys())}")
     
-    def complete_scan_run(self, scan_run_id: str, status: str = 'completed'):
+    def complete_scan_run(self, scan_run_id: str, status: str = 'completed') -> None:
         """
         Mark scan run as completed or failed with explicit UTC timestamp.
         
@@ -149,7 +149,7 @@ class ScanRunDAL:
             return dict(row)
         return None
     
-    def increment_counter(self, scan_run_id: str, counter_name: str, increment: int = 1):
+    def increment_counter(self, scan_run_id: str, counter_name: str, increment: int = 1) -> None:
         """
         Increment a counter field in scan_runs.
         

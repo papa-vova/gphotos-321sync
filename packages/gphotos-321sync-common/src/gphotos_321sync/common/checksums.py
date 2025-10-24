@@ -3,6 +3,9 @@
 import zlib
 from pathlib import Path
 
+# Constants for checksum calculation
+CRC32_CHUNK_SIZE = 65536  # 64 KB chunks
+
 
 def compute_crc32(file_path: Path) -> int:
     """
@@ -22,7 +25,7 @@ def compute_crc32(file_path: Path) -> int:
         OSError: If file cannot be read
     """
     crc = 0
-    chunk_size = 65536  # 64 KB chunks
+    chunk_size = CRC32_CHUNK_SIZE
     
     with open(file_path, 'rb') as f:
         while chunk := f.read(chunk_size):

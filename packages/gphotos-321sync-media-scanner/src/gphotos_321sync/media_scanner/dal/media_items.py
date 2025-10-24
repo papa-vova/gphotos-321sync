@@ -131,7 +131,7 @@ class MediaItemDAL:
         logger.debug(f"Inserted media_item {media_item_id}: {{'path': {relative_path!r}}}")
         return media_item_id
     
-    def update_media_item(self, media_item_id: str, **fields):
+    def update_media_item(self, media_item_id: str, **fields) -> None:
         """
         Update media item fields.
         
@@ -276,7 +276,7 @@ class MediaItemDAL:
             return dict(row)
         return None
     
-    def mark_seen(self, media_item_id: str, scan_run_id: str):
+    def mark_seen(self, media_item_id: str, scan_run_id: str) -> None:
         """
         Mark media item as seen in current scan with explicit UTC timestamp.
         

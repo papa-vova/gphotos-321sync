@@ -14,11 +14,15 @@ from pathlib import Path
 from typing import Optional
 import zlib
 
+# Constants for file processing
+CRC32_CHUNK_SIZE = 64 * 1024  # 64KB chunks for CRC32 calculation
+
 from .metadata.exif_extractor import extract_exif_smart, extract_resolution
 from .metadata.video_extractor import extract_video_metadata, is_video_file
 from .mime_detector import detect_mime_type
 from .fingerprint import compute_content_fingerprint
 from .errors import classify_error
+from gphotos_321sync.common.checksums import compute_crc32
 
 logger = logging.getLogger(__name__)
 
@@ -95,7 +99,8 @@ def process_file_cpu_work(
         
         # 2. Calculate CRC32 (full file stream)
         try:
-            crc32_value = calculate_crc32(file_path)
+            crc32_int = compute_crc32(file_path)
+            crc32_value = f"{crc32_int:08x}"  # Convert to 8-character hex string
             result['crc32'] = crc32_value
         except Exception as e:
             logger.debug(f"CRC32 calculation failed: {{'path': {str(file_path)!r}, 'error': {str(e)!r}}}")
@@ -171,7 +176,7 @@ def calculate_crc32(file_path: Path) -> str:
         - CRC32 is fast (~1-2 GB/s) for duplicate detection
     """
     crc = 0
-    chunk_size = 64 * 1024  # 64KB chunks
+    chunk_size = CRC32_CHUNK_SIZE
     
     with open(file_path, 'rb') as f:
         while True:

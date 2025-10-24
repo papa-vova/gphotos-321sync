@@ -214,7 +214,7 @@ class AlbumDAL:
             return dict(row)
         return None
     
-    def update_album(self, album_id: str, **fields):
+    def update_album(self, album_id: str, **fields) -> None:
         """
         Update album fields.
         

@@ -52,7 +52,7 @@ class PeopleDAL:
         logger.debug(f"Created person: {{'person_id': {person_id!r}, 'name': {person_name!r}}}")
         return person_id
     
-    def add_people_tags(self, media_item_id: str, people_names: list[str]):
+    def add_people_tags(self, media_item_id: str, people_names: list[str]) -> None:
         """Add people tags for a media item.
         
         Args:

@@ -86,7 +86,7 @@ class MigrationRunner:
         logger.debug(f"Found migration files: {{'count': {len(migrations)}}}")
         return migrations
     
-    def apply_migrations(self, target_version: Optional[int] = None):
+    def apply_migrations(self, target_version: Optional[int] = None) -> None:
         """
         Apply pending migrations up to target version.
         
@@ -194,7 +194,7 @@ class MigrationRunner:
         logger.info(f"Schema is up to date: {{'version': {current_version}}}")
         return True
     
-    def reset_database(self):
+    def reset_database(self) -> None:
         """
         Drop all tables and reset database.
         

@@ -103,7 +103,7 @@ class ArchiveExtractionState:
     failed_files: Dict[str, str] = field(default_factory=dict)  # path -> error message
     total_files: int = 0
     
-    def mark_file_extracted(self, file_path: str, size: int, crc32: Optional[int] = None):
+    def mark_file_extracted(self, file_path: str, size: int, crc32: Optional[int] = None) -> None:
         """Mark a file as successfully extracted."""
         self.extracted_files[file_path] = FileExtractionRecord(
             path=file_path,
@@ -112,7 +112,7 @@ class ArchiveExtractionState:
             crc32=crc32
         )
     
-    def mark_file_failed(self, file_path: str, error: str):
+    def mark_file_failed(self, file_path: str, error: str) -> None:
         """Mark a file as failed extraction."""
         self.failed_files[file_path] = error
     
@@ -143,7 +143,7 @@ class ExtractionState:
             )
         return self.archives[archive.name]
     
-    def save(self, state_file: Path):
+    def save(self, state_file: Path) -> None:
         """Save state to JSON file.
         
         Note: Only saves extracted_files for incomplete archives to reduce memory usage.
@@ -763,7 +763,7 @@ class ArchiveExtractor:
                         logger.info(f"Sanitized filename: '{member}' -> '{sanitized_member}'")
                     
                     # Extract to sanitized path with retry logic
-                    def extract_operation():
+                    def extract_operation() -> None:
                         # Extract to sanitized path
                         target_path = extract_to / sanitized_member
                         target_path.parent.mkdir(parents=True, exist_ok=True)
@@ -867,7 +867,7 @@ class ArchiveExtractor:
                 
                 # Extract file with retry logic
                 try:
-                    def extract_operation():
+                    def extract_operation() -> None:
                         # Extract to sanitized path
                         target_path = extract_to / sanitized_member
                         target_path.parent.mkdir(parents=True, exist_ok=True)
@@ -999,7 +999,7 @@ class ArchiveExtractor:
                 
                 # Extract file with retry logic
                 try:
-                    def extract_operation():
+                    def extract_operation() -> None:
                         tar_ref.extract(member, extract_to)
                     
                     self._retry_with_backoff(

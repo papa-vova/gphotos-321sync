@@ -5,6 +5,7 @@ For example: IMG_1234.HEIC and IMG_1234.MOV form a Live Photo pair.
 """
 
 import logging
+import sqlite3
 import uuid
 from pathlib import Path
 from typing import List, Tuple, Dict, Optional
@@ -92,7 +93,7 @@ def detect_live_photo_pairs(files: List[FileInfo]) -> List[Tuple[FileInfo, FileI
 
 
 def link_live_photo_pairs(
-    db_conn,
+    db_conn: sqlite3.Connection,
     pairs: List[Tuple[FileInfo, FileInfo]]
 ) -> Dict[str, int]:
     """
