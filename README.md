@@ -47,18 +47,3 @@ pip install -e ./packages/gphotos-321sync-common
 pip install -e ./packages/gphotos-321sync-takeout-extractor
 pip install -e ./packages/gphotos-321sync-media-scanner
 ```
-
-## Usage
-
-See individual package READMEs for detailed usage:
-
-- [Common utilities](packages/gphotos-321sync-common/README.md)
-- [Takeout extractor](packages/gphotos-321sync-takeout-extractor/README.md)
-- [Media scanner](packages/gphotos-321sync-media-scanner/README.md)
-
-## Development
-
-```bash
-# Run tests
-python -m pytest tests/ -v
-```
