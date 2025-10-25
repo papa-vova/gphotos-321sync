@@ -178,9 +178,9 @@ IMG20240221145914~3.jpg
 - `IMG20240221145914.jpg.supplemental-metadata.json`
 - `IMG20240221145914~2.jpg.supplemental-metadata.json`
 
-#### Extraction Duplicates
+#### Google Photos Duplicates (Numbered)
 
-When Google Takeout is extracted **multiple times** to the same location, the extraction system adds `(N)` suffixes:
+When Google Photos has multiple files with identical names, it creates numbered duplicates:
 
 **Media files:**
 
@@ -202,6 +202,8 @@ image.png.supplemental-metadata(2).json
 
 - Media: `image(1).png` - before extension
 - Sidecar: `image.png.supplemental-metadata(1).json` - before `.json`
+
+**Note:** This is the observed pattern in Google Takeout exports, but the exact reason for this placement difference is not documented by Google. The matching algorithm needs to handle both patterns.
 
 This requires special handling in the matching algorithm (see JSON Sidecar File Matching Logic section).
 

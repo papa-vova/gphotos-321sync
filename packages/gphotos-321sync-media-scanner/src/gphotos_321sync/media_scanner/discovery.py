@@ -4,12 +4,14 @@ Discovers all media files and pairs them with JSON sidecars.
 Handles Google Takeout directory structure and various edge cases.
 """
 
+import json
 import logging
 import re
 import time
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
-from typing import Iterator, Optional, List
+from typing import Iterator, Optional, List, Dict
 
 from .path_utils import should_scan_file
 
@@ -32,6 +34,16 @@ class FileInfo:
     album_folder_path: Path
     json_sidecar_path: Optional[Path]
     file_size: int
+
+
+@dataclass
+class ParsedSidecar:
+    """Parsed sidecar filename components."""
+    filename: str           # "IMG_1234" (without extension)
+    extension: str          # "jpg" or "jp" (may be truncated)
+    numeric_suffix: str    # "(1)" or "" (may be anywhere)
+    full_sidecar_path: Path
+    photo_taken_time: Optional[datetime] = None  # from JSON content
 
 
 @dataclass
@@ -440,6 +452,196 @@ def _handle_edited_files_and_duplicates(
                 break
     
     return json_sidecar_path
+
+
+def parse_sidecar_filename(sidecar_path: Path) -> ParsedSidecar:
+    """Parse sidecar filename into components using the exact logic from the provided script.
+    
+    Args:
+        sidecar_path: Path to the sidecar file
+        
+    Returns:
+        ParsedSidecar with filename, extension, numeric_suffix components
+    """
+    # Known media extensions; prefixes count as truncated matches
+    KNOWN_EXTS = [
+        'jpg','jpeg','jpe','png','gif','webp','heic','heif','bmp','tif','tiff','svg',
+        'webm','mp4','mov','avi','m4v','3gp','jfif','dng','cr2','cr3','arw','nef','raf','orf'
+    ]
+    
+    def is_ext_or_prefix(tok: str) -> bool:
+        t = tok.lower()
+        if not t:
+            return False
+        return any(e.startswith(t) for e in KNOWN_EXTS)
+    
+    base = sidecar_path.name
+    
+    # Require/play nice with trailing .json
+    JSON_RE = re.compile(r'\.json\s*$', re.I)
+    PAREN_NUM_RE = re.compile(r'\((\d+)\)\s*$')
+    
+    if not JSON_RE.search(base):
+        core = base
+        paren_num = ""
+    else:
+        tmp = JSON_RE.sub('', base)          # remove .json
+        m = PAREN_NUM_RE.search(tmp)         # extract "(n)" just before .json
+        if m:
+            paren_num = f"({m.group(1)})"
+            tmp = PAREN_NUM_RE.sub('', tmp)
+        else:
+            paren_num = ""
+        core = tmp
+    
+    # Strip supplemental tail if present (between extension and .json)
+    SUPP_TAIL_RE = re.compile(r'''
+        \.
+        (?:s|supp(?:lemen(?:t(?:al)?)?)?)    # s / supp / supplemen / supplement / supplemental
+        (?:-(?:meta(?:data)?)?)?             # -meta / -metadata (optional)
+        -?                                   # optional lone '-'
+        \s*$                                 # to end
+    ''', re.I | re.X)
+    
+    core = SUPP_TAIL_RE.sub('', core)
+    
+    # If no dot at all → no extension; filename is the whole core
+    if '.' not in core:
+        filename = core if core else ""
+        return ParsedSidecar(
+            filename=filename,
+            extension="",
+            numeric_suffix=paren_num,
+            full_sidecar_path=sidecar_path
+        )
+    
+    # Split on dots to detect extension cluster from the RIGHT
+    tokens = core.split('.')
+    # find rightmost token that is an extension or its prefix
+    last_ext_idx = -1
+    for i, tok in enumerate(tokens):
+        if is_ext_or_prefix(tok):
+            last_ext_idx = i  # keep updating; end with rightmost
+    if last_ext_idx == -1:
+        # No extension found: filename is whole core (dots allowed)
+        return ParsedSidecar(
+            filename=core if core else "",
+            extension="",
+            numeric_suffix=paren_num,
+            full_sidecar_path=sidecar_path
+        )
+    
+    # Walk left to include combined extensions (e.g., svg.png, jpg.webp)
+    start_ext_idx = last_ext_idx
+    while start_ext_idx - 1 >= 0 and is_ext_or_prefix(tokens[start_ext_idx - 1]):
+        start_ext_idx -= 1
+    
+    # Filename is everything BEFORE the extension cluster (allowing dots in filename)
+    filename = ".".join(tokens[:start_ext_idx]) if start_ext_idx > 0 else ""
+    filename = filename if filename else ""
+    
+    # Full extension is the cluster itself
+    full_ext_tokens = tokens[start_ext_idx:last_ext_idx + 1]
+    full_ext = ".".join(full_ext_tokens) if full_ext_tokens else ""
+    
+    return ParsedSidecar(
+        filename=filename,
+        extension=full_ext,
+        numeric_suffix=paren_num,
+        full_sidecar_path=sidecar_path
+    )
+
+
+def build_sidecar_index(sidecar_filenames: List[str]) -> Dict[str, List[ParsedSidecar]]:
+    """Build index: "filename.extension" -> List[ParsedSidecar].
+    
+    Args:
+        sidecar_filenames: List of sidecar filenames to parse
+        
+    Returns:
+        Dictionary mapping "filename.extension" to list of ParsedSidecar objects
+    """
+    logger.info("Starting sidecar index build")
+    
+    index: Dict[str, List[ParsedSidecar]] = {}
+    
+    for sidecar_filename in sidecar_filenames:
+        sidecar_path = Path(sidecar_filename)
+        parsed = parse_sidecar_filename(sidecar_path)
+        
+        # Create key: "filename.extension"
+        key = f"{parsed.filename}.{parsed.extension}" if parsed.extension else parsed.filename
+        
+        if key not in index:
+            index[key] = []
+        index[key].append(parsed)
+    
+    logger.info(f"Finished sidecar index build: {len(index)} unique keys")
+    return index
+
+
+def match_media_to_sidecar(media_file: Path, sidecar_index: Dict[str, List[ParsedSidecar]]) -> Optional[Path]:
+    """Find matching sidecar for media file within one album.
+    
+    Args:
+        media_file: Path to the media file
+        sidecar_index: Dictionary mapping "filename.extension" to list of ParsedSidecar objects
+        
+    Returns:
+        Path to matching sidecar if found, None otherwise
+    """
+    logger.debug(f"Starting sidecar discovery for media file: {media_file.name}")
+    
+    # Extract media filename + extension
+    media_stem = media_file.stem
+    media_suffix = media_file.suffix.lower()
+    
+    # Create lookup key
+    key = f"{media_stem}{media_suffix}"
+    
+    # Look up in sidecar_index
+    if key not in sidecar_index:
+        logger.debug(f"No sidecar candidates found for: {key}")
+        return None
+    
+    candidates = sidecar_index[key]
+    
+    if len(candidates) == 1:
+        candidate = candidates[0]
+        logger.debug(f"Single sidecar candidate found: {candidate.full_sidecar_path.name}")
+        
+        # For single candidate, we still need to check timestamps if available
+        # TODO: Implement timestamp comparison
+        logger.debug(f"Assigned sidecar to media file: {candidate.full_sidecar_path.name}")
+        return candidate.full_sidecar_path
+    
+    elif len(candidates) > 1:
+        logger.warning(f"Multiple sidecar candidates found for: {key}")
+        for i, candidate in enumerate(candidates):
+            logger.debug(f"Candidate {i+1}: {candidate.full_sidecar_path.name}")
+        
+        # TODO: Implement timestamp comparison to find best match
+        # For now, return the first candidate
+        best_candidate = candidates[0]
+        logger.debug(f"Assigned sidecar to media file: {best_candidate.full_sidecar_path.name}")
+        return best_candidate.full_sidecar_path
+    
+    return None
+
+
+def handle_unmatched_files(unmatched_media: List[Path], unmatched_sidecars: List[Path]) -> Dict:
+    """Process unmatched files - placeholder for now.
+    
+    Args:
+        unmatched_media: List of unmatched media files
+        unmatched_sidecars: List of unmatched sidecar files
+        
+    Returns:
+        Dictionary with processing results
+    """
+    # TODO: Implement later
+    logger.info(f"Processing {len(unmatched_media)} unmatched media files and {len(unmatched_sidecars)} unmatched sidecars")
+    return {}
 
 
 def _match_sidecar_patterns(
