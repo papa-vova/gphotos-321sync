@@ -287,7 +287,7 @@ def _match_supplemental_metadata_patterns(
     # This is a fallback - should come AFTER all other specific patterns
     elif filename.endswith('.json'):
         # Alternative pattern: photo.json (without .supplemental prefix)
-        # Used when media filename is extremely long and gets truncated
+        # Used when media filename is extremely long and gets truncated by Google's export system
         # Do PREFIX matching - find media file that starts with the sidecar base name
         base = filename[:-5]  # Remove .json
         # Find ALL media files that start with this base
@@ -396,7 +396,7 @@ def _handle_edited_files_and_duplicates(
         json_sidecar_path = json_sidecars.get(original_lookup_path)
     
     # If still not found, try prefix matching for alternative .json pattern
-    # This handles cases where the sidecar filename itself is truncated
+    # This handles cases where the sidecar filename itself is truncated by Google's export system
     # Example: photo_very_long_name.jpg → photo_very_long.json (truncated)
     if not json_sidecar_path:
         # Look for any .json file in same directory that is a prefix of the media filename

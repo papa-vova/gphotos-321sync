@@ -4,7 +4,7 @@ Creates a comprehensive test dataset resembling Google Takeout structure with:
 - Multiple user albums and year-based albums
 - All supported media file types (images, videos, RAW formats)
 - All JSON sidecar variants (standard, truncated, plain .json)
-- Edge cases: edited files, live photos, tilde duplicates, Windows duplicates
+- Edge cases: edited files, live photos, tilde duplicates, extraction duplicates
 - Corrupted files for error handling tests
 - Synthetic metadata (no personal data)
 - ~10,000 total files (media + sidecars)
@@ -140,7 +140,7 @@ class SyntheticDataGenerator:
             "edited_files": 0,
             "live_photos": 0,
             "tilde_duplicates": 0,
-            "windows_duplicates": 0,
+            "extraction_duplicates": 0,
             "by_format": {},
         }
     
@@ -490,9 +490,9 @@ class SyntheticDataGenerator:
             self.stats["tilde_duplicates"] += 2
             self.stats["media_files"] += 3
         
-        # Windows duplicates
+        # Extraction duplicates
         for i in range(3):
-            base = f"IMG_WINDOWS_{i:04d}"
+            base = f"IMG_EXTRACTION_{i:04d}"
             orig = edge_dir / f"{base}.jpg"
             dup1 = edge_dir / f"{base}(1).jpg"
             dup2 = edge_dir / f"{base}(2).jpg"
@@ -509,7 +509,7 @@ class SyntheticDataGenerator:
                     json.dump(metadata, f, indent=2)
                 self.stats["sidecar_files"] += 1
             
-            self.stats["windows_duplicates"] += 2
+            self.stats["extraction_duplicates"] += 2
             self.stats["media_files"] += 3
         
         # Files without sidecars
@@ -589,7 +589,7 @@ def main():
     logger.info(f"Media files: {stats['media_files']}")
     logger.info(f"Sidecar files: {stats['sidecar_files']}")
     logger.info(f"Albums: {stats['albums']} (user: {stats['user_albums']}, year: {stats['year_albums']})")
-    logger.info(f"Edge cases: edited={stats['edited_files']}, tilde_dups={stats['tilde_duplicates']}, win_dups={stats['windows_duplicates']}")
+    logger.info(f"Edge cases: edited={stats['edited_files']}, tilde_dups={stats['tilde_duplicates']}, ext_dups={stats['extraction_duplicates']}")
     logger.info(f"Corrupted files: {stats['corrupted_files']}")
 
 

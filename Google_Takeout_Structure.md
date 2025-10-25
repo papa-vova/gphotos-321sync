@@ -92,7 +92,7 @@ Every photo/video has an associated JSON file with the pattern:
 
 **Truncated Variants:**
 
-Due to Windows path length limits (260 characters), you may see truncated filenames:
+Google Takeout creates truncated sidecar filenames when the full path would be too long:
 
 - `.supplemental-metadata.json` (full)
 - `.supplemental-metadat.json` (truncated)
@@ -101,7 +101,7 @@ Due to Windows path length limits (260 characters), you may see truncated filena
 - `.supplemen.json` (truncated)
 - `.suppl.json` (truncated)
 
-**Purpose:** Same as above, but filename was truncated to fit Windows path limits.
+**Purpose:** Same as above, but filename was truncated by Google's export system to avoid path length issues.
 
 #### Album Metadata File (`metadata.json`)
 
@@ -178,9 +178,9 @@ IMG20240221145914~3.jpg
 - `IMG20240221145914.jpg.supplemental-metadata.json`
 - `IMG20240221145914~2.jpg.supplemental-metadata.json`
 
-#### Windows Extraction Duplicates
+#### Extraction Duplicates
 
-When Google Takeout is extracted **multiple times** to the same location, Windows adds `(N)` suffixes:
+When Google Takeout is extracted **multiple times** to the same location, the extraction system adds `(N)` suffixes:
 
 **Media files:**
 
@@ -552,7 +552,7 @@ Heuristic codes:
 
 ### B. Truncated Sidecar Suffixes
 
-**Google Takeout ielf creates truncated sidecar filenames** (not Windows extraction). When paths would be too long, Google's export system shortens the `.supplemental-metadata` suffix:
+**Google Takeout itself creates truncated sidecar filenames** (not during extraction). When paths would be too long, Google's export system shortens the `.supplemental-metadata` suffix:
 
 **Example from actual export:**
 
@@ -560,7 +560,7 @@ Heuristic codes:
 - Truncated: `Screenshot_20190317-234331.jpg.supplemental-me.json`
 - Truncated: `IMG_20200218_181324_Bokeh.jpg.supplemental-met.json`
 
-**Why?** Likely to ensure compatibility with Windows' 260-character path limit or internal Google export system constraints.
+**Why?** Likely to ensure compatibility with path length limits or internal Google export system constraints.
 
 Possible truncated patterns found in real exports:
 
@@ -671,7 +671,7 @@ For remaining orphaned sidecars:
 
 **Title Field Behavior:**
 
-When files have Windows duplicate suffixes `(N)`, the JSON `title` field may be **identical** for all duplicates:
+When files have duplicate suffixes `(N)`, the JSON `title` field may be **identical** for all duplicates:
 
 - `filename.ext` → `"title": "filename.ext"`
 - `filename(1).ext` → `"title": "filename.ext"` (same!)
@@ -700,7 +700,7 @@ This is why filename-based matching (Phase 1) is critical for duplicates.
 5. **Preserve people tags** - Store face tags in EXIF or separate database
 6. **Handle duplicates** - Detect and handle `(1)`, `(2)` suffixes appropriately
 7. **Unicode support** - Handle international characters in filenames and metadata
-8. **Path length limits** - Handle Windows 260-character path limit
+8. **Path length limits** - Handle path length constraints in takeout archives
 9. **Incremental sync** - Track processed files to avoid re-processing on subsequent runs
 10. **Error handling** - Gracefully handle missing metadata, corrupted files, etc.
 

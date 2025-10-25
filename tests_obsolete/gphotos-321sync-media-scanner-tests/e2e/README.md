@@ -49,7 +49,7 @@ Generates a complete synthetic test dataset resembling Google Takeout structure.
 
 - Edited files: 5 pairs with `-edited` suffix
 - Tilde duplicates: 4 sets with `~2`, `~3` suffixes
-- Windows duplicates: 3 sets with `(1)`, `(2)` suffixes
+- Extraction duplicates: 3 sets with `(1)`, `(2)` suffixes
 - Files without sidecars: 10 files
 - Orphaned sidecars: 5 sidecars without media files
 - Long filenames for truncation testing
