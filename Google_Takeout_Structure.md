@@ -444,7 +444,7 @@ Result: ✅ Match found
 
 ## What's NOT Included in Exports
 
-### Edit Information (NOT Exported)
+### Edit Information
 
 - **Crop coordinates** - You only get the final cropped image
 - **Filter settings** - Which filter was applied
@@ -453,7 +453,7 @@ Result: ✅ Match found
 
 **What you DO get:** The final rendered image as `[filename]-edited.[ext]`
 
-### Face Detection Details (NOT Exported)
+### Face Detection Details
 
 - **Bounding boxes** - Where faces are located in the image
 - **Unlabeled faces** - Faces detected but not manually tagged
@@ -461,7 +461,7 @@ Result: ✅ Match found
 
 **What you DO get:** Only manually tagged faces in the `people` array
 
-### Private/Internal Metadata (NOT Exported)
+### Private/Internal Metadata
 
 - **Internal Google IDs** - Internal database identifiers
 - **Sync status** - Whether file is synced across devices
