@@ -79,8 +79,6 @@ These files **DO** have separate metadata files.
 
 ### Duplicates
 
-#### Google Photos Duplicates
-
 Files with identical names in Google Photos get numeric suffixes:
 
 ```bash
@@ -112,7 +110,7 @@ These are normal file names and do not result in a specially numbered metadata s
 
 ## JSON Metadata Structure
 
-### Album Metadata (`metadata.json`)
+### Album Metadata
 
 **Location:** One per album folder (e.g., `Takeout/Google Photos/Chair yoga/metadata.json`)
 
@@ -140,7 +138,7 @@ These are normal file names and do not result in a specially numbered metadata s
 | `date.timestamp` | string | Album creation time (Unix epoch seconds) |
 | `date.formatted` | string | Human-readable creation date (for display) |
 
-### Photo/Video Metadata (`.supplemental-metadata.json`)
+### Photo/Video Metadata
 
 **Location:** Next to each media file
 
