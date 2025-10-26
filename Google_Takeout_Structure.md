@@ -1,74 +1,39 @@
 # Google Photos Takeout Structure
 
-This document provides a comprehensive reference for the file structure, naming conventions, and metadata format of Google Photos Takeout exports, along with the actual implementation details of our media scanner.
-
 ## Overview
 
-When you export your Google Photos library via [Google Takeout](https://takeout.google.com/), you receive an archive containing:
-
-- **Media files** - Your photos and videos
-- **JSON metadata files** - Sidecar files with timestamps, location, people tags, and other metadata
-- **Album metadata** - JSON files describing album properties
-- **HTML viewer** - For offline browsing
-
-**Important Notes:**
-
-- Not all JSON fields are present in every file
-- Field presence depends on: photo source, user actions, device capabilities, Google Photos features used
-- Google can change this structure without notice
-- This documentation is based on community reverse-engineering and analysis of actual exports
-
-## Directory Structure
+When you export your Google Photos library via [Google Takeout](https://takeout.google.com/), you receive an archive with the following structure:
 
 ```text
 Takeout/
 └── Google Photos/
-    ├── archive_browser.html          # Offline HTML viewer
-    ├── Photos from YYYY/             # Chronological organization
-    │   ├── [media files]
-    │   └── [metadata files]
+    ├── archive_browser.html          # Static HTML desctiption of the archive
+    ├── Photos from YYYY/             # Chronological albums
+    │   ├── [media files]             # Your actual photos and videos
+    │   └── [metadata files]          # JSON sidecar files containing metadata for each media file
     └── [Album Name]/                 # Named albums/collections
-        ├── metadata.json             # Album-level metadata
-        ├── [media files]
-        └── [metadata files]
+        ├── metadata.json             # Album-level metadata — the only difference with chronological albums
+        ├── [media files]             # Your actual photos and videos
+        └── [metadata files]          # JSON sidecar files containing metadata for each media file
 ```
 
-**Purpose of each element:**
+## Media Files
 
-- **`archive_browser.html`** - HTML file for browsing the archive offline in a web browser
-- **`Photos from YYYY/`** - Chronological folders containing media organized by year
-- **`[Album Name]/`** - Named albums or collections you created in Google Photos
-- **`metadata.json`** - Album-level metadata (one per album folder)
-- **Media files** - Your actual photos and videos
-- **Metadata files** - JSON sidecar files containing metadata for each media file
+- **Images:** JPEG, PNG, GIF, WEBP, SVG, HEIC
+- **Videos:** MPEG, MP4/M4V, MKV, 3GP, AVI, MOV
 
-## File Types
+## Metadata Files
 
-### Media Files
+### Album Metadata
 
-#### Images
+One `metadata.json` file exists per album folder.
 
-- **`.jpg`, `.JPG`, `.jpeg`** - JPEG photos (most common format)
-- **`.png`, `.PNG`** - PNG images (screenshots, graphics)
-- **`.gif`** - (Animated) GIFs
-- **`.webp`** - WebP format (modern web images)
-- **`.heic`** - HEIC format (iPhone photos)
+### Media Metadata
 
-#### Videos
+Every photo/video has an associated sidecar JSON file with metadata.
+The full ideal naming pattern:
 
-- **`.mp4`, `.MP4`** - MP4 videos (most common)
-- **`.m4v`** - M4V videos (Apple format)
-- **`.3gp`** - 3GP videos (older mobile phones)
-- **`.avi`** - AVI videos
-- **`.MOV`** - QuickTime videos
-
-### Metadata Files
-
-#### Media Metadata (`.supplemental-metadata.json`)
-
-Every photo/video has an associated JSON file with the pattern:
-
-```text
+```bash
 [filename].[ext].supplemental-metadata.json
 ```
 
@@ -79,20 +44,15 @@ Every photo/video has an associated JSON file with the pattern:
 
 **Truncated Variants:**
 
-Google Takeout creates truncated sidecar filenames when the full path would be too long:
+Google Takeout truncates sidecar filenames when it finds the full path to be too long. Examples:
 
-- `.supplemental-metadata.json` (full)
-- `.supplemental-metadat.json` (truncated)
-- `.supplemental-metad.json` (truncated)
-- `.supplemental-me.json` (truncated)
-- `.supplemen.json` (truncated)
-- `.suppl.json` (truncated)
+- `.supplemental-metadat.json`
+- `.supplemental-me.json`
+- `.suppl.json`
+- `.s.json`
+- `..json`
 
-#### Album Metadata File (`metadata.json`)
-
-One `metadata.json` file exists per album/collection folder.
-
-### Special Files
+### Special Naming of Media Files
 
 #### Edited Versions
 
@@ -100,73 +60,55 @@ One `metadata.json` file exists per album/collection folder.
 - **Example:** `IMG_20200920_131207-edited.jpg`
 - **Language variants:** `-bearbeitet` (German), `-modifié` (French), etc.
 
-**Important:** Edited files do NOT have separate metadata files - they share the original file's metadata.
+Edited files **do NOT** have separate metadata files — they share the original file's metadata.
 
 #### Google Photos Creations
 
-- **`-COLLAGE.jpg`** - Auto-generated photo collages
-- **`-ANIMATION.gif`** - Auto-generated animations from burst photos
-- **`-MOVIE.m4v`** - Auto-generated movies/compilations
+- **`-COLLAGE.jpg`** — Auto-generated photo collages
+- **`-ANIMATION.gif`** — Auto-generated animations from burst photos
+- **`-MOVIE.m4v`** — Auto-generated movies/compilations
+
+These files **DO** have separate metadata files.
 
 #### Special Cases
 
-- **`[UNSET].jpg`** - Files with missing/corrupted original filenames
-- **Files without extensions** - Legacy files (e.g., "03.03.13 - 1")
+- **`[UNSET].jpg`** — Files with missing/corrupted original filenames
+- **Files without extensions** — E.g., "03.03.13 - 1"
+
+These files **DO** have separate metadata files.
 
 ### Duplicates
 
 #### Google Photos Duplicates
 
-Files with identical names in Google Photos get numeric or tilde suffixes:
+Files with identical names in Google Photos get numeric suffixes:
 
-**Numeric suffix pattern:**
-
-```text
+```bash
 image.png
 image(1).png
 image(2).png
 ```
 
+**Important:** numeric suffixes can be present in different parts of the file name. E.g.:
+
+- `DSC_0245-COLLAGE(1).jpg` — most common
+- `21.12(1).11 - 1` — rare
+
+Each duplicate has its own metadata file, e.g.:
+
+- `21.12.11 - 1.supplemental-metadata(1).json`
+- `DSC_0245-COLLAGE.jpg.supplemental-metadata(1).json`
+- `image(2).png.supplemental-metadata.json`
+
 **Tilde suffix pattern:**
 
-```text
+```bash
 IMG20240221145914.jpg
 IMG20240221145914~2.jpg
 IMG20240221145914~3.jpg
 ```
 
-**Important:** Each duplicate has its own metadata file:
-
-- `image.png.supplemental-metadata.json`
-- `image(1).png.supplemental-metadata.json`
-- `image(2).png.supplemental-metadata.json`
-
-#### Google Photos Duplicates (Numbered)
-
-When Google Photos has multiple files with identical names, it creates numbered duplicates:
-
-**Media files:**
-
-```text
-image.png
-image(1).png
-image(2).png
-```
-
-**Sidecar files:**
-
-```text
-image.png.supplemental-metadata.json
-image.png.supplemental-metadata(1).json
-image.png.supplemental-metadata(2).json
-```
-
-**Critical difference:** The `(N)` appears in **different positions**:
-
-- Media: `image(1).png` - before extension
-- Sidecar: `image.png.supplemental-metadata(1).json` - before `.json`
-
-**Note:** This is the observed pattern in Google Takeout exports. The exact reason for this placement difference is not documented by Google, but our matching algorithm handles both patterns correctly.
+These are normal file names and do not result in a specially numbered metadata sidecars.
 
 ## JSON Metadata Structure
 
@@ -260,17 +202,15 @@ image.png.supplemental-metadata(2).json
 
 ### Core Timestamp Fields
 
-| Field | Type | Purpose | Notes |
-|-------|------|---------|-------|
-| `photoTakenTime.timestamp` | string | **When the photo was taken** | **Most important for sync** - Unix epoch seconds |
-| `photoTakenTime.formatted` | string | Human-readable taken time | For display only |
-| `creationTime.timestamp` | string | When uploaded to Google Photos | May differ from photoTakenTime |
-| `creationTime.formatted` | string | Human-readable upload time | For display only |
-| `modificationTime.timestamp` | string | Last edit in Google Photos | Present if photo was edited |
-| `modificationTime.formatted` | string | Human-readable edit time | For display only |
-| `photoLastModifiedTime.timestamp` | string | File system modification time | May differ from above |
-
-**Sync recommendation:** Use `photoTakenTime.timestamp` as the primary timestamp. Fall back to `creationTime.timestamp` if `photoTakenTime` is missing.
+| Field | Type | Purpose |
+|-------|------|---------|
+| `photoTakenTime.timestamp` | string | When the photo was taken |
+| `photoTakenTime.formatted` | string | Human-readable taken time |
+| `creationTime.timestamp` | string | When uploaded to Google Photos |
+| `creationTime.formatted` | string | Human-readable upload time |
+| `modificationTime.timestamp` | string | Last edit in Google Photos |
+| `modificationTime.formatted` | string | Human-readable edit time |
+| `photoLastModifiedTime.timestamp` | string | File system modification time |
 
 ### Location Data
 
@@ -281,8 +221,8 @@ image.png.supplemental-metadata(2).json
 | `geoData.altitude` | number | Altitude in meters | May be 0.0 if unavailable |
 | `geoData.latitudeSpan` | number | Latitude span | Usually 0.0 |
 | `geoData.longitudeSpan` | number | Longitude span | Usually 0.0 |
-| `geoDataExif.latitude` | number | **Original EXIF GPS latitude** | From camera EXIF data |
-| `geoDataExif.longitude` | number | **Original EXIF GPS longitude** | From camera EXIF data |
+| `geoDataExif.latitude` | number | Original EXIF GPS latitude | From camera EXIF data |
+| `geoDataExif.longitude` | number | Original EXIF GPS longitude | From camera EXIF data |
 | `geoDataExif.altitude` | number | Original EXIF GPS altitude | From camera EXIF data |
 
 **Important difference:**
@@ -290,16 +230,14 @@ image.png.supplemental-metadata(2).json
 - **`geoData`** - May be manually adjusted by user in Google Photos
 - **`geoDataExif`** - Original location from camera, unchanged
 
-**Sync recommendation:** Prefer `geoDataExif` for original location. Use `geoData` if you want user corrections.
-
 ### Descriptive Metadata
 
 | Field | Type | Purpose | Notes |
 |-------|------|---------|-------|
-| `title` | string | Photo filename | Usually the original filename |
+| `title` | string | Photo filename | The original file name (there can be other files with the same name, hence the duplicates with numeric suffixes) |
 | `description` | string | User-added caption | Only present if user added text |
 | `url` | string | Google Photos web URL | Becomes invalid after deletion |
-| `imageViews` | string | View count in Google Photos | **Note: string, not number!** |
+| `imageViews` | string | View count in Google Photos | Note: string, not number! |
 
 ### People & Face Recognition
 
@@ -324,14 +262,12 @@ image.png.supplemental-metadata(2).json
 ]
 ```
 
-**Note:** Names can be in any language (Unicode support required).
-
 ### Device & Origin Information
 
 | Field | Type | Purpose | Notes |
 |-------|------|---------|-------|
 | `googlePhotosOrigin.mobileUpload.deviceType` | string | Device type | `ANDROID_PHONE`, `IOS_PHONE`, etc. |
-| `googlePhotosOrigin.mobileUpload.deviceFolder` | object | Device folder info | **May be absent entirely** |
+| `googlePhotosOrigin.mobileUpload.deviceFolder` | object | Device folder info | |
 | `googlePhotosOrigin.mobileUpload.deviceFolder.localFolderName` | string | Original device folder | Often empty `""`, or `"WhatsApp Images"`, `"Camera"` |
 | `googlePhotosOrigin.fromSharedAlbum` | object | Photo from shared album | Empty object `{}` |
 | `googlePhotosOrigin.composition.type` | string | Google Photos creation type | `AUTO` or `MANUAL` for collages/animations |
@@ -353,73 +289,9 @@ image.png.supplemental-metadata(2).json
 
 **Note:** These fields may be absent (not present in JSON) if the value is `false`.
 
-## Media & Metadata Scanning Implementation
-
-Our scanner implements a comprehensive file discovery and matching system that handles all Google Takeout patterns and edge cases.
-
-### File Discovery Process
-
-1. **Directory Scanning**: Recursively scans the Google Photos directory structure
-2. **File Classification**: Separates media files from JSON metadata files
-3. **Album Detection**: Identifies album boundaries and metadata
-4. **Sidecar Indexing**: Builds efficient lookup structures for matching
-
-### Core Functions
-
-#### `discover_files(target_media_path: Path) -> DiscoveryResult`
-
-**Purpose**: Main public API for file discovery
-
-**Process:**
-
-1. Detects Google Takeout structure (`Takeout/Google Photos/` vs direct path)
-2. Collects all media and JSON files
-3. Builds sidecar index for efficient matching
-4. Processes each media file to find matching sidecars
-5. Returns comprehensive results with statistics
-
-**Returns:** `DiscoveryResult` containing:
-
-- `files`: List of `FileInfo` objects for each media file
-- `json_sidecar_count`: Number of successfully paired sidecars
-- `paired_sidecars`: Set of sidecar paths that were matched
-- `all_sidecars`: Set of all discovered sidecar paths (for orphan detection)
-
-#### `_collect_files(scan_root: Path) -> tuple[list[Path], list[Path], dict[Path, set[str]]]`
-
-**Purpose**: Collects all files in the directory tree
-
-**Returns:**
-
-- `media_files`: List of all potential media files
-- `json_files`: List of all JSON sidecar files
-- `all_files`: Dictionary mapping directories to their file sets
-
-#### `_build_sidecar_index(sidecar_filenames: List[str]) -> Dict[str, List[ParsedSidecar]]`
-
-**Purpose**: Builds efficient index for sidecar lookup
-
-**Key Format**: `"album_path/filename.extension"` (e.g., `"Album1/IMG_1234.jpg"`)
-
-**Benefits:**
-
-- Prevents cross-album collisions
-- Handles multiple sidecars per media file
-- Enables O(1) lookup performance
-
-#### `_parse_sidecar_filename(sidecar_path: Path) -> ParsedSidecar`
-
-**Purpose**: Parses sidecar filenames into structured components
-
-**Returns:** `ParsedSidecar` with:
-
-- `filename`: Base filename (e.g., "IMG_1234")
-- `extension`: Media extension (e.g., "jpg", may be truncated)
-- `numeric_suffix`: Duplicate suffix (e.g., "(1)" or "")
-- `full_sidecar_path`: Complete path to sidecar file
-- `photo_taken_time`: Timestamp from JSON content (if available)
-
 ## Sidecar Matching Algorithm
+
+TODO: replace with the high level explanation of how _parse_sidecar_filename works, without mentioning the function name
 
 Our implementation uses a comprehensive three-phase matching algorithm that handles all Google Takeout patterns and edge cases.
 
@@ -452,7 +324,7 @@ Result: ✅ Match found
 
 1. Check if ONLY ONE sidecar has no numeric suffix
 2. If yes → **SUCCESS** (take the no-suffix one)
-3. If no → **ERROR** (log all candidates, no match)
+TODO: replace this "3. If no → **ERROR** (log all candidates, no match)" and the following parts of this section (## Sidecar Matching Algorithm) with actual correct description.
 
 **Example:**
 
@@ -524,29 +396,6 @@ Suffix: "(2)"
 Pattern: "(2)\." matches "21.12(2).11"
 Result: ✅ Valid match
 ```
-
-### Algorithm Benefits
-
-#### Performance Optimizations
-
-1. **Album-Scoped Matching**: Prevents cross-album collisions
-2. **Efficient Indexing**: O(1) lookup performance
-3. **Early Exit**: Stops at first successful match
-4. **Batch Processing**: Processes all files in single pass
-
-#### Robustness Features
-
-1. **Case-Insensitive Matching**: Handles filename case variations
-2. **Multi-Language Support**: Supports edited file patterns in multiple languages
-3. **Truncated Filename Handling**: Handles Google's path length limitations
-4. **Comprehensive Logging**: DEBUG for matches, INFO for unmatched files, ERROR for conflicts
-
-#### Error Handling
-
-1. **Graceful Degradation**: Continues processing when individual matches fail
-2. **Detailed Logging**: Provides clear information about matching decisions
-3. **Orphan Detection**: Identifies unmatched media files and sidecars
-4. **Statistics Tracking**: Provides comprehensive matching statistics
 
 ### Matching Examples
 
@@ -621,19 +470,15 @@ Result: ✅ Match found
 - **Sharing permissions** - Who has access to shared albums
 - **Comments from shared albums** - Comments from other users
 
-## Statistics (from example export)
-
-- **Total files:** ~91,900
-- **Media files:** ~45,950 (50%)
-- **Metadata files:** ~45,950 (50%)
-- **Date range:** 2007-2025+
-- **Languages:** English, Russian (Cyrillic), others
-- **Video formats:** MP4 (most common), M4V, 3GP, AVI, MOV
-- **Image formats:** JPG (most common), PNG, GIF, WEBP, HEIC
-
 ## References
 
-### Primary Sources
+This documentation is based on:
+
+- Analysis of actual Google Takeout exports
+- Code inspection of open-source tools that parse these files
+- Community reports and issue trackers
+- Cross-referencing multiple independent implementations
+- Implementation and testing of our own comprehensive matching algorithm
 
 1. **Google Takeout Official Documentation**
    - [Google Takeout Homepage](https://takeout.google.com/)
@@ -649,13 +494,3 @@ Result: ✅ Match found
    - [GPTH Issue #136](https://github.com/TheLastGimbus/GooglePhotosTakeoutHelper/issues/136) - GPS data discussion
    - [GPTH Issue #137](https://github.com/TheLastGimbus/GooglePhotosTakeoutHelper/issues/137) - Writing data back to EXIF
    - Various issues across multiple Google Photos tools
-
-### Verification Method
-
-This documentation is based on:
-
-- Analysis of actual Google Takeout exports
-- Code inspection of open-source tools that parse these files
-- Community reports and issue trackers
-- Cross-referencing multiple independent implementations
-- Implementation and testing of our own comprehensive matching algorithm
