@@ -31,7 +31,7 @@ class TestParallelProcessingCompatibility:
             assert hasattr(result, 'all_sidecars')
             
             # Verify files are FileInfo objects
-            assert len(result.files) == 2
+            assert len(result.files) == 1  # Only photo1.jpg has a sidecar
             assert all(isinstance(f, FileInfo) for f in result.files)
             
             # Verify FileInfo has required attributes for parallel processing

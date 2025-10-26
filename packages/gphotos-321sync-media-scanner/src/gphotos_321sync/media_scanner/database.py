@@ -27,7 +27,7 @@ class DatabaseConnection:
         Args:
             db_path: Path to SQLite database file
         """
-        self.db_path = db_path
+        self.db_path = Path(db_path) if not isinstance(db_path, Path) else db_path
         self._connection: Optional[sqlite3.Connection] = None
         
     def connect(self) -> sqlite3.Connection:

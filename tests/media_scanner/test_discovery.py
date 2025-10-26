@@ -10,7 +10,9 @@ from gphotos_321sync.media_scanner.discovery import (
     discover_files,
     _collect_files,
     _create_file_info,
+    _create_file_info_from_batch_result,
     _match_media_to_sidecar,
+    _match_media_to_sidecar_batch,
     _build_sidecar_index,
     _parse_sidecar_filename,
     FileInfo,
@@ -53,45 +55,53 @@ class TestCollectFiles:
             (temp_path / "album1").mkdir()
             (temp_path / "album2").mkdir()
             (temp_path / "album1" / "photo1.jpg").touch()
-            (temp_path / "album2" / "photo2.png").touch()
             (temp_path / "album1" / "photo1.json").touch()
+            (temp_path / "album2" / "photo2.png").touch()
+            (temp_path / "album2" / "photo2.json").touch()
             
             media_files, json_files, all_files = _collect_files(temp_path)
             
             assert len(media_files) == 2
-            assert len(json_files) == 1
-            assert len(all_files) == 2  # Two directories
+            assert len(json_files) == 2
+            assert len(all_files) == 2
 
 
 class TestCreateFileInfo:
     """Test the _create_file_info helper function."""
     
     def test_create_file_info_basic(self):
-        """Test basic FileInfo creation."""
+        """Test basic file info creation using batch approach."""
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
             media_file = temp_path / "photo.jpg"
             media_file.touch()
-            media_file.write_bytes(b"test data")
             
-            # Create sidecar index with matching sidecar (using new album-based key format)
-            sidecar_index = {f"{temp_path.name}/photo.jpg": [ParsedSidecar(
-                filename="photo",
-                extension="jpg", 
-                numeric_suffix="",
-                full_sidecar_path=temp_path / "photo.json"
-            )]}
+            # Create sidecar file
+            sidecar_file = temp_path / "photo.jpg.supplemental-metadata.json"
+            sidecar_file.touch()
             
-            file_info = _create_file_info(media_file, temp_path, sidecar_index)
+            # Use the new batch approach
+            media_files = [media_file]
+            sidecar_index = {
+                "photo.jpg": [ParsedSidecar(
+                    filename="photo",
+                    extension="jpg",
+                    numeric_suffix="",
+                    full_sidecar_path=sidecar_file
+                )]
+            }
+            
+            batch_results = _match_media_to_sidecar_batch(media_files, sidecar_index)
+            file_info = _create_file_info_from_batch_result(media_file, temp_path, batch_results.matches[media_file])
             
             assert file_info.file_path == media_file
             assert file_info.relative_path == Path("photo.jpg")
             assert file_info.album_folder_path == Path(".")
-            assert file_info.json_sidecar_path == temp_path / "photo.json"
-            assert file_info.file_size == 9  # "test data" is 9 bytes
+            assert file_info.json_sidecar_path == sidecar_file
+            assert file_info.file_size == 0
     
     def test_create_file_info_no_sidecar(self):
-        """Test FileInfo creation without sidecar."""
+        """Test file info creation when no sidecar exists."""
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
             media_file = temp_path / "photo.jpg"
@@ -117,22 +127,22 @@ class TestParseSidecarFilename:
         assert parsed.full_sidecar_path == sidecar_path
     
     def test_parse_sidecar_filename_with_duplicate(self):
-        """Test parsing sidecar with duplicate suffix."""
-        sidecar_path = Path("photo.jpg.supplemental-metadata(1).json")
+        """Test sidecar filename parsing with duplicate suffix."""
+        sidecar_path = Path("photo.jpg.supplemental-metadata(2).json")
         parsed = _parse_sidecar_filename(sidecar_path)
         
         assert parsed.filename == "photo"
         assert parsed.extension == "jpg"
-        assert parsed.numeric_suffix == "(1)"
+        assert parsed.numeric_suffix == "(2)"
         assert parsed.full_sidecar_path == sidecar_path
     
     def test_parse_sidecar_filename_truncated(self):
-        """Test parsing truncated sidecar filename."""
-        sidecar_path = Path("photo.jpg.suppl.json")
+        """Test sidecar filename parsing with truncated extension."""
+        sidecar_path = Path("photo.jp.supplemental-metadata.json")
         parsed = _parse_sidecar_filename(sidecar_path)
         
         assert parsed.filename == "photo"
-        assert parsed.extension == "jpg"
+        assert parsed.extension == "jp"
         assert parsed.numeric_suffix == ""
         assert parsed.full_sidecar_path == sidecar_path
 
@@ -156,171 +166,200 @@ class TestBuildSidecarIndex:
         assert len(index["/photo2.png"]) == 1
 
 
-class TestMatchMediaToSidecar:
-    """Test the _match_media_to_sidecar helper function."""
+class TestMatchMediaToSidecarBatch:
+    """Test the _match_media_to_sidecar_batch function with proper exclusion logic."""
     
-    def test_match_media_to_sidecar_basic(self):
-        """Test basic media to sidecar matching."""
-        media_file = Path("/photo.jpg")  # Full path with parent directory
+    def test_batch_happy_path_matching(self):
+        """Test Phase 1: Happy path matching with exclusion."""
+        # Create album with media files and sidecars
+        album_path = Path("/test_album")
+        media_files = [
+            album_path / "photo1.jpg",
+            album_path / "photo2.png", 
+            album_path / "photo3.jpg"
+        ]
+        
         sidecar_index = {
-            "/photo.jpg": [ParsedSidecar(
-                filename="photo",
+            "photo1.jpg": [ParsedSidecar(
+                filename="photo1",
+                extension="jpg", 
+                numeric_suffix="",
+                full_sidecar_path=album_path / "photo1.jpg.supplemental-metadata.json"
+            )],
+            "photo2.png": [ParsedSidecar(
+                filename="photo2",
+                extension="png",
+                numeric_suffix="", 
+                full_sidecar_path=album_path / "photo2.png.supplemental-metadata.json"
+            )],
+            "photo3.jpg": [ParsedSidecar(
+                filename="photo3",
                 extension="jpg",
                 numeric_suffix="",
-                full_sidecar_path=Path("photo.jpg.supplemental-metadata.json")
+                full_sidecar_path=album_path / "photo3.jpg.supplemental-metadata.json"
             )]
         }
         
-        result = _match_media_to_sidecar(media_file, sidecar_index)
+        results = _match_media_to_sidecar_batch(media_files, sidecar_index)
         
-        assert result == Path("photo.jpg.supplemental-metadata.json")
+        # All files should match in Phase 1
+        assert len(results.matches) == 3
+        assert len(results.matched_phase1) == 3
+        assert len(results.matched_phase2) == 0
+        assert len(results.matched_phase3) == 0
+        assert len(results.unmatched_media) == 0
+        assert len(results.unmatched_sidecars) == 0
+        
+        # Check specific matches
+        assert results.matches[media_files[0]] == album_path / "photo1.jpg.supplemental-metadata.json"
+        assert results.matches[media_files[1]] == album_path / "photo2.png.supplemental-metadata.json" 
+        assert results.matches[media_files[2]] == album_path / "photo3.jpg.supplemental-metadata.json"
     
-    def test_match_media_to_sidecar_no_match(self):
-        """Test media to sidecar matching when no match exists."""
-        media_file = Path("photo.jpg")
-        sidecar_index = {}
+    def test_batch_numbered_files_matching(self):
+        """Test Phase 2: Numbered files matching with exclusion."""
+        album_path = Path("/test_album")
+        media_files = [
+            album_path / "photo(1).jpg",
+            album_path / "photo(2).jpg",
+            album_path / "photo(3).jpg"
+        ]
         
-        result = _match_media_to_sidecar(media_file, sidecar_index)
-        
-        assert result is None
-    
-    def test_match_media_to_sidecar_numeric_suffix_match(self):
-        """Test media to sidecar matching with numeric suffix."""
-        media_file = Path("/photo(2).jpg")  # Media has numeric suffix
         sidecar_index = {
-            "/photo.jpg": [ParsedSidecar(
-                filename="photo",
-                extension="jpg",
-                numeric_suffix="(2)",  # Sidecar has matching numeric suffix
-                full_sidecar_path=Path("photo.jpg.supplemental-metadata(2).json")
-            )]
-        }
-        
-        result = _match_media_to_sidecar(media_file, sidecar_index)
-        
-        assert result == Path("photo.jpg.supplemental-metadata(2).json")
-    
-    def test_match_media_to_sidecar_numeric_suffix_mismatch(self):
-        """Test media to sidecar matching with mismatched numeric suffix."""
-        media_file = Path("/photo(2).jpg")  # Media has (2)
-        sidecar_index = {
-            "/photo.jpg": [ParsedSidecar(
-                filename="photo",
-                extension="jpg",
-                numeric_suffix="(1)",  # Sidecar has (1) - mismatch
-                full_sidecar_path=Path("photo.jpg.supplemental-metadata(1).json")
-            )]
-        }
-        
-        result = _match_media_to_sidecar(media_file, sidecar_index)
-        
-        assert result is None  # Should not match due to suffix mismatch
-    
-    def test_match_media_to_sidecar_multiple_candidates_no_clear_winner(self):
-        """Test media to sidecar matching with multiple candidates and no clear winner."""
-        media_file = Path("/photo.jpg")
-        sidecar_index = {
-            "/photo.jpg": [
+            "photo.jpg": [
                 ParsedSidecar(
                     filename="photo",
                     extension="jpg",
                     numeric_suffix="(1)",
-                    full_sidecar_path=Path("photo.jpg.supplemental-metadata(1).json")
+                    full_sidecar_path=album_path / "photo.jpg.supplemental-metadata(1).json"
                 ),
+                ParsedSidecar(
+                    filename="photo", 
+                    extension="jpg",
+                    numeric_suffix="(2)",
+                    full_sidecar_path=album_path / "photo.jpg.supplemental-metadata(2).json"
+                ),
+                ParsedSidecar(
+                    filename="photo",
+                    extension="jpg", 
+                    numeric_suffix="(3)",
+                    full_sidecar_path=album_path / "photo.jpg.supplemental-metadata(3).json"
+                )
+            ]
+        }
+        
+        results = _match_media_to_sidecar_batch(media_files, sidecar_index)
+        
+        # All files should match in Phase 2
+        assert len(results.matches) == 3
+        assert results.matches[media_files[0]] == album_path / "photo.jpg.supplemental-metadata(1).json"
+        assert results.matches[media_files[1]] == album_path / "photo.jpg.supplemental-metadata(2).json"
+        assert results.matches[media_files[2]] == album_path / "photo.jpg.supplemental-metadata(3).json"
+    
+    def test_batch_edited_files_matching(self):
+        """Test Phase 3: Edited files matching with exclusion."""
+        album_path = Path("/test_album")
+        media_files = [
+            album_path / "photo-edited.jpg",
+            album_path / "photo-edited(2).jpg",
+            album_path / "photo-edited(3).jpg"
+        ]
+        
+        sidecar_index = {
+            "photo.jpg": [
+                ParsedSidecar(
+                    filename="photo",
+                    extension="jpg",
+                    numeric_suffix="",
+                    full_sidecar_path=album_path / "photo.jpg.supplemental-metadata.json"
+                ),
+                ParsedSidecar(
+                    filename="photo",
+                    extension="jpg", 
+                    numeric_suffix="(2)",
+                    full_sidecar_path=album_path / "photo.jpg.supplemental-metadata(2).json"
+                ),
+                ParsedSidecar(
+                    filename="photo",
+                    extension="jpg",
+                    numeric_suffix="(3)", 
+                    full_sidecar_path=album_path / "photo.jpg.supplemental-metadata(3).json"
+                )
+            ]
+        }
+        
+        results = _match_media_to_sidecar_batch(media_files, sidecar_index)
+        
+        # All files should match in Phase 3
+        assert len(results.matches) == 3
+        assert results.matches[media_files[0]] == album_path / "photo.jpg.supplemental-metadata.json"
+        assert results.matches[media_files[1]] == album_path / "photo.jpg.supplemental-metadata(2).json"
+        assert results.matches[media_files[2]] == album_path / "photo.jpg.supplemental-metadata(3).json"
+    
+    def test_batch_mixed_phases_with_exclusion(self):
+        """Test all phases together with proper exclusion."""
+        album_path = Path("/test_album")
+        media_files = [
+            album_path / "photo1.jpg",           # Phase 1: Happy path
+            album_path / "photo(2).jpg",        # Phase 2: Numbered
+            album_path / "photo-edited.jpg",    # Phase 3: Edited
+            album_path / "orphan.jpg"           # Phase 4: No match
+        ]
+        
+        sidecar_index = {
+            "photo1.jpg": [ParsedSidecar(
+                filename="photo1",
+                extension="jpg",
+                numeric_suffix="",
+                full_sidecar_path=album_path / "photo1.jpg.supplemental-metadata.json"
+            )],
+            "photo.jpg": [
                 ParsedSidecar(
                     filename="photo",
                     extension="jpg",
                     numeric_suffix="(2)",
-                    full_sidecar_path=Path("photo.jpg.supplemental-metadata(2).json")
-                )
-            ]
-        }
-        
-        result = _match_media_to_sidecar(media_file, sidecar_index)
-        
-        assert result is None  # Should not match due to multiple candidates
-    
-    def test_match_media_to_sidecar_multiple_candidates_single_no_suffix(self):
-        """Test media to sidecar matching with multiple candidates but only one without suffix."""
-        media_file = Path("/photo.jpg")
-        sidecar_index = {
-            "/photo.jpg": [
-                ParsedSidecar(
-                    filename="photo",
-                    extension="jpg",
-                    numeric_suffix="",  # No suffix - this should win
-                    full_sidecar_path=Path("photo.jpg.supplemental-metadata.json")
+                    full_sidecar_path=album_path / "photo.jpg.supplemental-metadata(2).json"
                 ),
                 ParsedSidecar(
                     filename="photo",
-                    extension="jpg",
-                    numeric_suffix="(1)",
-                    full_sidecar_path=Path("photo.jpg.supplemental-metadata(1).json")
+                    extension="jpg", 
+                    numeric_suffix="",
+                    full_sidecar_path=album_path / "photo.jpg.supplemental-metadata.json"
                 )
             ]
         }
         
-        result = _match_media_to_sidecar(media_file, sidecar_index)
+        results = _match_media_to_sidecar_batch(media_files, sidecar_index)
         
-        assert result == Path("photo.jpg.supplemental-metadata.json")
+        # Check matches (orphan.jpg should not match)
+        assert len(results.matches) == 3
+        assert results.matches[media_files[0]] == album_path / "photo1.jpg.supplemental-metadata.json"  # Phase 1
+        assert results.matches[media_files[1]] == album_path / "photo.jpg.supplemental-metadata(2).json"  # Phase 2
+        assert results.matches[media_files[2]] == album_path / "photo.jpg.supplemental-metadata.json"  # Phase 3
+        assert media_files[3] in results.unmatched_media  # Phase 4: No match
     
-    def test_match_media_to_sidecar_edited_pattern(self):
-        """Test media to sidecar matching with edited file pattern."""
-        media_file = Path("/photo-edited.jpg")  # Media has -edited suffix
+    def test_batch_exclusion_prevents_double_matching(self):
+        """Test that exclusion prevents the same sidecar from being matched twice."""
+        album_path = Path("/test_album")
+        media_files = [
+            album_path / "photo.jpg",           # Should match in Phase 1
+            album_path / "photo-edited.jpg"     # Should NOT match in Phase 3 (sidecar already taken)
+        ]
+        
         sidecar_index = {
-            "/photo.jpg": [ParsedSidecar(
+            "photo.jpg": [ParsedSidecar(
                 filename="photo",
                 extension="jpg",
                 numeric_suffix="",
-                full_sidecar_path=Path("photo.jpg.supplemental-metadata.json")
+                full_sidecar_path=album_path / "photo.jpg.supplemental-metadata.json"
             )]
         }
         
-        result = _match_media_to_sidecar(media_file, sidecar_index)
+        results = _match_media_to_sidecar_batch(media_files, sidecar_index)
         
-        assert result == Path("photo.jpg.supplemental-metadata.json")
-    
-    def test_match_media_to_sidecar_edited_with_numeric_suffix(self):
-        """Test media to sidecar matching with edited file pattern and numeric suffix."""
-        media_file = Path("/photo-edited(2).jpg")  # Media has -edited and (2)
-        sidecar_index = {
-            "/photo.jpg": [ParsedSidecar(
-                filename="photo",
-                extension="jpg",
-                numeric_suffix="(2)",  # Matching numeric suffix
-                full_sidecar_path=Path("photo.jpg.supplemental-metadata(2).json")
-            )]
-        }
-        
-        result = _match_media_to_sidecar(media_file, sidecar_index)
-        
-        assert result == Path("photo.jpg.supplemental-metadata(2).json")
-    
-    def test_match_media_to_sidecar_album_scoped_matching(self):
-        """Test that matching is scoped to the same album."""
-        # Create a proper Path object with parent directory
-        album1_path = Path("/Album1")
-        media_file = album1_path / "photo.jpg"
-        
-        sidecar_index = {
-            "Album1/photo.jpg": [ParsedSidecar(
-                filename="photo",
-                extension="jpg",
-                numeric_suffix="",
-                full_sidecar_path=Path("Album1/photo.jpg.supplemental-metadata.json")
-            )],
-            "Album2/photo.jpg": [ParsedSidecar(
-                filename="photo",
-                extension="jpg",
-                numeric_suffix="",
-                full_sidecar_path=Path("Album2/photo.jpg.supplemental-metadata.json")
-            )]
-        }
-        
-        result = _match_media_to_sidecar(media_file, sidecar_index)
-        
-        # Should only match the sidecar from Album1, not Album2
-        assert result == Path("Album1/photo.jpg.supplemental-metadata.json")
+        # First file should match, second should not (exclusion working)
+        assert len(results.matches) == 1
+        assert results.matches[media_files[0]] == album_path / "photo.jpg.supplemental-metadata.json"
+        assert media_files[1] in results.unmatched_media
 
 
 class TestDiscoverFiles:
@@ -338,7 +377,11 @@ class TestDiscoverFiles:
             
             files = discover_files(temp_path)
             
-            assert len(files.files) == 2
+            assert len(files.files) == 1  # Only photo1.jpg has a sidecar
+            assert files.files[0].file_path.name == "photo1.jpg"
+            assert files.files[0].json_sidecar_path.name == "photo1.jpg.supplemental-metadata.json"
+            assert len(files.unmatched_media) == 1  # photo2.png has no sidecar
+            assert "photo2.png" in [f.name for f in files.unmatched_media]
             assert all(isinstance(f, FileInfo) for f in files.files)
             
             # Check that one file has a sidecar
@@ -380,7 +423,7 @@ class TestRefactoredFunctionality:
             result = discover_files(temp_path)
             
             assert isinstance(result, DiscoveryResult)
-            assert len(result.files) == 2
+            assert len(result.files) == 1  # Only photo1.jpg has a sidecar
             assert all(isinstance(f, FileInfo) for f in result.files)
             
             # Test that FileInfo objects have all required attributes

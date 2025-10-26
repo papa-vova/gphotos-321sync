@@ -110,7 +110,7 @@ These are normal file names and do not result in a specially numbered metadata s
 
 ## JSON Metadata Structure
 
-### Album Metadata
+### Album Metadata Structure
 
 **Location:** One per album folder (e.g., `Takeout/Google Photos/Chair yoga/metadata.json`)
 
@@ -138,7 +138,7 @@ These are normal file names and do not result in a specially numbered metadata s
 | `date.timestamp` | string | Album creation time (Unix epoch seconds) |
 | `date.formatted` | string | Human-readable creation date (for display) |
 
-### Photo/Video Metadata
+### Photo/Video Metadata Structure
 
 **Location:** Next to each media file
 
@@ -289,97 +289,92 @@ These are normal file names and do not result in a specially numbered metadata s
 
 ## Sidecar Matching Algorithm
 
-TODO: replace with the high level explanation of how _parse_sidecar_filename works, without mentioning the function name
+Our implementation uses a comprehensive four-phase matching algorithm with exclusion that processes all media files in an album together. The algorithm extracts key components from sidecar filenames: base filename (e.g., "IMG_1234" from "IMG_1234.jpg.supplemental-metadata.json"), extension (e.g., "jpg" - may be truncated like "jp"), and numeric suffix (e.g., "(2)" - may be empty).
 
-Our implementation uses a comprehensive three-phase matching algorithm that handles all Google Takeout patterns and edge cases.
-
-### Phase 1: Exact Filename Matching
-
-#### Case 1: Single Exact Match
-
-**Pattern**: `media_file.jpg` ↔ `media_file.jpg.supplemental-metadata.json`
+### Phase 1: Happy Path Matching
 
 **Process:**
 
-1. Create lookup key: `"album_path/media_file.jpg"`
-2. Check if exactly one sidecar exists for this key
-3. If no numeric suffix → **SUCCESS** (immediate match)
-4. If has numeric suffix → validate suffix matches media filename
+1. Look for exact filename match with no numeric suffix
+2. If found → **SUCCESS** (immediate match)
+3. Exclude matched pair from further processing
 
 **Example:**
 
 ```text
 Media: Album1/IMG_1234.jpg
 Sidecar: Album1/IMG_1234.jpg.supplemental-metadata.json
+Algorithm: Phase 1 (exact match, no numeric suffix)
 Result: ✅ Match found
 ```
 
-#### Case 2: Multiple Candidates
-
-**Pattern**: Multiple sidecars for same media file
-
-**Process:**
-
-1. Check if ONLY ONE sidecar has no numeric suffix
-2. If yes → **SUCCESS** (take the no-suffix one)
-TODO: replace this "3. If no → **ERROR** (log all candidates, no match)" and the following parts of this section (## Sidecar Matching Algorithm) with actual correct description.
-
-**Example:**
-
-```text
-Media: Album1/IMG_1234.jpg
-Sidecars: 
-  - Album1/IMG_1234.jpg.supplemental-metadata.json (no suffix)
-  - Album1/IMG_1234.jpg.supplemental-metadata(1).json (suffix)
-Result: ✅ Match found (takes the no-suffix one)
-```
-
-### Phase 2: Alternative Pattern Matching
-
-#### Case 3.1: Edited File Pattern
-
-**Pattern**: `media_file-edited.jpg` → `media_file.jpg.supplemental-metadata.json`
-
-**Process:**
-
-1. Check if media filename ends with edited suffix (case-insensitive)
-2. Strip edited suffix from filename
-3. Retry Phase 1 matching with stripped filename
-4. Handle multiple languages: `-edited`, `-bearbeitet`, `-modifié`, etc.
-
-**Example:**
-
-```text
-Media: Album1/IMG_1234-edited.jpg
-Strip: IMG_1234
-Lookup: Album1/IMG_1234.jpg
-Sidecar: Album1/IMG_1234.jpg.supplemental-metadata.json
-Result: ✅ Match found
-```
-
-#### Case 3.2: Numeric Suffix Matching
-
-**Pattern**: Media file has numeric suffix, find matching sidecar
+### Phase 2: Numbered Files Matching
 
 **Process:**
 
 1. Extract numeric suffix from media filename (e.g., "(2)")
-2. Search all sidecars in same album for matching suffix
-3. Validate suffix appears in correct position
+2. Remove numeric suffix to get base filename
+3. Look for sidecar with matching numeric suffix
+4. If found → **SUCCESS**
+5. Exclude matched pair from further processing
 
 **Example:**
 
 ```text
 Media: Album1/IMG_1234(2).jpg
-Suffix: "(2)"
-Search: Find sidecar with numeric_suffix="(2)"
+Extract: numeric suffix "(2)", base filename "IMG_1234"
 Sidecar: Album1/IMG_1234.jpg.supplemental-metadata(2).json
+Algorithm: Phase 2 (numbered files matching)
 Result: ✅ Match found
 ```
 
-### Phase 3: Numeric Suffix Validation
+### Phase 3: Edited Files Matching
 
-#### Suffix Position Rules
+**Process:**
+
+1. Check if media filename contains "-edited" (case-insensitive)
+2. Strip "-edited" from filename
+3. Extract numeric suffix from stripped filename (if any)
+4. Remove numeric suffix to get base filename
+5. Look for sidecar with matching numeric suffix (or no suffix)
+6. If found → **SUCCESS**
+7. Exclude matched pair from further processing
+
+**Example:**
+
+```text
+Media: Album1/IMG_1234-edited.jpg
+Strip: "IMG_1234" (no numeric suffix)
+Sidecar: Album1/IMG_1234.jpg.supplemental-metadata.json
+Algorithm: Phase 3 (edited files matching)
+Result: ✅ Match found
+```
+
+**Example with numeric suffix:**
+
+```text
+Media: Album1/IMG_1234-edited(2).jpg
+Strip: "IMG_1234(2)", extract suffix "(2)", base "IMG_1234"
+Sidecar: Album1/IMG_1234.jpg.supplemental-metadata(2).json
+Algorithm: Phase 3 (edited files matching with numeric suffix)
+Result: ✅ Match found
+```
+
+### Phase 4: Unmatched Files
+
+**Process:**
+
+1. Log remaining unmatched media files at INFO level
+2. Log remaining unmatched sidecars at INFO level
+3. Report final statistics
+
+### Exclusion Logic
+
+**Key Feature:** Once a media file and sidecar are matched in any phase, they are excluded from further processing. This prevents double-matching and ensures each file is processed only once.
+
+**Batch Processing:** All media files in an album are processed together, allowing the exclusion logic to work effectively across all phases.
+
+### Numeric Suffix Validation
 
 Our algorithm validates numeric suffixes using two mutually exclusive patterns:
 
@@ -402,7 +397,7 @@ Result: ✅ Valid match
 ```text
 Media: Album1/IMG_20200920_131207.jpg
 Sidecar: Album1/IMG_20200920_131207.jpg.supplemental-metadata.json
-Algorithm: Phase 1, Case 1 (exact match)
+Algorithm: Phase 1 (happy path)
 Result: ✅ Match found
 ```
 
@@ -411,7 +406,7 @@ Result: ✅ Match found
 ```text
 Media: Album1/Screenshot_20190317-234331.jpg
 Sidecar: Album1/Screenshot_20190317-234331.jpg.supplemental-me.json
-Algorithm: Phase 1, Case 1 (exact match with truncated pattern)
+Algorithm: Phase 1 (happy path with truncated pattern)
 Result: ✅ Match found
 ```
 
@@ -420,7 +415,7 @@ Result: ✅ Match found
 ```text
 Media: Album1/image(1).png
 Sidecar: Album1/image.png.supplemental-metadata(1).json
-Algorithm: Phase 1, Case 1 (numeric suffix validation)
+Algorithm: Phase 2 (numbered files matching)
 Result: ✅ Match found
 ```
 
@@ -429,7 +424,7 @@ Result: ✅ Match found
 ```text
 Media: Album1/IMG_1234-edited.jpg
 Sidecar: Album1/IMG_1234.jpg.supplemental-metadata.json
-Algorithm: Phase 2, Case 3.1 (edited pattern)
+Algorithm: Phase 3 (edited files matching)
 Result: ✅ Match found
 ```
 
@@ -438,9 +433,26 @@ Result: ✅ Match found
 ```text
 Media: Album1/21.12(2).11 - 1.jpg
 Sidecar: Album1/21.12(2).11 - 1.jpg.supplemental-metadata(2).json
-Algorithm: Phase 2, Case 3.2 (numeric suffix matching)
+Algorithm: Phase 2 (numbered files matching)
 Result: ✅ Match found
 ```
+
+#### Multiple Candidates (Error Case)
+
+```text
+Media: Album1/IMG_1234.jpg
+Sidecars: 
+  - Album1/IMG_1234.jpg.supplemental-metadata(1).json
+  - Album1/IMG_1234.jpg.supplemental-metadata(2).json
+Algorithm: Phase 1 (multiple candidates, no clear winner)
+Result: ❌ ERROR logged, no match
+```
+
+### Logging Levels
+
+- **DEBUG**: Successful matches (media file ↔ sidecar)
+- **INFO**: Unmatched media files and sidecars, album processing start/end
+- **ERROR**: Multiple sidecar candidates with no clear winner
 
 ## What's NOT Included in Exports
 

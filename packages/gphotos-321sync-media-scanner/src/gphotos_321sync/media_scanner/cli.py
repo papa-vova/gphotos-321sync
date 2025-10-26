@@ -185,7 +185,7 @@ def main() -> int:
     config = loader.load(defaults_path=args.config)
     
     # Setup logging with config values
-    setup_logging(level=config.logging.level, format_type=config.logging.format)
+    setup_logging(level=config.logging.level, format=config.logging.format)
     
     # Pass config and overrides to scan_command
     return scan_command(

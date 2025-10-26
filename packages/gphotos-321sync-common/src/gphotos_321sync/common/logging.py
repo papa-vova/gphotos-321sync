@@ -59,7 +59,7 @@ class SimpleFormatter(logging.Formatter):
 
 def setup_logging(
     level: str = "INFO",
-    format_type: str = "simple",
+    format: str = "simple",
     log_file: Optional[Path] = None,
     max_file_size_mb: int = 10,
     backup_count: int = 5,
@@ -68,7 +68,7 @@ def setup_logging(
 
     Args:
         level: Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-        format_type: Format type (simple, detailed, json)
+        format: Format type (simple, detailed, json)
         log_file: Optional log file path
         max_file_size_mb: Max log file size in MB
         backup_count: Number of backup files to keep
@@ -83,9 +83,9 @@ def setup_logging(
     # Console handler
     console_handler = logging.StreamHandler(sys.stderr)
 
-    if format_type == "json":
+    if format == "json":
         console_handler.setFormatter(StructuredFormatter())
-    elif format_type == "detailed":
+    elif format == "detailed":
         console_handler.setFormatter(DetailedFormatter())
     else:
         console_handler.setFormatter(SimpleFormatter())

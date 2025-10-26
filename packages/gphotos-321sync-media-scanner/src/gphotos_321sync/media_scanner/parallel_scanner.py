@@ -137,17 +137,6 @@ class ParallelScanner:
         }
         
         try:
-            # Phase 0: Build list1 - raw filesystem scan (equivalent to: find . -type f | sort)
-            # This MUST be done BEFORE any processing starts
-            logger.info("Phase 0: Building complete file list (raw filesystem scan)...")
-            all_files_list1 = set()
-            scan_root = target_media_path / "Takeout" if (target_media_path / "Takeout").exists() else target_media_path
-            for file_path in scan_root.rglob("*"):
-                if file_path.is_file():
-                    all_files_list1.add(str(file_path))
-            all_files_list1_sorted = sorted(all_files_list1)
-            logger.info(f"Found {len(all_files_list1_sorted)} files for processing")
-            
             # Phase 1: Album discovery (must run before file processing)
             logger.info("Phase 1: Discovering albums...")
             phase_start = time.time()
@@ -291,85 +280,66 @@ class ParallelScanner:
                     f"  Total:                      <0.1s (very fast scan)"
                 )
             
-            # Phase 4: Check for unprocessed files (final step after all processing)
-            logger.info("Phase 4: Checking for unprocessed files...")
+            # Phase 4: Comprehensive file processing analysis
+            logger.info("Phase 4: Analyzing file processing results...")
             
-            # Build list2: collect all files that were touched during processing
-            from gphotos_321sync.common import normalize_path
-            all_files_list2_raw = []
+            # Use the new granular tracking from DiscoveryResult
+            processed_media = set(file_info.file_path for file_info in files_to_process)
+            processed_sidecars = set(file_info.json_sidecar_path for file_info in files_to_process if file_info.json_sidecar_path)
+            processed_metadata = set(album_metadata_files)
             
-            # Add album metadata.json files that were read
-            for metadata_path in album_metadata_files:
-                all_files_list2_raw.append(normalize_path(metadata_path))
+            # Calculate unprocessed files by type
+            unprocessed_media = discovery_result.discovered_media - processed_media
+            unprocessed_sidecars = discovery_result.discovered_sidecars - processed_sidecars
+            unprocessed_metadata = discovery_result.discovered_metadata - processed_metadata
+            unprocessed_other = discovery_result.discovered_other
             
-            # Add all media files that were processed
-            for file_info in files_to_process:
-                all_files_list2_raw.append(normalize_path(file_info.file_path))
-                # Add sidecar if it exists
-                if file_info.json_sidecar_path:
-                    all_files_list2_raw.append(normalize_path(file_info.json_sidecar_path))
+            # Log comprehensive statistics
+            logger.info(f"File processing summary:")
+            logger.info(f"  Discovered: {len(discovery_result.discovered_media)} media, {len(discovery_result.discovered_sidecars)} sidecars, {len(discovery_result.discovered_metadata)} metadata, {len(discovery_result.discovered_other)} other")
+            logger.info(f"  Processed: {len(processed_media)} media, {len(processed_sidecars)} sidecars, {len(processed_metadata)} metadata")
+            logger.info(f"  Unprocessed: {len(unprocessed_media)} media, {len(unprocessed_sidecars)} sidecars, {len(unprocessed_metadata)} metadata, {len(unprocessed_other)} other")
             
-            # Check for archive_browser.html (Google Takeout index file)
-            archive_browser = target_media_path / "Takeout" / "archive_browser.html"
-            if archive_browser.exists():
-                all_files_list2_raw.append(normalize_path(archive_browser))
+            # Log phase-by-phase matching results
+            logger.info(f"Matching algorithm results:")
+            logger.info(f"  Phase 1 (Happy path): {len(discovery_result.matched_phase1)} matches")
+            logger.info(f"  Phase 2 (Numbered files): {len(discovery_result.matched_phase2)} matches")
+            logger.info(f"  Phase 3 (Edited files): {len(discovery_result.matched_phase3)} matches")
+            logger.info(f"  Unmatched media: {len(discovery_result.unmatched_media)} files")
+            logger.info(f"  Unmatched sidecars: {len(discovery_result.unmatched_sidecars)} files")
             
-            # Sort and remove duplicates
-            all_files_list2_sorted = sorted(set(all_files_list2_raw))
+            # Log detailed unprocessed files at DEBUG level
+            if unprocessed_media:
+                logger.debug(f"Unprocessed media files: {[str(p) for p in unprocessed_media]}")
             
-            # Normalize list1 for comparison
-            all_files_list1_normalized = sorted(set(normalize_path(p) for p in all_files_list1_sorted))
+            if unprocessed_sidecars:
+                logger.debug(f"Unprocessed sidecar files: {[str(p) for p in unprocessed_sidecars]}")
             
-            # Compare list1 vs list2
-            unprocessed_files = sorted(set(all_files_list1_normalized) - set(all_files_list2_sorted))
+            if unprocessed_metadata:
+                logger.debug(f"Unprocessed metadata files: {[str(p) for p in unprocessed_metadata]}")
             
-            # Check for duplicate sidecars across folders (only for unprocessed sidecars)
-            import hashlib
+            if unprocessed_other:
+                logger.debug(f"Unprocessed other files: {[str(p) for p in unprocessed_other]}")
             
-            duplicated_sidecars = []
-            genuinely_orphaned = []
-            timestamp_matched = []
-            
-            for unprocessed_path in unprocessed_files:
-                # Only check .json files (sidecars)
-                if not unprocessed_path.endswith('.json'):
-                    genuinely_orphaned.append(unprocessed_path)
-                    continue
-                
-                # Skip system files
-                filename = Path(unprocessed_path).name
-                if filename in ['metadata.json', 'print-subscriptions.json', 'shared_album_comments.json', 'user-generated-memory-titles.json']:
-                    genuinely_orphaned.append(unprocessed_path)
-                    continue
-                
-                # Look for sidecars with same filename in other folders
-                unprocessed_file = Path(unprocessed_path)
-                found_duplicate = False
-                
-                # Search in all_files_list1 for files with same name but different path
-                for other_path in all_files_list1_normalized:
-                    other_file = Path(other_path)
-                    
-                    # Same filename, different directory
-                    if other_file.name == unprocessed_file.name and other_file.parent != unprocessed_file.parent:
-                        # Check if the other file was processed (in list2)
-                        if other_path in all_files_list2_sorted:
-                            # Found a duplicate that was processed - check if content is identical
-                            try:
-                                with open(unprocessed_file, 'rb') as f1, open(other_file, 'rb') as f2:
-                                    hash1 = hashlib.sha256(f1.read()).hexdigest()
-                                    hash2 = hashlib.sha256(f2.read()).hexdigest()
-                                    
-                                    if hash1 == hash2:
-                                        # Identical duplicate found
-                                        duplicated_sidecars.append(unprocessed_path)
-                                        found_duplicate = True
-                                        break
-                            except Exception as e:
-                                logger.debug(f"Failed to compare sidecar contents: {{'file1': {str(unprocessed_file)!r}, 'file2': {str(other_file)!r}, 'error': {str(e)!r}}}")
-                
-                if not found_duplicate:
-                    genuinely_orphaned.append(unprocessed_path)
+            return {
+                "scan_run_id": scan_run_id,
+                "status": "completed",
+                "total_files": total_files,
+                "media_files_processed": scan_run.get("media_files_processed", 0),
+                "duration_seconds": total_duration,
+                "phase_timings": phase_timings,
+                "discovery_stats": {
+                    "discovered_media": len(discovery_result.discovered_media),
+                    "discovered_sidecars": len(discovery_result.discovered_sidecars),
+                    "discovered_metadata": len(discovery_result.discovered_metadata),
+                    "discovered_other": len(discovery_result.discovered_other),
+                    "matched_phase1": len(discovery_result.matched_phase1),
+                    "matched_phase2": len(discovery_result.matched_phase2),
+                    "matched_phase3": len(discovery_result.matched_phase3),
+                    "unmatched_media": len(discovery_result.unmatched_media),
+                    "unmatched_sidecars": len(discovery_result.unmatched_sidecars),
+                }
+            }
             
             # Phase 4.5: Timestamp-based matching for orphaned sidecars in year-based albums
             # For each orphaned sidecar:
