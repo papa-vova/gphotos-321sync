@@ -23,11 +23,11 @@ from .dal.albums import AlbumDAL
 from .dal.media_items import MediaItemDAL
 from .dal.scan_runs import ScanRunDAL
 from .database import DatabaseConnection
-from .discovery import discover_files_with_stats
+from .discovery import discover_files
 from .parallel.queue_manager import QueueManager
 from .parallel.worker_thread import worker_thread_main
 from .parallel.writer_thread import writer_thread_main
-from .parallel_scanner_helpers import match_orphaned_sidecars, report_unmatched_files
+from .parallel_scanner_helpers import report_unmatched_files
 from .progress import ProgressTracker
 
 logger = logging.getLogger(__name__)
@@ -178,7 +178,7 @@ class ParallelScanner:
             logger.info("Scanning directory tree for media files and JSON sidecars...")
             logger.debug("Building file list (this may take a while for large libraries)...")
             phase_start = time.time()
-            discovery_result = discover_files_with_stats(target_media_path)
+            discovery_result = discover_files(target_media_path)
             files_to_process = discovery_result.files
             
             # Count media files, JSON sidecars, and media files with sidecars
@@ -203,32 +203,11 @@ class ParallelScanner:
                 media_files_with_metadata=media_with_metadata_count
             )
             
-            # Phase 2.5: Content-based matching for orphaned sidecars
-            # IMPORTANT: This modifies files_to_process in-place, does NOT add new items
-            orphan_match_count = match_orphaned_sidecars(
-                target_media_path=target_media_path,
-                paired_sidecars=discovery_result.paired_sidecars,
-                all_sidecars=discovery_result.all_sidecars,
-                all_media_files=files_to_process
-            )
-            
-            # Update statistics (file count unchanged, but metadata count may increase)
-            if orphan_match_count > 0:
-                media_with_metadata_count = sum(1 for f in files_to_process if f.json_sidecar_path is not None)
-                logger.info(f"Updated totals after content-based matching: {media_files_count} media files, {media_with_metadata_count} with metadata")
-                # Update scan_runs with new media_files_with_metadata count
-                scan_run_dal.update_scan_run(
-                    scan_run_id=scan_run_id,
-                    media_files_with_metadata=media_with_metadata_count
-                )
-            
-            # Phase 2.6: Report unmatched files
-            # Rebuild paired_sidecars set to include content-based matches
-            all_paired_sidecars = discovery_result.paired_sidecars | {f.json_sidecar_path for f in files_to_process if f.json_sidecar_path}
+            # Phase 2.5: Report unmatched files
             report_unmatched_files(
                 scan_root=target_media_path,
                 all_sidecars=discovery_result.all_sidecars,
-                paired_sidecars=all_paired_sidecars,
+                paired_sidecars=discovery_result.paired_sidecars,
                 all_media_files=files_to_process
             )
             

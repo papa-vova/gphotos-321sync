@@ -1,0 +1,92 @@
+---
+description: Markdown linting standards for gphotos-321sync project
+alwaysApply: true
+---
+
+# Markdown Linting Rules for gphotos-321sync
+
+## Overview
+
+This rule defines markdown linting standards for the gphotos-321sync project, ensuring consistent formatting and readability across all documentation.
+
+## Rules Configuration
+
+### Strictly Enforced Rules
+
+#### MD022: Headings should be surrounded by blank lines
+
+- **Purpose**: Ensures proper spacing around headings for readability
+- **Enforcement**: Always add blank lines before and after headings
+- **Example**: Add blank lines before and after all headings
+
+#### MD031: Fenced code blocks should be surrounded by blank lines
+
+- **Purpose**: Improves readability by separating code blocks from text
+- **Enforcement**: Always add blank lines before and after code blocks
+- **Example**: Add blank lines before and after all code blocks
+
+#### MD032: Lists should be surrounded by blank lines
+
+- **Purpose**: Ensures proper spacing around lists for readability
+- **Enforcement**: Always add blank lines before and after lists
+- **Example**: Add blank lines before and after all lists
+
+#### MD040: Fenced code blocks should have a language specified
+
+- **Purpose**: Enables proper syntax highlighting and improves readability
+- **Enforcement**: Always specify language for code blocks
+- **Example**: Use `python`, `text`, `json`, `bash`, `yaml` for code blocks
+
+#### MD047: Files should end with a single newline character
+
+- **Purpose**: Ensures consistent file endings across different systems
+- **Enforcement**: Always end files with exactly one newline character
+
+### Disabled Rules
+
+#### MD013: Line length
+
+- **Reason**: Disabled for documentation flexibility
+- **Note**: Long lines may be necessary for URLs, code examples, or table content
+
+#### MD033: Inline HTML
+
+- **Reason**: Allowed for complex formatting needs
+- **Note**: HTML may be required for advanced markdown features
+
+#### MD041: First line in file should be a top level heading
+
+- **Reason**: Disabled for flexibility in documentation structure
+- **Note**: Some files may not require a top-level heading
+
+## Implementation Guidelines
+
+### Code Block Standards
+
+- Use `text` for plain text examples
+- Use `python` for Python code
+- Use `json` for JSON examples
+- Use `bash` for shell commands
+- Use `yaml` for YAML configuration
+
+### List Formatting
+
+- Use consistent bullet points (`-` or `*`)
+- Maintain proper indentation for nested lists
+- Add blank lines before and after all lists
+
+### Heading Structure
+
+- Use proper heading hierarchy (H1 → H2 → H3)
+- Add blank lines before and after all headings
+- Maintain consistent heading formatting
+
+### File Endings
+
+- Always end files with exactly one newline character
+- No trailing whitespace
+- Consistent line endings (LF preferred)
+
+## Enforcement
+
+These rules are enforced through the project's linting pipeline and should be followed for all markdown files in the repository.
