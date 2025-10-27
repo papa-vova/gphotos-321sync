@@ -29,35 +29,43 @@ class TestCollectFiles:
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
             
-            # Create test files
-            (temp_path / "photo1.jpg").touch()
-            (temp_path / "photo2.png").touch()
-            (temp_path / "photo1.json").touch()
-            (temp_path / "metadata.json").touch()  # Should be skipped
+            # Create an album directory (simulate Google Photos structure)
+            album_dir = temp_path / "Photos from 2024"
+            album_dir.mkdir()
+            
+            # Create test files inside the album
+            (album_dir / "photo1.jpg").touch()
+            (album_dir / "photo2.png").touch()
+            (album_dir / "photo1.json").touch()
+            (album_dir / "metadata.json").touch()  # Should be skipped
             
             media_files, json_files, all_files = _collect_files(temp_path)
             
             assert len(media_files) == 2
             assert len(json_files) == 1
             assert len(all_files) == 1
-            assert temp_path in all_files
-            assert "photo1.jpg" in all_files[temp_path]
-            assert "photo2.png" in all_files[temp_path]
-            assert "photo1.json" in all_files[temp_path]
-            assert "metadata.json" in all_files[temp_path]
+            assert album_dir in all_files
+            assert "photo1.jpg" in all_files[album_dir]
+            assert "photo2.png" in all_files[album_dir]
+            assert "photo1.json" in all_files[album_dir]
+            assert "metadata.json" in all_files[album_dir]
     
     def test_collect_files_nested(self):
         """Test file collection in nested directories."""
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
             
-            # Create nested structure
-            (temp_path / "album1").mkdir()
-            (temp_path / "album2").mkdir()
-            (temp_path / "album1" / "photo1.jpg").touch()
-            (temp_path / "album1" / "photo1.json").touch()
-            (temp_path / "album2" / "photo2.png").touch()
-            (temp_path / "album2" / "photo2.json").touch()
+            # Create album directories (simulate Google Photos structure)
+            album1 = temp_path / "Photos from 2023"
+            album2 = temp_path / "Photos from 2024"
+            album1.mkdir()
+            album2.mkdir()
+            
+            # Create files inside albums
+            (album1 / "photo1.jpg").touch()
+            (album1 / "photo1.json").touch()
+            (album2 / "photo2.png").touch()
+            (album2 / "photo2.json").touch()
             
             media_files, json_files, all_files = _collect_files(temp_path)
             
@@ -370,14 +378,22 @@ class TestDiscoverFiles:
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
             
-            # Create test files with proper Google Takeout sidecar naming
-            (temp_path / "photo1.jpg").touch()
-            (temp_path / "photo2.png").touch()
-            (temp_path / "photo1.jpg.supplemental-metadata.json").touch()
+            # Create Google Photos structure
+            google_photos = temp_path / "Takeout" / "Google Photos"
+            google_photos.mkdir(parents=True)
+            
+            # Create an album directory
+            album_dir = google_photos / "Photos from 2024"
+            album_dir.mkdir()
+            
+            # Create test files inside the album with proper Google Takeout sidecar naming
+            (album_dir / "photo1.jpg").touch()
+            (album_dir / "photo2.png").touch()
+            (album_dir / "photo1.jpg.supplemental-metadata.json").touch()
             
             files = discover_files(temp_path)
             
-            assert len(files.files) == 1  # Only photo1.jpg has a sidecar
+            assert len(files.files) == 2  # Both photo1.jpg (matched) and photo2.png (unmatched) should be processed
             assert files.files[0].file_path.name == "photo1.jpg"
             assert files.files[0].json_sidecar_path.name == "photo1.jpg.supplemental-metadata.json"
             assert len(files.unmatched_media) == 1  # photo2.png has no sidecar
@@ -414,16 +430,24 @@ class TestRefactoredFunctionality:
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
             
-            # Create test files with proper Google Takeout sidecar naming
-            (temp_path / "photo1.jpg").touch()
-            (temp_path / "photo2.png").touch()
-            (temp_path / "photo1.jpg.supplemental-metadata.json").touch()
+            # Create Google Photos structure
+            google_photos = temp_path / "Takeout" / "Google Photos"
+            google_photos.mkdir(parents=True)
+            
+            # Create an album directory
+            album_dir = google_photos / "Photos from 2024"
+            album_dir.mkdir()
+            
+            # Create test files inside the album with proper Google Takeout sidecar naming
+            (album_dir / "photo1.jpg").touch()
+            (album_dir / "photo2.png").touch()
+            (album_dir / "photo1.jpg.supplemental-metadata.json").touch()
             
             # Test that the function returns DiscoveryResult
             result = discover_files(temp_path)
             
             assert isinstance(result, DiscoveryResult)
-            assert len(result.files) == 1  # Only photo1.jpg has a sidecar
+            assert len(result.files) == 2  # Both photo1.jpg (matched) and photo2.png (unmatched) should be processed
             assert all(isinstance(f, FileInfo) for f in result.files)
             
             # Test that FileInfo objects have all required attributes
@@ -439,10 +463,18 @@ class TestRefactoredFunctionality:
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
             
-            # Create multiple test files with proper Google Takeout sidecar naming
+            # Create Google Photos structure
+            google_photos = temp_path / "Takeout" / "Google Photos"
+            google_photos.mkdir(parents=True)
+            
+            # Create an album directory
+            album_dir = google_photos / "Photos from 2024"
+            album_dir.mkdir()
+            
+            # Create multiple test files inside the album with proper Google Takeout sidecar naming
             for i in range(10):
-                (temp_path / f"photo{i}.jpg").touch()
-                (temp_path / f"photo{i}.jpg.supplemental-metadata.json").touch()
+                (album_dir / f"photo{i}.jpg").touch()
+                (album_dir / f"photo{i}.jpg.supplemental-metadata.json").touch()
             
             # Test that discovery still works efficiently
             result = discover_files(temp_path)

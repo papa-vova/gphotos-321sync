@@ -15,6 +15,14 @@ SYSTEM_FILES = {
     'icon\r',         # macOS custom folder icon (has literal carriage return!)
 }
 
+# Google Photos metadata files to exclude (not media files)
+GOOGLE_PHOTOS_METADATA_FILES = {
+    'print-subscriptions.json',
+    'shared_album_comments.json', 
+    'user-generated-memory-titles.json',
+    'archive_browser.html',
+}
+
 # Temporary file extensions to exclude
 TEMP_EXTENSIONS = {'.tmp', '.temp', '.cache', '.bak', '.swp'}
 
@@ -54,12 +62,13 @@ def should_scan_file(path: Path) -> bool:
     Determine if a file should be scanned by the media scanner.
     
     IMPORTANT: This does NOT check file content! It only excludes obvious
-    system/temporary files to avoid wasting time on MIME detection.
+    system/temporary files and Google Photos metadata files to avoid wasting time on MIME detection.
     
     The actual media detection happens via MIME type checking (detect_mime_type).
     
     Excluded files:
     - System files (Thumbs.db, .DS_Store, desktop.ini, Icon\r)
+    - Google Photos metadata files (print-subscriptions.json, shared_album_comments.json, etc.)
     - Temporary files (.tmp, .temp, .cache, .bak, .swp)
     
     NOT excluded:
@@ -76,6 +85,10 @@ def should_scan_file(path: Path) -> bool:
     
     # Skip known system files
     if filename in SYSTEM_FILES:
+        return False
+    
+    # Skip Google Photos metadata files (not media files)
+    if filename in GOOGLE_PHOTOS_METADATA_FILES:
         return False
     
     # Skip temporary files by extension

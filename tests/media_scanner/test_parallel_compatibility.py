@@ -16,10 +16,18 @@ class TestParallelProcessingCompatibility:
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
             
-            # Create test files with proper Google Takeout sidecar naming
-            (temp_path / "photo1.jpg").touch()
-            (temp_path / "photo2.png").touch()
-            (temp_path / "photo1.jpg.supplemental-metadata.json").touch()
+            # Create Google Photos structure
+            google_photos = temp_path / "Takeout" / "Google Photos"
+            google_photos.mkdir(parents=True)
+            
+            # Create an album directory
+            album_dir = google_photos / "Photos from 2024"
+            album_dir.mkdir()
+            
+            # Create test files inside the album with proper Google Takeout sidecar naming
+            (album_dir / "photo1.jpg").touch()
+            (album_dir / "photo2.png").touch()
+            (album_dir / "photo1.jpg.supplemental-metadata.json").touch()
             
             # Test discover_files returns DiscoveryResult
             result = discover_files(temp_path)
@@ -31,7 +39,7 @@ class TestParallelProcessingCompatibility:
             assert hasattr(result, 'all_sidecars')
             
             # Verify files are FileInfo objects
-            assert len(result.files) == 1  # Only photo1.jpg has a sidecar
+            assert len(result.files) == 2  # Both photo1.jpg (matched) and photo2.png (unmatched) should be processed
             assert all(isinstance(f, FileInfo) for f in result.files)
             
             # Verify FileInfo has required attributes for parallel processing
@@ -70,12 +78,20 @@ class TestParallelProcessingCompatibility:
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
             
-            # Create a test file
-            test_file = temp_path / "test.jpg"
+            # Create Google Photos structure
+            google_photos = temp_path / "Takeout" / "Google Photos"
+            google_photos.mkdir(parents=True)
+            
+            # Create an album directory
+            album_dir = google_photos / "Photos from 2024"
+            album_dir.mkdir()
+            
+            # Create test files inside the album
+            test_file = album_dir / "test.jpg"
             test_file.write_bytes(b"fake image data")
             
             # Create sidecar
-            sidecar_file = temp_path / "test.jpg.supplemental-metadata.json"
+            sidecar_file = album_dir / "test.jpg.supplemental-metadata.json"
             sidecar_file.write_text('{"title": "Test Image"}')
             
             # Get FileInfo from discovery

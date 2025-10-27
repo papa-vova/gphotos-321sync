@@ -120,6 +120,13 @@ def discover_files(target_media_path: Path) -> DiscoveryResult:
     discovered_metadata = set()
     discovered_other = set()
     
+    # Step 1: Identify files outside album directories (top-level files)
+    for file_path in scan_root.rglob("*"):
+        if file_path.is_file() and file_path.parent == scan_root:
+            # Files at the top level of Google Photos directory
+            discovered_other.add(file_path)
+    
+    # Step 2: Process all files as potential media/sidecars/metadata
     for file_path in scan_root.rglob("*"):
         if file_path.is_file():
             if file_path.suffix.lower() == '.json':
@@ -131,6 +138,11 @@ def discover_files(target_media_path: Path) -> DiscoveryResult:
                 discovered_media.add(file_path)
             else:
                 discovered_other.add(file_path)
+    
+    # Step 3: Remove any intersections (files that were already categorized as "other")
+    discovered_media -= discovered_other
+    discovered_sidecars -= discovered_other
+    discovered_metadata -= discovered_other
     
     # Process files and collect phase-by-phase results
     files = []
@@ -177,6 +189,12 @@ def discover_files(target_media_path: Path) -> DiscoveryResult:
             files.append(file_info)
             if sidecar_path:
                 paired_sidecars.add(sidecar_path)
+        
+        # CRITICAL FIX: Also create FileInfo objects for unmatched media files
+        # These need to be processed even without sidecars for metadata extraction
+        for unmatched_media_file in batch_result.unmatched_media:
+            file_info = _create_file_info_from_batch_result(unmatched_media_file, scan_root, None)
+            files.append(file_info)
     
     return DiscoveryResult(
         files=files,
@@ -213,9 +231,22 @@ def _collect_files(scan_root: Path) -> tuple[list[Path], list[Path], dict[Path, 
     media_files: list[Path] = []  # All potential media files
     
     logger.info("Collecting all files...")
+    
+    # Step 1: Identify top-level files (these are not media/sidecars)
+    top_level_files = set()
+    for file_path in scan_root.rglob("*"):
+        if file_path.is_file() and file_path.parent == scan_root:
+            top_level_files.add(file_path)
+    
+    # Step 2: Process all files as potential media/sidecars
     for file_path in scan_root.rglob("*"):
         if file_path.is_dir():
             continue
+        
+        # Skip top-level files (already identified as "other")
+        if file_path in top_level_files:
+            continue
+            
         if not should_scan_file(file_path):
             continue
         
@@ -516,6 +547,8 @@ def _match_media_to_sidecar_batch(media_files: List[Path], sidecar_index: Dict[s
             matches[media_file] = match
             phase1_matches.append(media_file)
             remaining_sidecars.discard(match)
+            # DEBUG: Log successful match
+            logger.debug(f"Phase 1 match: {media_file} -> {match}")
     
     # Remove matched media files
     for media_file in phase1_matches:
@@ -532,6 +565,8 @@ def _match_media_to_sidecar_batch(media_files: List[Path], sidecar_index: Dict[s
             matches[media_file] = match
             phase2_matches.append(media_file)
             remaining_sidecars.discard(match)
+            # DEBUG: Log successful match
+            logger.debug(f"Phase 2 match: {media_file} -> {match}")
     
     # Remove matched media files
     for media_file in phase2_matches:
@@ -548,6 +583,8 @@ def _match_media_to_sidecar_batch(media_files: List[Path], sidecar_index: Dict[s
             matches[media_file] = match
             phase3_matches.append(media_file)
             remaining_sidecars.discard(match)
+            # DEBUG: Log successful match
+            logger.debug(f"Phase 3 match: {media_file} -> {match}")
     
     # Remove matched media files
     for media_file in phase3_matches:
@@ -555,8 +592,16 @@ def _match_media_to_sidecar_batch(media_files: List[Path], sidecar_index: Dict[s
     
     logger.debug(f"Phase 3 complete: {len(phase3_matches)} matches")
     
-    # Phase 4: Log unmatched files
+    # Phase 4: Log unmatched files with paths
     logger.info(f"Phase 4: {len(remaining_media)} unmatched media files, {len(remaining_sidecars)} unmatched sidecars")
+    
+    # INFO: Log unmatched media files with paths
+    for unmatched_media in remaining_media:
+        logger.info(f"Unmatched media: {unmatched_media}")
+    
+    # INFO: Log unmatched sidecars with paths
+    for unmatched_sidecar in remaining_sidecars:
+        logger.info(f"Unmatched sidecar: {unmatched_sidecar}")
     
     return BatchMatchingResult(
         matches=matches,
@@ -640,6 +685,7 @@ def _try_edited_files_match_batch(media_file: Path, sidecar_index: Dict[str, Lis
     base_stem = _strip_edited_from_filename(media_stem)
     
     if not base_stem:
+        logger.debug(f"Phase 3: Could not strip '-edited' from {media_stem}")
         return None
     
     # Extract numeric suffix from the base filename
@@ -650,7 +696,10 @@ def _try_edited_files_match_batch(media_file: Path, sidecar_index: Dict[str, Lis
     
     key = f"{actual_base_stem}{media_suffix}"
     
+    logger.debug(f"Phase 3: {media_stem} -> base_stem: {base_stem}, actual_base_stem: {actual_base_stem}, key: {key}")
+    
     if key not in sidecar_index:
+        logger.debug(f"Phase 3: No sidecars found for key {key}")
         return None
     
     # Look for sidecars with matching numeric suffix (or no suffix if base has no suffix) that are still available
@@ -660,6 +709,8 @@ def _try_edited_files_match_batch(media_file: Path, sidecar_index: Dict[str, Lis
     else:
         matching_candidates = [c for c in sidecar_index[key] 
                               if not c.numeric_suffix and c.full_sidecar_path in remaining_sidecars]
+    
+    logger.debug(f"Phase 3: Found {len(matching_candidates)} candidates for {media_stem}")
     
     if len(matching_candidates) == 1:
         return matching_candidates[0].full_sidecar_path
