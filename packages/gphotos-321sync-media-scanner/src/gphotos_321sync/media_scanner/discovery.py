@@ -529,12 +529,7 @@ def _match_media_to_sidecar_batch(media_files: List[Path], sidecar_index: Dict[s
     """
     matches = {}
     remaining_media = media_files.copy()
-    remaining_sidecars = set()
-    
-    # Build set of all available sidecars
-    for sidecar_list in sidecar_index.values():
-        for sidecar in sidecar_list:
-            remaining_sidecars.add(sidecar.full_sidecar_path)
+    matched_sidecars = set()  # Track matched sidecars without removing from processing pool
     
     logger.info(f"Starting batch matching for {len(media_files)} media files in album")
     
@@ -542,13 +537,13 @@ def _match_media_to_sidecar_batch(media_files: List[Path], sidecar_index: Dict[s
     logger.debug("Phase 1: Happy path matching")
     phase1_matches = []
     for media_file in remaining_media:
-        match = _try_happy_path_match_batch(media_file, sidecar_index, remaining_sidecars)
+        match = _try_happy_path_match_batch(media_file, sidecar_index, matched_sidecars)
         if match:
             matches[media_file] = match
             phase1_matches.append(media_file)
-            remaining_sidecars.discard(match)
-            # DEBUG: Log successful match
-            logger.debug(f"Phase 1 match: {media_file} -> {match}")
+            matched_sidecars.add(match)
+            # DEBUG: Log successful match with paths
+            logger.debug(f"Phase 1 match: {media_file.name} -> {match.name}")
     
     # Remove matched media files
     for media_file in phase1_matches:
@@ -560,13 +555,13 @@ def _match_media_to_sidecar_batch(media_files: List[Path], sidecar_index: Dict[s
     logger.debug("Phase 2: Numbered files matching")
     phase2_matches = []
     for media_file in remaining_media:
-        match = _try_numbered_files_match_batch(media_file, sidecar_index, remaining_sidecars)
+        match = _try_numbered_files_match_batch(media_file, sidecar_index, matched_sidecars)
         if match:
             matches[media_file] = match
             phase2_matches.append(media_file)
-            remaining_sidecars.discard(match)
-            # DEBUG: Log successful match
-            logger.debug(f"Phase 2 match: {media_file} -> {match}")
+            matched_sidecars.add(match)
+            # DEBUG: Log successful match with paths
+            logger.debug(f"Phase 2 match: {media_file.name} -> {match.name}")
     
     # Remove matched media files
     for media_file in phase2_matches:
@@ -578,13 +573,13 @@ def _match_media_to_sidecar_batch(media_files: List[Path], sidecar_index: Dict[s
     logger.debug("Phase 3: Edited files matching")
     phase3_matches = []
     for media_file in remaining_media:
-        match = _try_edited_files_match_batch(media_file, sidecar_index, remaining_sidecars)
+        match = _try_edited_files_match_batch(media_file, sidecar_index, matched_sidecars)
         if match:
             matches[media_file] = match
             phase3_matches.append(media_file)
-            remaining_sidecars.discard(match)
-            # DEBUG: Log successful match
-            logger.debug(f"Phase 3 match: {media_file} -> {match}")
+            matched_sidecars.add(match)
+            # DEBUG: Log successful match with paths
+            logger.debug(f"Phase 3 match: {media_file.name} -> {match.name}")
     
     # Remove matched media files
     for media_file in phase3_matches:
@@ -592,15 +587,22 @@ def _match_media_to_sidecar_batch(media_files: List[Path], sidecar_index: Dict[s
     
     logger.debug(f"Phase 3 complete: {len(phase3_matches)} matches")
     
-    # Phase 4: Log unmatched files with paths
-    logger.info(f"Phase 4: {len(remaining_media)} unmatched media files, {len(remaining_sidecars)} unmatched sidecars")
+    # Phase 4: Calculate unmatched sidecars and log unmatched files with paths
+    all_sidecars = set()
+    for sidecar_list in sidecar_index.values():
+        for sidecar in sidecar_list:
+            all_sidecars.add(sidecar.full_sidecar_path)
+    
+    unmatched_sidecars = all_sidecars - matched_sidecars
+    
+    logger.info(f"Phase 4: {len(remaining_media)} unmatched media files, {len(unmatched_sidecars)} unmatched sidecars")
     
     # INFO: Log unmatched media files with paths
     for unmatched_media in remaining_media:
         logger.info(f"Unmatched media: {unmatched_media}")
     
     # INFO: Log unmatched sidecars with paths
-    for unmatched_sidecar in remaining_sidecars:
+    for unmatched_sidecar in unmatched_sidecars:
         logger.info(f"Unmatched sidecar: {unmatched_sidecar}")
     
     return BatchMatchingResult(
@@ -609,11 +611,11 @@ def _match_media_to_sidecar_batch(media_files: List[Path], sidecar_index: Dict[s
         matched_phase2=set(phase2_matches),
         matched_phase3=set(phase3_matches),
         unmatched_media=set(remaining_media),
-        unmatched_sidecars=remaining_sidecars
+        unmatched_sidecars=unmatched_sidecars
     )
 
 
-def _try_happy_path_match_batch(media_file: Path, sidecar_index: Dict[str, List[ParsedSidecar]], remaining_sidecars: set) -> Optional[Path]:
+def _try_happy_path_match_batch(media_file: Path, sidecar_index: Dict[str, List[ParsedSidecar]], matched_sidecars: set) -> Optional[Path]:
     """Phase 1 batch helper: Happy path matching with exclusion."""
     media_stem = media_file.stem
     media_suffix = media_file.suffix.lower()
@@ -624,9 +626,9 @@ def _try_happy_path_match_batch(media_file: Path, sidecar_index: Dict[str, List[
     if key not in sidecar_index:
         return None
     
-    # Look for sidecars with empty numeric suffix that are still available
+    # Look for sidecars with empty numeric suffix
     no_suffix_candidates = [c for c in sidecar_index[key] 
-                           if not c.numeric_suffix and c.full_sidecar_path in remaining_sidecars]
+                           if not c.numeric_suffix]
     
     if len(no_suffix_candidates) == 1:
         return no_suffix_candidates[0].full_sidecar_path
@@ -637,7 +639,7 @@ def _try_happy_path_match_batch(media_file: Path, sidecar_index: Dict[str, List[
     return None
 
 
-def _try_numbered_files_match_batch(media_file: Path, sidecar_index: Dict[str, List[ParsedSidecar]], remaining_sidecars: set) -> Optional[Path]:
+def _try_numbered_files_match_batch(media_file: Path, sidecar_index: Dict[str, List[ParsedSidecar]], matched_sidecars: set) -> Optional[Path]:
     """Phase 2 batch helper: Numbered files matching with exclusion."""
     media_stem = media_file.stem
     media_suffix = media_file.suffix.lower()
@@ -658,9 +660,9 @@ def _try_numbered_files_match_batch(media_file: Path, sidecar_index: Dict[str, L
     if key not in sidecar_index:
         return None
     
-    # Look for sidecars with matching numeric suffix that are still available
+    # Look for sidecars with matching numeric suffix
     matching_candidates = [c for c in sidecar_index[key] 
-                          if c.numeric_suffix == media_numeric_suffix and c.full_sidecar_path in remaining_sidecars]
+                          if c.numeric_suffix == media_numeric_suffix]
     
     if len(matching_candidates) == 1:
         return matching_candidates[0].full_sidecar_path
@@ -671,7 +673,7 @@ def _try_numbered_files_match_batch(media_file: Path, sidecar_index: Dict[str, L
     return None
 
 
-def _try_edited_files_match_batch(media_file: Path, sidecar_index: Dict[str, List[ParsedSidecar]], remaining_sidecars: set) -> Optional[Path]:
+def _try_edited_files_match_batch(media_file: Path, sidecar_index: Dict[str, List[ParsedSidecar]], matched_sidecars: set) -> Optional[Path]:
     """Phase 3 batch helper: Edited files matching with exclusion."""
     media_stem = media_file.stem
     media_suffix = media_file.suffix.lower()
@@ -702,13 +704,13 @@ def _try_edited_files_match_batch(media_file: Path, sidecar_index: Dict[str, Lis
         logger.debug(f"Phase 3: No sidecars found for key {key}")
         return None
     
-    # Look for sidecars with matching numeric suffix (or no suffix if base has no suffix) that are still available
+    # Look for sidecars with matching numeric suffix (or no suffix if base has no suffix)
     if base_numeric_suffix:
         matching_candidates = [c for c in sidecar_index[key] 
-                             if c.numeric_suffix == base_numeric_suffix and c.full_sidecar_path in remaining_sidecars]
+                             if c.numeric_suffix == base_numeric_suffix]
     else:
         matching_candidates = [c for c in sidecar_index[key] 
-                              if not c.numeric_suffix and c.full_sidecar_path in remaining_sidecars]
+                              if not c.numeric_suffix]
     
     logger.debug(f"Phase 3: Found {len(matching_candidates)} candidates for {media_stem}")
     

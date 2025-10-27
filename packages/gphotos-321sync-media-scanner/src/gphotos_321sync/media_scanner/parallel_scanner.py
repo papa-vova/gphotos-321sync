@@ -320,6 +320,7 @@ class ParallelScanner:
             
             if unprocessed_other:
                 logger.debug(f"Unprocessed other files: {[str(p) for p in unprocessed_other]}")
+                logger.debug("Note: There's probably also archive_browser.html, not counted as well (located outside Google Photos directory)")
             
             return {
                 "scan_run_id": scan_run_id,

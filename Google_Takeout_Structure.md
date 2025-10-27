@@ -297,7 +297,8 @@ Our implementation uses a comprehensive four-phase matching algorithm with exclu
 
 1. Look for exact filename match with no numeric suffix
 2. If found → **SUCCESS** (immediate match)
-3. Exclude matched pair from further processing
+3. Exclude matched media file from further processing
+4. Track matched sidecar (but keep available for other phases)
 
 **Example:**
 
@@ -316,7 +317,8 @@ Result: ✅ Match found
 2. Remove numeric suffix to get base filename
 3. Look for sidecar with matching numeric suffix
 4. If found → **SUCCESS**
-5. Exclude matched pair from further processing
+5. Exclude matched media file from further processing
+6. Track matched sidecar (but keep available for other phases)
 
 **Example:**
 
@@ -338,7 +340,8 @@ Result: ✅ Match found
 4. Remove numeric suffix to get base filename
 5. Look for sidecar with matching numeric suffix (or no suffix)
 6. If found → **SUCCESS**
-7. Exclude matched pair from further processing
+7. Exclude matched media file from further processing
+8. Track matched sidecar (but keep available for other phases)
 
 **Example:**
 
@@ -370,9 +373,13 @@ Result: ✅ Match found
 
 ### Exclusion Logic
 
-**Key Feature:** Once a media file and sidecar are matched in any phase, they are excluded from further processing. This prevents double-matching and ensures each file is processed only once.
+**Key Feature:** Once a media file is matched in any phase, it is excluded from further processing. However, sidecars remain available for ALL phases 1-3, allowing the same sidecar to match multiple media files (e.g., both the original and edited versions).
 
-**Batch Processing:** All media files in an album are processed together, allowing the exclusion logic to work effectively across all phases.
+**Media File Exclusion:** Matched media files are immediately excluded from subsequent phases to prevent double-matching.
+
+**Sidecar Availability:** Sidecars are tracked as matched but remain in the processing pool for all phases 1-3, ensuring they can serve multiple media files.
+
+**Phase 4 Cleanup:** Only after all phases 1-3 are complete are matched sidecars removed from the pool, allowing Phase 4 to accurately report truly unmatched sidecars.
 
 ### Numeric Suffix Validation
 

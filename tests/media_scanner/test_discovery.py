@@ -134,8 +134,8 @@ class TestParseSidecarFilename:
         assert parsed.numeric_suffix == ""
         assert parsed.full_sidecar_path == sidecar_path
     
-    def test_parse_sidecar_filename_with_duplicate(self):
-        """Test sidecar filename parsing with duplicate suffix."""
+    def test_parse_sidecar_filename_with_numeric_suffix(self):
+        """Test sidecar filename parsing with numeric suffix."""
         sidecar_path = Path("photo.jpg.supplemental-metadata(2).json")
         parsed = _parse_sidecar_filename(sidecar_path)
         
@@ -346,11 +346,11 @@ class TestMatchMediaToSidecarBatch:
         assert media_files[3] in results.unmatched_media  # Phase 4: No match
     
     def test_batch_exclusion_prevents_double_matching(self):
-        """Test that exclusion prevents the same sidecar from being matched twice."""
+        """Test that exclusion prevents the same sidecar from being matched twice in the same phase."""
         album_path = Path("/test_album")
         media_files = [
             album_path / "photo.jpg",           # Should match in Phase 1
-            album_path / "photo-edited.jpg"     # Should NOT match in Phase 3 (sidecar already taken)
+            album_path / "photo-edited.jpg"     # Should ALSO match in Phase 3 (same sidecar, different phase)
         ]
         
         sidecar_index = {
@@ -364,10 +364,11 @@ class TestMatchMediaToSidecarBatch:
         
         results = _match_media_to_sidecar_batch(media_files, sidecar_index)
         
-        # First file should match, second should not (exclusion working)
-        assert len(results.matches) == 1
+        # Both files should match (same sidecar can match multiple media files across phases)
+        assert len(results.matches) == 2
         assert results.matches[media_files[0]] == album_path / "photo.jpg.supplemental-metadata.json"
-        assert media_files[1] in results.unmatched_media
+        assert results.matches[media_files[1]] == album_path / "photo.jpg.supplemental-metadata.json"
+        assert len(results.unmatched_media) == 0
 
 
 class TestDiscoverFiles:
