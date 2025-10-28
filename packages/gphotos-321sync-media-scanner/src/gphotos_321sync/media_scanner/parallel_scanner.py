@@ -27,7 +27,6 @@ from .discovery import discover_files
 from .parallel.queue_manager import QueueManager
 from .parallel.worker_thread import worker_thread_main
 from .parallel.writer_thread import writer_thread_main
-from .parallel_scanner_helpers import report_unmatched_files
 from .progress import ProgressTracker
 
 logger = logging.getLogger(__name__)
@@ -192,14 +191,6 @@ class ParallelScanner:
                 media_files_with_metadata=media_with_metadata_count
             )
             
-            # Phase 2.5: Report unmatched files
-            report_unmatched_files(
-                scan_root=target_media_path,
-                all_sidecars=discovery_result.all_sidecars,
-                paired_sidecars=discovery_result.paired_sidecars,
-                all_media_files=files_to_process
-            )
-            
             if media_files_count > 0:
                 logger.info(f"Starting parallel processing: {{'processes': {self.worker_processes}, 'threads': {self.worker_threads}}}")
             
@@ -308,10 +299,11 @@ class ParallelScanner:
             logger.info(f"  Phase 4 (Prefix matching): {len(discovery_result.matched_phase4)} matches")
             logger.info(f"  Unmatched media: {len(discovery_result.unmatched_media)} files")
             logger.info(f"  Unmatched sidecars: {len(discovery_result.unmatched_sidecars)} files")
+            logger.info(f"  Unprocessed sidecars: {len(unprocessed_sidecars)} files")
             
-            # Log detailed unprocessed files at DEBUG level
-            if unprocessed_media:
-                logger.debug(f"Unprocessed media files: {[str(p) for p in unprocessed_media]}")
+            # Log detailed unmatched files at DEBUG level
+            if discovery_result.unmatched_media:
+                logger.debug(f"Unmatched media files: {[str(p) for p in discovery_result.unmatched_media]}")
             
             if unprocessed_sidecars:
                 logger.debug(f"Unprocessed sidecar files: {[str(p) for p in unprocessed_sidecars]}")

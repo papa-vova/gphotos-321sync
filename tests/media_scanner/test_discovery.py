@@ -220,7 +220,7 @@ class TestMatchMediaToSidecarBatch:
         ]
         
         sidecar_index = {
-            "photo.jpg": [
+            "photo.": [
                 ParsedSidecar(
                     filename="photo",
                     extension="jpg",
@@ -307,13 +307,15 @@ class TestMatchMediaToSidecarBatch:
                 numeric_suffix="",
                 full_sidecar_path=album_path / "photo1.jpg.supplemental-metadata.json"
             )],
-            "photo.jpg": [
+            "photo.": [
                 ParsedSidecar(
                     filename="photo",
                     extension="jpg",
                     numeric_suffix="(2)",
                     full_sidecar_path=album_path / "photo.jpg.supplemental-metadata(2).json"
-                ),
+                )
+            ],
+            "photo.jpg": [
                 ParsedSidecar(
                     filename="photo",
                     extension="jpg", 

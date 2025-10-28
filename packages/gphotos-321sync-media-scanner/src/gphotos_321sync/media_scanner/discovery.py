@@ -762,7 +762,12 @@ def _try_prefix_match_batch(media_file: Path, sidecar_index: Dict[str, List[Pars
             sidecar_base = sidecar.filename
             
             # Check if sidecar base is a prefix of base media stem
-            if base_media_stem.startswith(sidecar_base):
+            # Phase 4 is for PREFIX matching: one filename must be a COMPLETE prefix of the other
+            if sidecar_base == base_media_stem:
+                # Exact match
+                matching_sidecars.append(sidecar.full_sidecar_path)
+            elif base_media_stem.startswith(sidecar_base) and len(base_media_stem) > len(sidecar_base):
+                # Sidecar is shorter, and media starts with sidecar - PREFIX MATCH
                 matching_sidecars.append(sidecar.full_sidecar_path)
     
     if len(matching_sidecars) == 1:
@@ -794,7 +799,12 @@ def _try_prefix_match_batch(media_file: Path, sidecar_index: Dict[str, List[Pars
             sidecar_base = sidecar.filename
             
             # Check if base media stem is a prefix of sidecar base
-            if sidecar_base.startswith(base_media_stem):
+            # Phase 4 is for PREFIX matching: one filename must be a COMPLETE prefix of the other
+            if sidecar_base == base_media_stem:
+                # Exact match
+                matching_sidecars.append(sidecar.full_sidecar_path)
+            elif sidecar_base.startswith(base_media_stem) and len(sidecar_base) > len(base_media_stem):
+                # Media is shorter, and sidecar starts with media - PREFIX MATCH
                 matching_sidecars.append(sidecar.full_sidecar_path)
     
     if len(matching_sidecars) == 1:
