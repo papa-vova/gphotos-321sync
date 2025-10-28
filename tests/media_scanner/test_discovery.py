@@ -9,9 +9,7 @@ import pytest
 from gphotos_321sync.media_scanner.discovery import (
     discover_files,
     _collect_files,
-    _create_file_info,
     _create_file_info_from_batch_result,
-    _match_media_to_sidecar,
     _match_media_to_sidecar_batch,
     _build_sidecar_index,
     _parse_sidecar_filename,
@@ -75,7 +73,7 @@ class TestCollectFiles:
 
 
 class TestCreateFileInfo:
-    """Test the _create_file_info helper function."""
+    """Test the _create_file_info_from_batch_result helper function."""
     
     def test_create_file_info_basic(self):
         """Test basic file info creation using batch approach."""
@@ -108,17 +106,6 @@ class TestCreateFileInfo:
             assert file_info.json_sidecar_path == sidecar_file
             assert file_info.file_size == 0
     
-    def test_create_file_info_no_sidecar(self):
-        """Test file info creation when no sidecar exists."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            temp_path = Path(temp_dir)
-            media_file = temp_path / "photo.jpg"
-            media_file.touch()
-            
-            file_info = _create_file_info(media_file, temp_path, {})
-            
-            assert file_info.file_path == media_file
-            assert file_info.json_sidecar_path is None
 
 
 class TestParseSidecarFilename:
@@ -188,19 +175,19 @@ class TestMatchMediaToSidecarBatch:
         ]
         
         sidecar_index = {
-            "photo1.jpg": [ParsedSidecar(
+            "test_album/photo1.jpg": [ParsedSidecar(
                 filename="photo1",
                 extension="jpg", 
                 numeric_suffix="",
                 full_sidecar_path=album_path / "photo1.jpg.supplemental-metadata.json"
             )],
-            "photo2.png": [ParsedSidecar(
+            "test_album/photo2.png": [ParsedSidecar(
                 filename="photo2",
                 extension="png",
                 numeric_suffix="", 
                 full_sidecar_path=album_path / "photo2.png.supplemental-metadata.json"
             )],
-            "photo3.jpg": [ParsedSidecar(
+            "test_album/photo3.jpg": [ParsedSidecar(
                 filename="photo3",
                 extension="jpg",
                 numeric_suffix="",
@@ -273,7 +260,7 @@ class TestMatchMediaToSidecarBatch:
         ]
         
         sidecar_index = {
-            "photo.jpg": [
+            "test_album/photo.jpg": [
                 ParsedSidecar(
                     filename="photo",
                     extension="jpg",
@@ -314,13 +301,13 @@ class TestMatchMediaToSidecarBatch:
         ]
         
         sidecar_index = {
-            "photo1.jpg": [ParsedSidecar(
+            "test_album/photo1.jpg": [ParsedSidecar(
                 filename="photo1",
                 extension="jpg",
                 numeric_suffix="",
                 full_sidecar_path=album_path / "photo1.jpg.supplemental-metadata.json"
             )],
-            "photo.jpg": [
+            "test_album/photo.jpg": [
                 ParsedSidecar(
                     filename="photo",
                     extension="jpg",
@@ -354,7 +341,7 @@ class TestMatchMediaToSidecarBatch:
         ]
         
         sidecar_index = {
-            "photo.jpg": [ParsedSidecar(
+            "test_album/photo.jpg": [ParsedSidecar(
                 filename="photo",
                 extension="jpg",
                 numeric_suffix="",

@@ -43,6 +43,7 @@ class BatchMatchingResult:
     matched_phase1: set[Path]  # Media files matched in Phase 1
     matched_phase2: set[Path]  # Media files matched in Phase 2
     matched_phase3: set[Path]  # Media files matched in Phase 3
+    matched_phase4: set[Path]  # Media files matched in Phase 4
     unmatched_media: set[Path]  # Media files that couldn't be matched
     unmatched_sidecars: set[Path]  # Sidecars that couldn't be matched
 
@@ -89,6 +90,7 @@ class DiscoveryResult:
     matched_phase1: set[Path]  # Happy path matches (exact filename, no numeric suffix)
     matched_phase2: set[Path] # Numbered files matches (extract numeric suffix)
     matched_phase3: set[Path] # Edited files matches (strip "-edited")
+    matched_phase4: set[Path] # Prefix-based matches (different filename lengths)
     unmatched_media: set[Path]
     unmatched_sidecars: set[Path]
     
@@ -150,6 +152,7 @@ def discover_files(target_media_path: Path) -> DiscoveryResult:
     matched_phase1 = set()
     matched_phase2 = set()
     matched_phase3 = set()
+    matched_phase4 = set()
     unmatched_media = set()
     unmatched_sidecars = set()
     
@@ -161,17 +164,34 @@ def discover_files(target_media_path: Path) -> DiscoveryResult:
             media_by_album[album_path] = []
         media_by_album[album_path].append(media_file)
     
+    # Build sidecar index once for ALL sidecars
+    full_sidecar_index = {}
+    for sidecar_path in discovered_sidecars:
+        parsed = _parse_sidecar_filename(sidecar_path)
+        # Use full path as key to include album info
+        key = f"{sidecar_path.parent}/{parsed.filename}.{parsed.extension}"
+        if key not in full_sidecar_index:
+            full_sidecar_index[key] = []
+        full_sidecar_index[key].append(parsed)
+    
     # Process each album with batch matching
     for album_path, album_media_files in media_by_album.items():
-        # Build sidecar index for this album
+        # Skip album if no media files
+        if not album_media_files:
+            logger.debug(f"Skipping album {album_path}: no media files")
+            continue
+        
+        # Filter sidecar index for this album from the full index
         album_sidecar_index = {}
-        for sidecar_path in discovered_sidecars:
-            if sidecar_path.parent == album_path:
-                parsed = _parse_sidecar_filename(sidecar_path)
-                key = f"{parsed.filename}.{parsed.extension}"
-                if key not in album_sidecar_index:
-                    album_sidecar_index[key] = []
-                album_sidecar_index[key].append(parsed)
+        for key, sidecar_list in full_sidecar_index.items():
+            # Extract album path from the full key
+            for sidecar in sidecar_list:
+                if sidecar.full_sidecar_path.parent == album_path:
+                    # Use simple key format (filename.extension) for album-specific index
+                    simple_key = key.split('/')[-1] if '/' in key else key
+                    if simple_key not in album_sidecar_index:
+                        album_sidecar_index[simple_key] = []
+                    album_sidecar_index[simple_key].append(sidecar)
         
         # Process album with batch algorithm
         batch_result = _match_media_to_sidecar_batch(album_media_files, album_sidecar_index)
@@ -180,6 +200,7 @@ def discover_files(target_media_path: Path) -> DiscoveryResult:
         matched_phase1.update(batch_result.matched_phase1)
         matched_phase2.update(batch_result.matched_phase2)
         matched_phase3.update(batch_result.matched_phase3)
+        matched_phase4.update(batch_result.matched_phase4)
         unmatched_media.update(batch_result.unmatched_media)
         unmatched_sidecars.update(batch_result.unmatched_sidecars)
         
@@ -206,6 +227,7 @@ def discover_files(target_media_path: Path) -> DiscoveryResult:
         matched_phase1=matched_phase1,
         matched_phase2=matched_phase2,
         matched_phase3=matched_phase3,
+        matched_phase4=matched_phase4,
         unmatched_media=unmatched_media,
         unmatched_sidecars=unmatched_sidecars,
         
@@ -299,44 +321,6 @@ def _create_file_info_from_batch_result(media_file: Path, scan_root: Path, sidec
         json_sidecar_path=sidecar_path,
         file_size=file_size
     )
-
-
-def _create_file_info(
-    file_path: Path, 
-    scan_root: Path, 
-    sidecar_index: Dict[str, List[ParsedSidecar]]
-) -> FileInfo:
-    """Create FileInfo object for a media file.
-    
-    Args:
-        file_path: Path to the media file
-        scan_root: Root directory for relative path calculation
-        sidecar_index: Dictionary mapping "filename.extension" to list of ParsedSidecar objects
-        
-    Returns:
-        FileInfo object for the media file
-    """
-    # Calculate relative path from scan_root
-    relative_path = file_path.relative_to(scan_root)
-    
-    # Calculate album folder path (parent of the file)
-    album_folder_path = relative_path.parent
-    
-    # Get file size
-    file_size = file_path.stat().st_size
-    
-    # Find JSON sidecar using new parsing logic
-    json_sidecar_path = _match_media_to_sidecar(file_path, sidecar_index)
-    
-    return FileInfo(
-        file_path=file_path,
-        relative_path=relative_path,
-        album_folder_path=album_folder_path,
-        json_sidecar_path=json_sidecar_path,
-        file_size=file_size
-    )
-
-
 
 
 def _parse_sidecar_filename(sidecar_path: Path) -> ParsedSidecar:
@@ -467,51 +451,6 @@ def _build_sidecar_index(sidecar_filenames: List[str]) -> Dict[str, List[ParsedS
     return index
 
 
-def _match_media_to_sidecar(media_file: Path, sidecar_index: Dict[str, List[ParsedSidecar]]) -> Optional[Path]:
-    """Find matching sidecar for media file using phased algorithm.
-    
-    Implements systematic matching with exclusion of matched pairs:
-    1. Happy path: exact filename match (no numeric suffix)
-    2. Numbered files: match with numeric suffix
-    3. Edited files: strip "-edited" and match
-    
-    Args:
-        media_file: Path to the media file
-        sidecar_index: Dictionary mapping "album_path/filename.extension" to list of ParsedSidecar objects
-        
-    Returns:
-        Path to matching sidecar if found, None otherwise
-    """
-    logger.debug(f"Starting sidecar discovery for media file: {media_file.name}")
-    
-    # Extract media filename components
-    media_stem = media_file.stem
-    media_suffix = media_file.suffix.lower()
-    album_path = media_file.parent.name
-    
-    # Phase 1: Happy path - exact filename match (no numeric suffix)
-    match = _try_happy_path_match(media_stem, media_suffix, album_path, sidecar_index)
-    if match:
-        logger.debug(f"Match found (happy path): {media_file.name} -> {match.name}")
-        return match
-    
-    # Phase 2: Numbered files - extract numeric suffix and match
-    match = _try_numbered_files_match(media_stem, media_suffix, album_path, sidecar_index)
-    if match:
-        logger.debug(f"Match found (numbered): {media_file.name} -> {match.name}")
-        return match
-    
-    # Phase 3: Edited files - strip "-edited" and match
-    match = _try_edited_files_match(media_stem, media_suffix, album_path, sidecar_index)
-    if match:
-        logger.debug(f"Match found (edited): {media_file.name} -> {match.name}")
-        return match
-    
-    # Phase 4: No match found
-    logger.info(f"No match found for media file: {media_file.name}")
-    return None
-
-
 def _match_media_to_sidecar_batch(media_files: List[Path], sidecar_index: Dict[str, List[ParsedSidecar]]) -> BatchMatchingResult:
     """Match all media files to sidecars using phased algorithm with exclusion.
     
@@ -519,6 +458,7 @@ def _match_media_to_sidecar_batch(media_files: List[Path], sidecar_index: Dict[s
     1. Happy path: exact filename match (no numeric suffix)
     2. Numbered files: match with numeric suffix  
     3. Edited files: strip "-edited" and match
+    4. Prefix-based matching: handle cases where filenames have different lengths
     
     Args:
         media_files: List of media file paths in the album
@@ -552,6 +492,18 @@ def _match_media_to_sidecar_batch(media_files: List[Path], sidecar_index: Dict[s
     logger.debug(f"Phase 1 complete: {len(phase1_matches)} matches")
     
     # Phase 2: Numbered files - extract numeric suffix and match
+    if not remaining_media:
+        logger.debug("Phase 2: Skipping (no remaining media files)")
+        return BatchMatchingResult(
+            matches=matches,
+            matched_phase1=set(phase1_matches),
+            matched_phase2=set(),
+            matched_phase3=set(),
+            matched_phase4=set(),
+            unmatched_media=set(),
+            unmatched_sidecars=set()
+        )
+    
     logger.debug("Phase 2: Numbered files matching")
     phase2_matches = []
     for media_file in remaining_media:
@@ -570,6 +522,18 @@ def _match_media_to_sidecar_batch(media_files: List[Path], sidecar_index: Dict[s
     logger.debug(f"Phase 2 complete: {len(phase2_matches)} matches")
     
     # Phase 3: Edited files - strip "-edited" and match
+    if not remaining_media:
+        logger.debug("Phase 3: Skipping (no remaining media files)")
+        return BatchMatchingResult(
+            matches=matches,
+            matched_phase1=set(phase1_matches),
+            matched_phase2=set(phase2_matches),
+            matched_phase3=set(),
+            matched_phase4=set(),
+            unmatched_media=set(),
+            unmatched_sidecars=set()
+        )
+    
     logger.debug("Phase 3: Edited files matching")
     phase3_matches = []
     for media_file in remaining_media:
@@ -587,7 +551,37 @@ def _match_media_to_sidecar_batch(media_files: List[Path], sidecar_index: Dict[s
     
     logger.debug(f"Phase 3 complete: {len(phase3_matches)} matches")
     
-    # Phase 4: Calculate unmatched sidecars and log unmatched files with paths
+    # Phase 4: Prefix-based matching for remaining files
+    if not remaining_media:
+        logger.debug("Phase 4: Skipping (no remaining media files)")
+        return BatchMatchingResult(
+            matches=matches,
+            matched_phase1=set(phase1_matches),
+            matched_phase2=set(phase2_matches),
+            matched_phase3=set(phase3_matches),
+            matched_phase4=set(),
+            unmatched_media=set(),
+            unmatched_sidecars=set()
+        )
+    
+    logger.debug("Phase 4: Prefix-based matching")
+    phase4_matches = []
+    for media_file in remaining_media:
+        match = _try_prefix_match_batch(media_file, sidecar_index, matched_sidecars)
+        if match:
+            matches[media_file] = match
+            phase4_matches.append(media_file)
+            matched_sidecars.add(match)
+            # DEBUG: Log successful match with paths
+            logger.debug(f"Phase 4 match: {media_file.name} -> {match.name}")
+    
+    # Remove matched media files
+    for media_file in phase4_matches:
+        remaining_media.remove(media_file)
+    
+    logger.debug(f"Phase 4 complete: {len(phase4_matches)} matches")
+    
+    # Phase 5: Calculate unmatched sidecars and log unmatched files with paths
     all_sidecars = set()
     for sidecar_list in sidecar_index.values():
         for sidecar in sidecar_list:
@@ -595,7 +589,7 @@ def _match_media_to_sidecar_batch(media_files: List[Path], sidecar_index: Dict[s
     
     unmatched_sidecars = all_sidecars - matched_sidecars
     
-    logger.info(f"Phase 4: {len(remaining_media)} unmatched media files, {len(unmatched_sidecars)} unmatched sidecars")
+    logger.info(f"Phase 5: {len(remaining_media)} unmatched media files, {len(unmatched_sidecars)} unmatched sidecars")
     
     # INFO: Log unmatched media files with paths
     for unmatched_media in remaining_media:
@@ -610,6 +604,7 @@ def _match_media_to_sidecar_batch(media_files: List[Path], sidecar_index: Dict[s
         matched_phase1=set(phase1_matches),
         matched_phase2=set(phase2_matches),
         matched_phase3=set(phase3_matches),
+        matched_phase4=set(phase4_matches),
         unmatched_media=set(remaining_media),
         unmatched_sidecars=unmatched_sidecars
     )
@@ -621,7 +616,7 @@ def _try_happy_path_match_batch(media_file: Path, sidecar_index: Dict[str, List[
     media_suffix = media_file.suffix.lower()
     album_path = media_file.parent.name
     
-    key = f"{media_stem}{media_suffix}"
+    key = f"{album_path}/{media_stem}{media_suffix}"
     
     if key not in sidecar_index:
         return None
@@ -655,7 +650,7 @@ def _try_numbered_files_match_batch(media_file: Path, sidecar_index: Dict[str, L
     base_stem = _remove_numeric_suffix_from_media(media_stem)
     
     # Look for sidecars with base filename and matching numeric suffix that are still available
-    key = f"{base_stem}{media_suffix}"
+    key = f"{album_path}/{base_stem}."
     
     if key not in sidecar_index:
         return None
@@ -696,7 +691,7 @@ def _try_edited_files_match_batch(media_file: Path, sidecar_index: Dict[str, Lis
     # Remove numeric suffix from base stem to get the actual base filename
     actual_base_stem = _remove_numeric_suffix_from_media(base_stem)
     
-    key = f"{actual_base_stem}{media_suffix}"
+    key = f"{album_path}/{actual_base_stem}{media_suffix}"
     
     logger.debug(f"Phase 3: {media_stem} -> base_stem: {base_stem}, actual_base_stem: {actual_base_stem}, key: {key}")
     
@@ -723,117 +718,93 @@ def _try_edited_files_match_batch(media_file: Path, sidecar_index: Dict[str, Lis
     return None
 
 
-def _try_happy_path_match(media_stem: str, media_suffix: str, album_path: str, sidecar_index: Dict[str, List[ParsedSidecar]]) -> Optional[Path]:
-    """Phase 1: Happy path - exact filename match (no numeric suffix).
+def _try_prefix_match_batch(media_file: Path, sidecar_index: Dict[str, List[ParsedSidecar]], matched_sidecars: set) -> Optional[Path]:
+    """Phase 4 batch helper: Prefix-based matching for remaining files.
+    
+    This phase handles cases where:
+    1. Media filename starts with sidecar filename (sidecar is shorter)
+    2. Sidecar filename starts with media filename (media is shorter)
     
     Args:
-        media_stem: Media filename without extension
-        media_suffix: Media file extension
-        album_path: Album folder name
-        sidecar_index: Sidecar index
+        media_file: Path to the media file
+        sidecar_index: Dictionary mapping "filename.extension" to list of ParsedSidecar objects
+        matched_sidecars: Set of already matched sidecar paths
         
     Returns:
         Path to matching sidecar if found, None otherwise
     """
-    key = f"{media_stem}{media_suffix}"
+    media_stem = media_file.stem
+    media_suffix = media_file.suffix.lower()
     
-    if key not in sidecar_index:
+    # Strip "-edited" from media filename before matching (file names can be shortened while editing)
+    processed_media_stem = _strip_edited_from_filename(media_stem) or media_stem
+    
+    # Extract numeric suffix from processed media stem and strip it
+    media_numeric_suffix = _extract_numeric_suffix_from_media(processed_media_stem)
+    base_media_stem = _remove_numeric_suffix_from_media(processed_media_stem) if media_numeric_suffix else processed_media_stem
+    
+    # Strategy 1: Find sidecars where the sidecar filename is a prefix of the media filename
+    # Example: "Screenshot_2023-04-05-18-07-21-83_abb9c8060a0a.json" matches "Screenshot_2023-04-05-18-07-21-83_abb9c8060a0a1.jpg"
+    matching_sidecars = []
+    
+    for key, sidecar_list in sidecar_index.items():
+        for sidecar in sidecar_list:
+            if sidecar.full_sidecar_path in matched_sidecars:
+                continue
+            
+            # Filter by numeric suffix: only consider sidecars with matching numeric suffix
+            if media_numeric_suffix:
+                if sidecar.numeric_suffix != media_numeric_suffix:
+                    continue
+            else:
+                # If media has no numeric suffix, only consider sidecars without numeric suffix
+                if sidecar.numeric_suffix:
+                    continue
+                
+            # Extract the base filename from sidecar (without .supplemental-metadata.json)
+            sidecar_base = sidecar.filename
+            
+            # Check if sidecar base is a prefix of base media stem
+            if base_media_stem.startswith(sidecar_base):
+                matching_sidecars.append(sidecar.full_sidecar_path)
+    
+    if len(matching_sidecars) == 1:
+        logger.debug(f"Phase 4 match (sidecar prefix): {media_file.name} -> {matching_sidecars[0].name}")
+        return matching_sidecars[0]
+    elif len(matching_sidecars) > 1:
+        logger.debug(f"Phase 4: Multiple sidecar prefix matches for {media_file.name}: {[s.name for s in matching_sidecars]}")
         return None
     
-    # Look for sidecars with empty numeric suffix
-    no_suffix_candidates = [c for c in sidecar_index[key] if not c.numeric_suffix]
+    # Strategy 2: Find sidecars where the media filename is a prefix of the sidecar filename
+    # Example: "24.05(2).13 - 1" matches "24.05.13 - 1.supplemental-metadata(2).json"
+    matching_sidecars = []
     
-    if len(no_suffix_candidates) == 1:
-        return no_suffix_candidates[0].full_sidecar_path
-    elif len(no_suffix_candidates) > 1:
-        logger.error(f"Multiple sidecars without numeric suffix for {media_stem}{media_suffix}: {[c.full_sidecar_path.name for c in no_suffix_candidates]}")
-        return None
+    for key, sidecar_list in sidecar_index.items():
+        for sidecar in sidecar_list:
+            if sidecar.full_sidecar_path in matched_sidecars:
+                continue
+            
+            # Filter by numeric suffix: only consider sidecars with matching numeric suffix
+            if media_numeric_suffix:
+                if sidecar.numeric_suffix != media_numeric_suffix:
+                    continue
+            else:
+                # If media has no numeric suffix, only consider sidecars without numeric suffix
+                if sidecar.numeric_suffix:
+                    continue
+                
+            # Extract the base filename from sidecar (without .supplemental-metadata.json)
+            sidecar_base = sidecar.filename
+            
+            # Check if base media stem is a prefix of sidecar base
+            if sidecar_base.startswith(base_media_stem):
+                matching_sidecars.append(sidecar.full_sidecar_path)
     
-    return None
-
-
-def _try_numbered_files_match(media_stem: str, media_suffix: str, album_path: str, sidecar_index: Dict[str, List[ParsedSidecar]]) -> Optional[Path]:
-    """Phase 2: Numbered files - extract numeric suffix and match.
-    
-    Args:
-        media_stem: Media filename without extension
-        media_suffix: Media file extension
-        album_path: Album folder name
-        sidecar_index: Sidecar index
-        
-    Returns:
-        Path to matching sidecar if found, None otherwise
-    """
-    # Extract numeric suffix from media filename
-    media_numeric_suffix = _extract_numeric_suffix_from_media(media_stem)
-    
-    if not media_numeric_suffix:
-        return None
-    
-    # Remove numeric suffix from media stem to get base filename
-    base_stem = _remove_numeric_suffix_from_media(media_stem)
-    
-    # Look for sidecars with base filename and matching numeric suffix
-    key = f"{base_stem}{media_suffix}"
-    
-    if key not in sidecar_index:
-        return None
-    
-    # Look for sidecars with matching numeric suffix
-    matching_candidates = [c for c in sidecar_index[key] if c.numeric_suffix == media_numeric_suffix]
-    
-    if len(matching_candidates) == 1:
-        return matching_candidates[0].full_sidecar_path
-    elif len(matching_candidates) > 1:
-        logger.error(f"Multiple sidecars with numeric suffix {media_numeric_suffix} for {media_stem}{media_suffix}: {[c.full_sidecar_path.name for c in matching_candidates]}")
-        return None
-    
-    return None
-
-
-def _try_edited_files_match(media_stem: str, media_suffix: str, album_path: str, sidecar_index: Dict[str, List[ParsedSidecar]]) -> Optional[Path]:
-    """Phase 3: Edited files - strip "-edited" and match.
-    
-    Args:
-        media_stem: Media filename without extension
-        media_suffix: Media file extension
-        album_path: Album folder name
-        sidecar_index: Sidecar index
-        
-    Returns:
-        Path to matching sidecar if found, None otherwise
-    """
-    # Check if filename contains "-edited" (case insensitive)
-    if "-edited" not in media_stem.lower():
-        return None
-    
-    # Strip "-edited" from filename (case insensitive)
-    base_stem = _strip_edited_from_filename(media_stem)
-    
-    if not base_stem:
-        return None
-    
-    # Extract numeric suffix from the base filename
-    base_numeric_suffix = _extract_numeric_suffix_from_media(base_stem)
-    
-    # Remove numeric suffix from base stem to get the actual base filename
-    actual_base_stem = _remove_numeric_suffix_from_media(base_stem)
-    
-    key = f"{actual_base_stem}{media_suffix}"
-    
-    if key not in sidecar_index:
-        return None
-    
-    # Look for sidecars with matching numeric suffix (or no suffix if base has no suffix)
-    if base_numeric_suffix:
-        matching_candidates = [c for c in sidecar_index[key] if c.numeric_suffix == base_numeric_suffix]
-    else:
-        matching_candidates = [c for c in sidecar_index[key] if not c.numeric_suffix]
-    
-    if len(matching_candidates) == 1:
-        return matching_candidates[0].full_sidecar_path
-    elif len(matching_candidates) > 1:
-        logger.error(f"Multiple sidecars for edited file {media_stem}{media_suffix} -> {base_stem}{media_suffix}: {[c.full_sidecar_path.name for c in matching_candidates]}")
+    if len(matching_sidecars) == 1:
+        logger.debug(f"Phase 4 match (media prefix): {media_file.name} -> {matching_sidecars[0].name}")
+        return matching_sidecars[0]
+    elif len(matching_sidecars) > 1:
+        logger.debug(f"Phase 4: Multiple media prefix matches for {media_file.name}: {[s.name for s in matching_sidecars]}")
         return None
     
     return None
@@ -875,7 +846,9 @@ def _extract_numeric_suffix_from_media(media_stem: str) -> Optional[str]:
     if suffix_end < len(media_stem) and media_stem[suffix_end] == '.':
         return last_match.group(0)  # Return "(n)"
     
-    return None
+    # NEW: Also accept numeric suffixes anywhere in the filename
+    # This handles cases like "24.05(2).13 - 1" where (2) is followed by ".13"
+    return last_match.group(0)  # Return "(n)"
 
 
 def _remove_numeric_suffix_from_media(media_stem: str) -> str:

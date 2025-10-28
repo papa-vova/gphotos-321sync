@@ -49,6 +49,7 @@ class TestDiscoveryResult:
             matched_phase1=matched_phase1,
             matched_phase2=matched_phase2,
             matched_phase3=matched_phase3,
+            matched_phase4=set(),
             unmatched_media=unmatched_media,
             unmatched_sidecars=unmatched_sidecars,
             discovered_media=discovered_media,
@@ -99,6 +100,7 @@ class TestDiscoveryResult:
             matched_phase1={Path("/test/photo1.jpg")},
             matched_phase2=set(),
             matched_phase3=set(),
+            matched_phase4=set(),
             unmatched_media={Path("/test/photo2.jpg")},
             unmatched_sidecars={Path("/test/photo2.jpg.supplemental-metadata.json"),
                               Path("/test/photo3.jpg.supplemental-metadata.json")},
@@ -146,6 +148,7 @@ class TestBatchMatchingResult:
             matched_phase1=matched_phase1,
             matched_phase2=matched_phase2,
             matched_phase3=matched_phase3,
+            matched_phase4=set(),
             unmatched_media=unmatched_media,
             unmatched_sidecars=unmatched_sidecars
         )
@@ -178,6 +181,7 @@ class TestBatchMatchingResult:
             matched_phase1={Path("/test/photo1.jpg")},
             matched_phase2={Path("/test/photo2(1).jpg")},
             matched_phase3={Path("/test/photo3-edited.jpg")},
+            matched_phase4=set(),
             unmatched_media={Path("/test/photo4.jpg")},
             unmatched_sidecars={Path("/test/photo5.jpg.supplemental-metadata.json")}
         )
@@ -214,6 +218,7 @@ class TestGranularTrackingIntegration:
             matched_phase1={Path("/album1/photo1.jpg")},
             matched_phase2=set(),
             matched_phase3=set(),
+            matched_phase4=set(),
             unmatched_media={Path("/album1/photo2.jpg")},
             unmatched_sidecars=set()
         )
@@ -226,6 +231,7 @@ class TestGranularTrackingIntegration:
             matched_phase1=set(),
             matched_phase2={Path("/album2/photo3(1).jpg")},
             matched_phase3={Path("/album2/photo4-edited.jpg")},
+            matched_phase4=set(),
             unmatched_media=set(),
             unmatched_sidecars={Path("/album2/photo5.jpg.supplemental-metadata.json")}
         )
@@ -261,6 +267,7 @@ class TestGranularTrackingIntegration:
             matched_phase1=combined_phase1,
             matched_phase2=combined_phase2,
             matched_phase3=combined_phase3,
+            matched_phase4=set(),
             unmatched_media=combined_unmatched_media,
             unmatched_sidecars=combined_unmatched_sidecars,
             discovered_media={Path("/album1/photo1.jpg"), Path("/album1/photo2.jpg"),
@@ -297,6 +304,7 @@ class TestGranularTrackingIntegration:
             matched_phase1=set(),
             matched_phase2=set(),
             matched_phase3=set(),
+            matched_phase4=set(),
             unmatched_media=set(),
             unmatched_sidecars=set(),
             discovered_media=set(),
@@ -335,6 +343,7 @@ class TestGranularTrackingEdgeCases:
             matched_phase1={Path("/test/photo1.jpg")},
             matched_phase2={Path("/test/photo2(1).jpg")},
             matched_phase3={Path("/test/photo3-edited.jpg")},
+            matched_phase4=set(),
             unmatched_media=set(),
             unmatched_sidecars=set()
         )
@@ -361,6 +370,7 @@ class TestGranularTrackingEdgeCases:
             matched_phase1=set(),
             matched_phase2=set(),
             matched_phase3=set(),
+            matched_phase4=set(),
             unmatched_media={Path("/test/photo1.jpg"), Path("/test/photo2.jpg"), Path("/test/photo3.jpg")},
             unmatched_sidecars={Path("/test/sidecar1.json"), Path("/test/sidecar2.json")}
         )
@@ -388,6 +398,7 @@ class TestGranularTrackingEdgeCases:
             matched_phase1=set(),
             matched_phase2=set(),
             matched_phase3=set(),
+            matched_phase4=set(),
             unmatched_media=set(),
             unmatched_sidecars=set(),
             discovered_media={Path("/test/photo1.jpg"), Path("/test/video1.mp4")},
@@ -430,6 +441,7 @@ class TestParallelScannerIntegration:
             matched_phase1=set(),
             matched_phase2=set(),
             matched_phase3=set(),
+            matched_phase4=set(),
             unmatched_media=set(),
             unmatched_sidecars=set(),
             discovered_media=set(),

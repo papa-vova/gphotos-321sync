@@ -289,7 +289,7 @@ These are normal file names and do not result in a specially numbered metadata s
 
 ## Sidecar Matching Algorithm
 
-Our implementation uses a comprehensive four-phase matching algorithm with exclusion that processes all media files in an album together. The algorithm extracts key components from sidecar filenames: base filename (e.g., "IMG_1234" from "IMG_1234.jpg.supplemental-metadata.json"), extension (e.g., "jpg" - may be truncated like "jp"), and numeric suffix (e.g., "(2)" - may be empty).
+Our implementation uses a comprehensive five-phase matching algorithm with exclusion that processes all media files in an album together. The algorithm extracts key components from sidecar filenames: base filename (e.g., "IMG_1234" from "IMG_1234.jpg.supplemental-metadata.json"), extension (e.g., "jpg" - may be truncated like "jp"), and numeric suffix (e.g., "(2)" - may be empty).
 
 ### Phase 1: Happy Path Matching
 
@@ -363,7 +363,41 @@ Algorithm: Phase 3 (edited files matching with numeric suffix)
 Result: ✅ Match found
 ```
 
-### Phase 4: Unmatched Files
+### Phase 4: Prefix-Based Matching
+
+**Process:**
+
+1. Strip "-edited" from media filename (file names can be shortened while editing)
+2. Extract numeric suffix from media filename (if present) and strip it to get base filename
+3. Filter sidecars to only consider those with matching numeric suffix
+4. **Strategy 1:** Check if sidecar base filename is a prefix of media base filename
+5. **Strategy 2:** Check if media base filename is a prefix of sidecar base filename
+6. If exactly one match found → **SUCCESS**
+7. Exclude matched media file from further processing
+8. Track matched sidecar
+
+**Example (Strategy 1 - sidecar is shorter):**
+
+```text
+Media: Album1/Screenshot_2023-04-05-18-07-21-83_abb9c8060a0a1.jpg
+Strip: "Screenshot_2023-04-05-18-07-21-83_abb9c8060a0a1", base: (no suffix)
+Sidecar: Album1/Screenshot_2023-04-05-18-07-21-83_abb9c8060a0a.json
+Algorithm: Phase 4 (sidecar base is prefix of media base)
+Result: ✅ Match found
+```
+
+**Example (Strategy 2 - media is shorter):**
+
+```text
+Media: Album1/photo(2)-edited.jpg
+Strip: "photo(2)", extract suffix "(2)", base: "photo"
+Sidecar: Album1/photo.jpg.supplemental-metadata(2).json
+Filter: Only consider sidecars with suffix "(2)" ✅
+Algorithm: Phase 4 (media base is prefix of sidecar base)
+Result: ✅ Match found
+```
+
+### Phase 5: Unmatched Files
 
 **Process:**
 
@@ -373,28 +407,39 @@ Result: ✅ Match found
 
 ### Exclusion Logic
 
-**Key Feature:** Once a media file is matched in any phase, it is excluded from further processing. However, sidecars remain available for ALL phases 1-3, allowing the same sidecar to match multiple media files (e.g., both the original and edited versions).
+**Key Feature:** Once a media file is matched in any phase, it is excluded from further processing. However, sidecars remain available for ALL phases 1-4, allowing the same sidecar to match multiple media files (e.g., both the original and edited versions).
 
 **Media File Exclusion:** Matched media files are immediately excluded from subsequent phases to prevent double-matching.
 
-**Sidecar Availability:** Sidecars are tracked as matched but remain in the processing pool for all phases 1-3, ensuring they can serve multiple media files.
+**Sidecar Availability:** Sidecars are tracked as matched but remain in the processing pool for all phases 1-4, ensuring they can serve multiple media files.
 
-**Phase 4 Cleanup:** Only after all phases 1-3 are complete are matched sidecars removed from the pool, allowing Phase 4 to accurately report truly unmatched sidecars.
+**Phase 5 Cleanup:** Only after all phases 1-4 are complete are matched sidecars removed from the pool, allowing Phase 5 to accurately report truly unmatched sidecars.
 
 ### Numeric Suffix Validation
 
-Our algorithm validates numeric suffixes using two mutually exclusive patterns:
+Our algorithm extracts numeric suffixes using a comprehensive pattern:
 
-1. **At the very end**: `"(n)$"` (e.g., `"photo(2)"`)
-2. **Somewhere within**: `"(n)\."` (e.g., `"21.12(2).11"`)
+- **Pattern**: `"\((\d+)\)"` - matches `(n)` where n is digits
+- **Position**: Can appear anywhere in the filename
+- **Selection**: Uses the rightmost occurrence if multiple exist
 
-**Example:**
+**Examples:**
 
 ```text
+Media: "photo(2).jpg"
+Suffix: "(2)"
+Position: At the end
+Result: ✅ Valid
+
 Media: "21.12(2).11 - 1.jpg"
 Suffix: "(2)"
-Pattern: "(2)\." matches "21.12(2).11"
-Result: ✅ Valid match
+Position: In the middle, followed by ".11"
+Result: ✅ Valid
+
+Media: "photo-edited(3).jpg"
+Suffix: "(3)"
+Position: At the end, after "-edited"
+Result: ✅ Valid
 ```
 
 ### Matching Examples

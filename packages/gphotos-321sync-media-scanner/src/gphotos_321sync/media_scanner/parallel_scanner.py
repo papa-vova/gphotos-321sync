@@ -305,6 +305,7 @@ class ParallelScanner:
             logger.info(f"  Phase 1 (Happy path): {len(discovery_result.matched_phase1)} matches")
             logger.info(f"  Phase 2 (Numbered files): {len(discovery_result.matched_phase2)} matches")
             logger.info(f"  Phase 3 (Edited files): {len(discovery_result.matched_phase3)} matches")
+            logger.info(f"  Phase 4 (Prefix matching): {len(discovery_result.matched_phase4)} matches")
             logger.info(f"  Unmatched media: {len(discovery_result.unmatched_media)} files")
             logger.info(f"  Unmatched sidecars: {len(discovery_result.unmatched_sidecars)} files")
             
@@ -337,6 +338,7 @@ class ParallelScanner:
                     "matched_phase1": len(discovery_result.matched_phase1),
                     "matched_phase2": len(discovery_result.matched_phase2),
                     "matched_phase3": len(discovery_result.matched_phase3),
+                    "matched_phase4": len(discovery_result.matched_phase4),
                     "unmatched_media": len(discovery_result.unmatched_media),
                     "unmatched_sidecars": len(discovery_result.unmatched_sidecars),
                 }
