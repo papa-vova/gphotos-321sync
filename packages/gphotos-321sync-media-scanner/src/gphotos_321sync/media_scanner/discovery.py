@@ -18,8 +18,9 @@ from .path_utils import should_scan_file
 logger = logging.getLogger(__name__)
 
 # Known media file extensions supported by Google Photos
-# Any suffix that is a prefix of these will be treated as a valid extension
-# e.g., '.j', '.jp', '.jpg' all match because they're prefixes of '.jpg'
+# Full extensions that can be used in matching
+# NOTE: Only unambiguous shortened prefixes are allowed
+# Ambiguous prefixes (e.g., 'j' could be jpg/jpeg, 'm' could be mp4/mov/mpg, etc.) are NOT supported
 # Sources: Google_Takeout_Structure.md and generate_test_data.py
 KNOWN_MEDIA_EXTENSIONS = [
     '.jpg', '.jpeg',  # Images
@@ -27,6 +28,84 @@ KNOWN_MEDIA_EXTENSIONS = [
     '.mp4', '.m4v', '.mov',  # Videos
     '.mpg', '.mpeg', '.3gp', '.avi', '.mkv', '.webm',
 ]
+
+# Single-character prefixes that unambiguously map to full extensions
+# Used when comparing shortened extensions
+# Note: 'j' maps to 'jpg', and matches both 'jpg' and 'jpeg' (both are JPEG format)
+UNAMBIGUOUS_SHORT_EXT = {
+    'p': 'png',
+    'g': 'gif',
+    'h': 'heic',
+    'a': 'avi',
+    's': 'svg',
+    '3': '3gp',
+    'j': 'jpg',  # Maps to .jpg, matches both .jpg and .jpeg
+}
+
+
+def _normalize_extension_to_full(ext: str) -> str:
+    """
+    Normalize an extension to its full form.
+    
+    If the extension is a single character and unambiguously maps to a full extension,
+    return the full extension. Otherwise, return the extension as-is.
+    
+    Examples:
+        'p' -> 'png'
+        'g' -> 'gif'
+        'jpg' -> 'jpg'
+        'j' -> 'j'  # Ambiguous, cannot expand
+        '' -> ''
+    
+    Args:
+        ext: Extension (with or without leading dot)
+        
+    Returns:
+        Normalized extension (always with leading dot)
+    """
+    # Remove leading dot if present
+    ext_clean = ext.lstrip('.')
+    
+    if not ext_clean:
+        return ''
+    
+    # If single character and unambiguous, expand it
+    if len(ext_clean) == 1 and ext_clean in UNAMBIGUOUS_SHORT_EXT:
+        return '.' + UNAMBIGUOUS_SHORT_EXT[ext_clean]
+    
+    # Otherwise, return with leading dot
+    return '.' + ext_clean
+
+
+def _extensions_match(media_ext: str, sidecar_ext: str) -> bool:
+    """
+    Check if media and sidecar extensions match.
+    
+    Both extensions must be in their full form (no ambiguous shortened versions).
+    Empty extensions match other empty extensions.
+    
+    Special case: .jpg and .jpeg are treated as the same (both JPEG format).
+    
+    Args:
+        media_ext: Media file extension (with or without leading dot)
+        sidecar_ext: Sidecar file extension (with or without leading dot)
+        
+    Returns:
+        True if extensions match, False otherwise
+    """
+    # Normalize both to full form
+    media_full = _normalize_extension_to_full(media_ext)
+    sidecar_full = _normalize_extension_to_full(sidecar_ext)
+    
+    # Extensions must be identical to match
+    if media_full == sidecar_full:
+        return True
+    
+    # Special case: .jpg and .jpeg are both JPEG format, so they match
+    if {media_full, sidecar_full} == {'.jpg', '.jpeg'}:
+        return True
+    
+    return False
 
 
 @dataclass
@@ -796,6 +875,17 @@ def _try_prefix_match_batch(media_file: Path, sidecar_index: Dict[str, List[Pars
     """
     # Use full filename for Phase 4 to handle files with dots
     media_full_name = media_file.name
+    media_suffix = media_file.suffix.lower()
+    
+    # Check if media has a real extension
+    has_media_extension = False
+    if not media_suffix:
+        has_media_extension = False
+    else:
+        for known_ext in KNOWN_MEDIA_EXTENSIONS:
+            if known_ext.startswith(media_suffix):
+                has_media_extension = True
+                break
     
     # Strip "-edited" from media filename before matching (file names can be shortened while editing)
     processed_media = _strip_edited_from_filename(media_full_name) or media_full_name
@@ -824,6 +914,10 @@ def _try_prefix_match_batch(media_file: Path, sidecar_index: Dict[str, List[Pars
                 
             # Extract the base filename from sidecar (without .supplemental-metadata.json)
             sidecar_base = sidecar.filename
+            
+            # CRITICAL: Extensions must match for proper pairing
+            if not _extensions_match(media_suffix, sidecar.extension):
+                continue
             
             # Check if sidecar base is a prefix of base media stem
             # Phase 4 is for PREFIX matching: one filename must be a COMPLETE prefix of the other
@@ -861,6 +955,10 @@ def _try_prefix_match_batch(media_file: Path, sidecar_index: Dict[str, List[Pars
                 
             # Extract the base filename from sidecar (without .supplemental-metadata.json)
             sidecar_base = sidecar.filename
+            
+            # CRITICAL: Extensions must match for proper pairing
+            if not _extensions_match(media_suffix, sidecar.extension):
+                continue
             
             # Check if base media stem is a prefix of sidecar base
             # Phase 4 is for PREFIX matching: one filename must be a COMPLETE prefix of the other
