@@ -621,7 +621,8 @@ def _try_happy_path_match_batch(media_file: Path, sidecar_index: Dict[str, List[
     media_stem = media_file.stem
     media_suffix = media_file.suffix.lower()
     
-    key = f"{media_stem}{media_suffix}"
+    # If no suffix, add trailing dot to match index format
+    key = f"{media_stem}{media_suffix}" if media_suffix else f"{media_stem}."
     
     if key not in sidecar_index:
         return None
@@ -641,17 +642,18 @@ def _try_happy_path_match_batch(media_file: Path, sidecar_index: Dict[str, List[
 
 def _try_numbered_files_match_batch(media_file: Path, sidecar_index: Dict[str, List[ParsedSidecar]], matched_sidecars: set) -> Optional[Path]:
     """Phase 2 batch helper: Numbered files matching with exclusion."""
-    media_stem = media_file.stem
-    media_suffix = media_file.suffix.lower()
+    # Use full filename (not stem) to handle numeric suffixes in the middle of the name
+    # e.g., "01.04(1).12 - 1" should extract "(1)" and base "01.04.12 - 1"
+    media_filename = media_file.name
     
     # Extract numeric suffix from media filename
-    media_numeric_suffix = _extract_numeric_suffix_from_media(media_stem)
+    media_numeric_suffix = _extract_numeric_suffix_from_media(media_filename)
     
     if not media_numeric_suffix:
         return None
     
-    # Remove numeric suffix from media stem to get base filename
-    base_stem = _remove_numeric_suffix_from_media(media_stem)
+    # Remove numeric suffix from media filename to get base filename
+    base_stem = _remove_numeric_suffix_from_media(media_filename)
     
     # Look for sidecars with base filename and matching numeric suffix that are still available
     key = f"{base_stem}."
@@ -694,7 +696,8 @@ def _try_edited_files_match_batch(media_file: Path, sidecar_index: Dict[str, Lis
     # Remove numeric suffix from base stem to get the actual base filename
     actual_base_stem = _remove_numeric_suffix_from_media(base_stem)
     
-    key = f"{actual_base_stem}{media_suffix}"
+    # If no suffix, add trailing dot to match index format
+    key = f"{actual_base_stem}{media_suffix}" if media_suffix else f"{actual_base_stem}."
     
     logger.debug(f"Phase 3: {media_stem} -> base_stem: {base_stem}, actual_base_stem: {actual_base_stem}, key: {key}")
     
@@ -737,7 +740,6 @@ def _try_prefix_match_batch(media_file: Path, sidecar_index: Dict[str, List[Pars
         Path to matching sidecar if found, None otherwise
     """
     media_stem = media_file.stem
-    media_suffix = media_file.suffix.lower()
     
     # Strip "-edited" from media filename before matching (file names can be shortened while editing)
     processed_media_stem = _strip_edited_from_filename(media_stem) or media_stem

@@ -358,6 +358,62 @@ class TestMatchMediaToSidecarBatch:
         assert results.matches[media_files[0]] == album_path / "photo.jpg.supplemental-metadata.json"
         assert results.matches[media_files[1]] == album_path / "photo.jpg.supplemental-metadata.json"
         assert len(results.unmatched_media) == 0
+    
+    def test_batch_dotted_filenames_without_extensions(self):
+        """Test matching for files with dots but no real extensions (e.g., '01.02.12 - 2')."""
+        album_path = Path("/test_album")
+        media_files = [
+            album_path / "01.02.12 - 2",  # No extension
+            album_path / "10.01.15 - 6"   # No extension
+        ]
+        
+        sidecar_index = {
+            "01.02.12 - 2.": [ParsedSidecar(
+                filename="01.02.12 - 2",
+                extension="",
+                numeric_suffix="",
+                full_sidecar_path=album_path / "01.02.12 - 2.supplemental-metadata.json"
+            )],
+            "10.01.15 - 6.": [ParsedSidecar(
+                filename="10.01.15 - 6",
+                extension="",
+                numeric_suffix="",
+                full_sidecar_path=album_path / "10.01.15 - 6.supplemental-metadata.json"
+            )]
+        }
+        
+        results = _match_media_to_sidecar_batch(media_files, sidecar_index)
+        
+        # Both files should match in Phase 1
+        assert len(results.matches) == 2
+        assert results.matches[media_files[0]] == album_path / "01.02.12 - 2.supplemental-metadata.json"
+        assert results.matches[media_files[1]] == album_path / "10.01.15 - 6.supplemental-metadata.json"
+        assert len(results.unmatched_media) == 0
+    
+    def test_batch_numbered_dotted_filenames(self):
+        """Test matching for numbered files with dots (e.g., '01.04(1).12 - 1')."""
+        album_path = Path("/test_album")
+        media_files = [
+            album_path / "01.04(1).12 - 1"  # No extension, but has numeric suffix
+        ]
+        
+        sidecar_index = {
+            "01.04.12 - 1.": [ParsedSidecar(
+                filename="01.04.12 - 1",
+                extension="",
+                numeric_suffix="(1)",
+                full_sidecar_path=album_path / "01.04.12 - 1.supplemental-metadata(1).json"
+            )]
+        }
+        
+        results = _match_media_to_sidecar_batch(media_files, sidecar_index)
+        
+        # Using full filename (not stem) allows Phase 2 to extract "(1)" and get base "01.04.12 - 1"
+        # This correctly matches in Phase 2
+        assert len(results.matches) == 1
+        assert len(results.matched_phase2) == 1
+        assert results.matches[media_files[0]] == album_path / "01.04.12 - 1.supplemental-metadata(1).json"
+        assert len(results.unmatched_media) == 0
 
 
 class TestDiscoverFiles:
