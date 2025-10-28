@@ -169,7 +169,9 @@ def discover_files(target_media_path: Path) -> DiscoveryResult:
     for sidecar_path in discovered_sidecars:
         parsed = _parse_sidecar_filename(sidecar_path)
         # Use full path as key to include album info
-        key = f"{sidecar_path.parent}/{parsed.filename}.{parsed.extension}"
+        # Extension is already normalized to lowercase in ParsedSidecar
+        ext = parsed.extension if parsed.extension else ""
+        key = f"{sidecar_path.parent}/{parsed.filename}.{ext}"
         if key not in full_sidecar_index:
             full_sidecar_index[key] = []
         full_sidecar_index[key].append(parsed)
@@ -342,6 +344,9 @@ def _parse_sidecar_filename(sidecar_path: Path) -> ParsedSidecar:
         t = tok.lower()
         if not t:
             return False
+        # Single character cannot be an extension prefix (too ambiguous)
+        if len(t) == 1:
+            return False
         return any(e.startswith(t) for e in KNOWN_EXTS)
     
     base = sidecar_path.name
@@ -392,10 +397,19 @@ def _parse_sidecar_filename(sidecar_path: Path) -> ParsedSidecar:
         if is_ext_or_prefix(tok):
             last_ext_idx = i  # keep updating; end with rightmost
     if last_ext_idx == -1:
-        # No extension found: filename is whole core (dots allowed)
+        # No extension found
+        # Edge case: if we have multiple single-char tokens (e.g., "j.j"), 
+        # treat the last one as extension
+        if len(tokens) > 1 and all(len(tok) == 1 for tok in tokens):
+            filename = ".".join(tokens[:-1])
+            extension = tokens[-1]
+        else:
+            filename = core if core else ""
+            extension = ""
+        
         return ParsedSidecar(
-            filename=core if core else "",
-            extension="",
+            filename=filename,
+            extension=extension.lower(),  # Normalize extension to lowercase
             numeric_suffix=paren_num,
             full_sidecar_path=sidecar_path
         )
@@ -415,7 +429,7 @@ def _parse_sidecar_filename(sidecar_path: Path) -> ParsedSidecar:
     
     return ParsedSidecar(
         filename=filename,
-        extension=full_ext,
+        extension=full_ext.lower(),  # Normalize extension to lowercase
         numeric_suffix=paren_num,
         full_sidecar_path=sidecar_path
     )
@@ -471,7 +485,7 @@ def _match_media_to_sidecar_batch(media_files: List[Path], sidecar_index: Dict[s
     remaining_media = media_files.copy()
     matched_sidecars = set()  # Track matched sidecars without removing from processing pool
     
-    logger.info(f"Starting batch matching for {len(media_files)} media files in album")
+    logger.info(f"Starting batch matching for {len(media_files)} media files in album {media_files[0].parent if media_files else 'unknown'}")
     
     # Phase 1: Happy path - exact filename match (no numeric suffix)
     logger.debug("Phase 1: Happy path matching")
@@ -483,7 +497,7 @@ def _match_media_to_sidecar_batch(media_files: List[Path], sidecar_index: Dict[s
             phase1_matches.append(media_file)
             matched_sidecars.add(match)
             # DEBUG: Log successful match with paths
-            logger.debug(f"Phase 1 match: {media_file.name} -> {match.name}")
+            logger.debug(f"Phase 1 match: {media_file} -> {match.name}")
     
     # Remove matched media files
     for media_file in phase1_matches:
@@ -513,7 +527,7 @@ def _match_media_to_sidecar_batch(media_files: List[Path], sidecar_index: Dict[s
             phase2_matches.append(media_file)
             matched_sidecars.add(match)
             # DEBUG: Log successful match with paths
-            logger.debug(f"Phase 2 match: {media_file.name} -> {match.name}")
+            logger.debug(f"Phase 2 match: {media_file} -> {match.name}")
     
     # Remove matched media files
     for media_file in phase2_matches:
@@ -543,7 +557,7 @@ def _match_media_to_sidecar_batch(media_files: List[Path], sidecar_index: Dict[s
             phase3_matches.append(media_file)
             matched_sidecars.add(match)
             # DEBUG: Log successful match with paths
-            logger.debug(f"Phase 3 match: {media_file.name} -> {match.name}")
+            logger.debug(f"Phase 3 match: {media_file} -> {match.name}")
     
     # Remove matched media files
     for media_file in phase3_matches:
@@ -573,7 +587,7 @@ def _match_media_to_sidecar_batch(media_files: List[Path], sidecar_index: Dict[s
             phase4_matches.append(media_file)
             matched_sidecars.add(match)
             # DEBUG: Log successful match with paths
-            logger.debug(f"Phase 4 match: {media_file.name} -> {match.name}")
+            logger.debug(f"Phase 4 match: {media_file} -> {match.name}")
     
     # Remove matched media files
     for media_file in phase4_matches:
@@ -590,14 +604,6 @@ def _match_media_to_sidecar_batch(media_files: List[Path], sidecar_index: Dict[s
     unmatched_sidecars = all_sidecars - matched_sidecars
     
     logger.info(f"Phase 5: {len(remaining_media)} unmatched media files, {len(unmatched_sidecars)} unmatched sidecars")
-    
-    # INFO: Log unmatched media files with paths
-    for unmatched_media in remaining_media:
-        logger.info(f"Unmatched media: {unmatched_media}")
-    
-    # INFO: Log unmatched sidecars with paths
-    for unmatched_sidecar in unmatched_sidecars:
-        logger.info(f"Unmatched sidecar: {unmatched_sidecar}")
     
     return BatchMatchingResult(
         matches=matches,
@@ -771,10 +777,10 @@ def _try_prefix_match_batch(media_file: Path, sidecar_index: Dict[str, List[Pars
                 matching_sidecars.append(sidecar.full_sidecar_path)
     
     if len(matching_sidecars) == 1:
-        logger.debug(f"Phase 4 match (sidecar prefix): {media_file.name} -> {matching_sidecars[0].name}")
+        logger.debug(f"Phase 4 match (sidecar prefix): {media_file} -> {matching_sidecars[0].name}")
         return matching_sidecars[0]
     elif len(matching_sidecars) > 1:
-        logger.debug(f"Phase 4: Multiple sidecar prefix matches for {media_file.name}: {[s.name for s in matching_sidecars]}")
+        logger.debug(f"Phase 4: Multiple sidecar prefix matches for {media_file}: {[s.name for s in matching_sidecars]}")
         return None
     
     # Strategy 2: Find sidecars where the media filename is a prefix of the sidecar filename
@@ -808,10 +814,10 @@ def _try_prefix_match_batch(media_file: Path, sidecar_index: Dict[str, List[Pars
                 matching_sidecars.append(sidecar.full_sidecar_path)
     
     if len(matching_sidecars) == 1:
-        logger.debug(f"Phase 4 match (media prefix): {media_file.name} -> {matching_sidecars[0].name}")
+        logger.debug(f"Phase 4 match (media prefix): {media_file} -> {matching_sidecars[0].name}")
         return matching_sidecars[0]
     elif len(matching_sidecars) > 1:
-        logger.debug(f"Phase 4: Multiple media prefix matches for {media_file.name}: {[s.name for s in matching_sidecars]}")
+        logger.debug(f"Phase 4: Multiple media prefix matches for {media_file}: {[s.name for s in matching_sidecars]}")
         return None
     
     return None

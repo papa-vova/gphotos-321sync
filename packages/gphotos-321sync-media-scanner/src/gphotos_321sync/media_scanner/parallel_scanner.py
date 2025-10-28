@@ -299,14 +299,13 @@ class ParallelScanner:
             logger.info(f"  Phase 4 (Prefix matching): {len(discovery_result.matched_phase4)} matches")
             logger.info(f"  Unmatched media: {len(discovery_result.unmatched_media)} files")
             logger.info(f"  Unmatched sidecars: {len(discovery_result.unmatched_sidecars)} files")
-            logger.info(f"  Unprocessed sidecars: {len(unprocessed_sidecars)} files")
             
             # Log detailed unmatched files at DEBUG level
             if discovery_result.unmatched_media:
                 logger.debug(f"Unmatched media files: {[str(p) for p in discovery_result.unmatched_media]}")
             
             if unprocessed_sidecars:
-                logger.debug(f"Unprocessed sidecar files: {[str(p) for p in unprocessed_sidecars]}")
+                logger.debug(f"Unmatched sidecar files: {[str(p) for p in unprocessed_sidecars]}")
             
             if unprocessed_metadata:
                 logger.debug(f"Unprocessed metadata files: {[str(p) for p in unprocessed_metadata]}")
