@@ -175,19 +175,19 @@ class TestMatchMediaToSidecarBatch:
         ]
         
         sidecar_index = {
-            "test_album/photo1.jpg": [ParsedSidecar(
+            "photo1.jpg": [ParsedSidecar(
                 filename="photo1",
                 extension="jpg", 
                 numeric_suffix="",
                 full_sidecar_path=album_path / "photo1.jpg.supplemental-metadata.json"
             )],
-            "test_album/photo2.png": [ParsedSidecar(
+            "photo2.png": [ParsedSidecar(
                 filename="photo2",
                 extension="png",
                 numeric_suffix="", 
                 full_sidecar_path=album_path / "photo2.png.supplemental-metadata.json"
             )],
-            "test_album/photo3.jpg": [ParsedSidecar(
+            "photo3.jpg": [ParsedSidecar(
                 filename="photo3",
                 extension="jpg",
                 numeric_suffix="",
@@ -260,7 +260,7 @@ class TestMatchMediaToSidecarBatch:
         ]
         
         sidecar_index = {
-            "test_album/photo.jpg": [
+            "photo.jpg": [
                 ParsedSidecar(
                     filename="photo",
                     extension="jpg",
@@ -301,13 +301,13 @@ class TestMatchMediaToSidecarBatch:
         ]
         
         sidecar_index = {
-            "test_album/photo1.jpg": [ParsedSidecar(
+            "photo1.jpg": [ParsedSidecar(
                 filename="photo1",
                 extension="jpg",
                 numeric_suffix="",
                 full_sidecar_path=album_path / "photo1.jpg.supplemental-metadata.json"
             )],
-            "test_album/photo.jpg": [
+            "photo.jpg": [
                 ParsedSidecar(
                     filename="photo",
                     extension="jpg",
@@ -341,7 +341,7 @@ class TestMatchMediaToSidecarBatch:
         ]
         
         sidecar_index = {
-            "test_album/photo.jpg": [ParsedSidecar(
+            "photo.jpg": [ParsedSidecar(
                 filename="photo",
                 extension="jpg",
                 numeric_suffix="",

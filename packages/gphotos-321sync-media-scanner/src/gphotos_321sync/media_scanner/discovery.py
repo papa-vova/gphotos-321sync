@@ -614,9 +614,8 @@ def _try_happy_path_match_batch(media_file: Path, sidecar_index: Dict[str, List[
     """Phase 1 batch helper: Happy path matching with exclusion."""
     media_stem = media_file.stem
     media_suffix = media_file.suffix.lower()
-    album_path = media_file.parent.name
     
-    key = f"{album_path}/{media_stem}{media_suffix}"
+    key = f"{media_stem}{media_suffix}"
     
     if key not in sidecar_index:
         return None
@@ -638,7 +637,6 @@ def _try_numbered_files_match_batch(media_file: Path, sidecar_index: Dict[str, L
     """Phase 2 batch helper: Numbered files matching with exclusion."""
     media_stem = media_file.stem
     media_suffix = media_file.suffix.lower()
-    album_path = media_file.parent.name
     
     # Extract numeric suffix from media filename
     media_numeric_suffix = _extract_numeric_suffix_from_media(media_stem)
@@ -650,7 +648,7 @@ def _try_numbered_files_match_batch(media_file: Path, sidecar_index: Dict[str, L
     base_stem = _remove_numeric_suffix_from_media(media_stem)
     
     # Look for sidecars with base filename and matching numeric suffix that are still available
-    key = f"{album_path}/{base_stem}."
+    key = f"{base_stem}."
     
     if key not in sidecar_index:
         return None
@@ -672,7 +670,6 @@ def _try_edited_files_match_batch(media_file: Path, sidecar_index: Dict[str, Lis
     """Phase 3 batch helper: Edited files matching with exclusion."""
     media_stem = media_file.stem
     media_suffix = media_file.suffix.lower()
-    album_path = media_file.parent.name
     
     # Check if filename contains "-edited" (case insensitive)
     if "-edited" not in media_stem.lower():
@@ -691,7 +688,7 @@ def _try_edited_files_match_batch(media_file: Path, sidecar_index: Dict[str, Lis
     # Remove numeric suffix from base stem to get the actual base filename
     actual_base_stem = _remove_numeric_suffix_from_media(base_stem)
     
-    key = f"{album_path}/{actual_base_stem}{media_suffix}"
+    key = f"{actual_base_stem}{media_suffix}"
     
     logger.debug(f"Phase 3: {media_stem} -> base_stem: {base_stem}, actual_base_stem: {actual_base_stem}, key: {key}")
     
