@@ -17,6 +17,17 @@ from .path_utils import should_scan_file
 
 logger = logging.getLogger(__name__)
 
+# Known media file extensions supported by Google Photos
+# Any suffix that is a prefix of these will be treated as a valid extension
+# e.g., '.j', '.jp', '.jpg' all match because they're prefixes of '.jpg'
+# Sources: Google_Takeout_Structure.md and generate_test_data.py
+KNOWN_MEDIA_EXTENSIONS = [
+    '.jpg', '.jpeg',  # Images
+    '.png', '.gif', '.webp', '.heic', '.svg',
+    '.mp4', '.m4v', '.mov',  # Videos
+    '.mpg', '.mpeg', '.3gp', '.avi', '.mkv', '.webm',
+]
+
 
 @dataclass
 class FileInfo:
@@ -618,11 +629,32 @@ def _match_media_to_sidecar_batch(media_files: List[Path], sidecar_index: Dict[s
 
 def _try_happy_path_match_batch(media_file: Path, sidecar_index: Dict[str, List[ParsedSidecar]], matched_sidecars: set) -> Optional[Path]:
     """Phase 1 batch helper: Happy path matching with exclusion."""
+    media_full_name = media_file.name
     media_stem = media_file.stem
     media_suffix = media_file.suffix.lower()
     
-    # If no suffix, add trailing dot to match index format
-    key = f"{media_stem}{media_suffix}" if media_suffix else f"{media_stem}."
+    # Check if the suffix is a real file extension
+    # Extensions can be: empty, or any prefix of a known extension (e.g., '.j', '.jp', '.jpg')
+    has_real_extension = False
+    if not media_suffix:
+        # No extension
+        has_real_extension = False
+    else:
+        # Check if this suffix is a prefix of any known extension
+        # e.g., '.j', '.jp', '.jpg' all match because they're prefixes of '.jpg'
+        for known_ext in KNOWN_MEDIA_EXTENSIONS:
+            if known_ext.startswith(media_suffix):
+                has_real_extension = True
+                break
+    
+    # If no real extension, use full filename (with trailing dot to match index format)
+    # e.g., "01.02.12 - 1" -> "01.02.12 - 1." 
+    # If it has a real extension, use stem + suffix
+    # e.g., "photo.jpg" -> "photo.jpg"
+    if has_real_extension:
+        key = f"{media_stem}{media_suffix}"
+    else:
+        key = f"{media_full_name}."
     
     if key not in sidecar_index:
         return None
@@ -676,6 +708,7 @@ def _try_numbered_files_match_batch(media_file: Path, sidecar_index: Dict[str, L
 
 def _try_edited_files_match_batch(media_file: Path, sidecar_index: Dict[str, List[ParsedSidecar]], matched_sidecars: set) -> Optional[Path]:
     """Phase 3 batch helper: Edited files matching with exclusion."""
+    media_full_name = media_file.name
     media_stem = media_file.stem
     media_suffix = media_file.suffix.lower()
     
@@ -683,8 +716,27 @@ def _try_edited_files_match_batch(media_file: Path, sidecar_index: Dict[str, Lis
     if "-edited" not in media_stem.lower():
         return None
     
+    # Check if the suffix is a real file extension
+    # Extensions can be: empty, or any prefix of a known extension (e.g., '.j', '.jp', '.jpg')
+    has_real_extension = False
+    if not media_suffix:
+        # No extension
+        has_real_extension = False
+    else:
+        # Check if this suffix is a prefix of any known extension
+        # e.g., '.j', '.jp', '.jpg' all match because they're prefixes of '.jpg'
+        for known_ext in KNOWN_MEDIA_EXTENSIONS:
+            if known_ext.startswith(media_suffix):
+                has_real_extension = True
+                break
+    
     # Strip "-edited" from filename (case insensitive)
-    base_stem = _strip_edited_from_filename(media_stem)
+    # For files without real extensions, strip from full name
+    if has_real_extension:
+        base_stem = _strip_edited_from_filename(media_stem)
+    else:
+        # For files like "01.02.12 - 1-edited", work with the full name
+        base_stem = _strip_edited_from_filename(media_full_name)
     
     if not base_stem:
         logger.debug(f"Phase 3: Could not strip '-edited' from {media_stem}")
@@ -696,8 +748,11 @@ def _try_edited_files_match_batch(media_file: Path, sidecar_index: Dict[str, Lis
     # Remove numeric suffix from base stem to get the actual base filename
     actual_base_stem = _remove_numeric_suffix_from_media(base_stem)
     
-    # If no suffix, add trailing dot to match index format
-    key = f"{actual_base_stem}{media_suffix}" if media_suffix else f"{actual_base_stem}."
+    # Construct key matching the index format
+    if has_real_extension:
+        key = f"{actual_base_stem}{media_suffix}"
+    else:
+        key = f"{actual_base_stem}."
     
     logger.debug(f"Phase 3: {media_stem} -> base_stem: {base_stem}, actual_base_stem: {actual_base_stem}, key: {key}")
     
@@ -739,14 +794,15 @@ def _try_prefix_match_batch(media_file: Path, sidecar_index: Dict[str, List[Pars
     Returns:
         Path to matching sidecar if found, None otherwise
     """
-    media_stem = media_file.stem
+    # Use full filename for Phase 4 to handle files with dots
+    media_full_name = media_file.name
     
     # Strip "-edited" from media filename before matching (file names can be shortened while editing)
-    processed_media_stem = _strip_edited_from_filename(media_stem) or media_stem
+    processed_media = _strip_edited_from_filename(media_full_name) or media_full_name
     
-    # Extract numeric suffix from processed media stem and strip it
-    media_numeric_suffix = _extract_numeric_suffix_from_media(processed_media_stem)
-    base_media_stem = _remove_numeric_suffix_from_media(processed_media_stem) if media_numeric_suffix else processed_media_stem
+    # Extract numeric suffix from processed media and strip it
+    media_numeric_suffix = _extract_numeric_suffix_from_media(processed_media)
+    base_media_stem = _remove_numeric_suffix_from_media(processed_media) if media_numeric_suffix else processed_media
     
     # Strategy 1: Find sidecars where the sidecar filename is a prefix of the media filename
     # Example: "Screenshot_2023-04-05-18-07-21-83_abb9c8060a0a.json" matches "Screenshot_2023-04-05-18-07-21-83_abb9c8060a0a1.jpg"
